@@ -3610,9 +3610,10 @@ Rules:
       if (response.status === 400 && /API_KEY_INVALID/.test(message)) {
         throw new Error('Gemini API 金鑰無效，請確認後重新輸入。');
       }
-      // A 404 usually means this model ID was retired; try the next one in the list.
+      // Retryable on the next model: retired/unknown model (404), overloaded (503), rate-limited (429), or transient server errors (5xx).
       lastError = new Error(`AI 辨識請求失敗（${response.status}）：${message}`);
-      if (response.status !== 404) throw lastError;
+      const retryableStatus = response.status === 404 || response.status === 429 || response.status === 503 || response.status >= 500;
+      if (!retryableStatus) throw lastError;
     }
 
     throw lastError || new Error('AI 辨識請求失敗：沒有可用的模型。');
