@@ -161,6 +161,7 @@
   .ocr-import-class-card{width:100%;padding:10px 12px}
   .ocr-import-class-card .tc-subject{flex:1;min-width:0}
   .editor-inner.is-layered #ocr-import-result .editor-fold{display:block !important;margin-bottom:10px}
+  #ocr-import-result .editor-fold[hidden]{display:none !important}
   #ocr-import-result .editor-fold-summary{display:flex !important}
   #ocr-import-result .editor-fold-body{display:block !important}
   #ocr-import-result .schedule-periods{overflow-x:auto;flex-wrap:nowrap;padding-bottom:3px}
@@ -459,24 +460,24 @@
 <template id="ocr-preview-template">
   <div class="ocr-import-preview-title">辨識結果與匯入預覽</div>
   <div class="ocr-import-preview-meta" data-ocr-preview-meta></div>
-  <details class="editor-fold" open>
-    <summary class="editor-fold-summary">第一區塊：節次時間</summary>
+  <details class="editor-fold" data-ocr-bell-fold open>
+    <summary class="editor-fold-summary">節次時間</summary>
     <div class="editor-fold-body"><div class="bell-list" data-ocr-bell-list></div></div>
   </details>
   <details class="editor-fold" data-ocr-break-fold open>
-    <summary class="editor-fold-summary">第二區塊：特殊時段</summary>
+    <summary class="editor-fold-summary">特殊時段</summary>
     <div class="editor-fold-body"><div class="bell-list" data-ocr-break-list></div></div>
   </details>
-  <details class="editor-fold" open>
-    <summary class="editor-fold-summary">第三區塊：辨識到的課程</summary>
+  <details class="editor-fold" data-ocr-class-fold open>
+    <summary class="editor-fold-summary">課程</summary>
     <div class="editor-fold-body"><div class="teacher-list" data-ocr-class-list></div></div>
   </details>
-  <details class="editor-fold" open>
-    <summary class="editor-fold-summary">第四區塊：課表指派</summary>
+  <details class="editor-fold" data-ocr-assignment-fold open>
+    <summary class="editor-fold-summary">課表指派</summary>
     <div class="editor-fold-body"><div class="schedule-grid" data-ocr-assignment-grid></div></div>
   </details>
   <details class="editor-fold" data-ocr-countdown-fold hidden>
-    <summary class="editor-fold-summary">第五區塊：倒數日期</summary>
+    <summary class="editor-fold-summary">倒數日期</summary>
     <div class="editor-fold-body"><div class="bell-list" data-ocr-countdown-list></div></div>
   </details>
   <div class="ocr-import-preview-note" data-ocr-preview-note></div>
@@ -796,7 +797,7 @@ function normalizeCountdownEvent(value) {
 function normalizeCountdownEvents(value) {
   const source=Array.isArray(value)?value:(value&&typeof value==='object'?[value]:[]);
   const events=source.map(normalizeCountdownEvent).filter(event=>event.name&&event.date).slice(0,12);
-  return events.length?events:DEFAULT_COUNTDOWN_EVENTS.map(event=>({...event}));
+  return events.length?events:Array.isArray(value)?[]:DEFAULT_COUNTDOWN_EVENTS.map(event=>({...event}));
 }
 const ORBIT_APP_ID='Orbit_Color';
 const ORBIT_STORAGE_SCHEMA='r8N3wL0yS5qM9uV7';
@@ -1398,6 +1399,8 @@ function updateExamCountdown() {
   if (!el || !card) return;
 
   const events=getCountdownEvents();
+  if (!events.length) { card.style.display='none'; return }
+  card.style.display='';
   activeCountdownIndex=Math.min(activeCountdownIndex,events.length-1);
   const event=events[activeCountdownIndex];
   const label=document.querySelector('.exam-countdown-label');
@@ -1924,7 +1927,7 @@ function cloneSettingsData(data) {
   return JSON.parse(JSON.stringify(data))
 }
 // Transfer backups use short keys and compressed Base64 to stay easy to copy.
-const TRANSFER_KEYS={teacherDB:'a',locationDB:'b',weeklySchedule:'c',bellTimes:'d',breakTimes:'e',countdownEvents:'f',countdownEvent:'g',reverseWeek:'h',proAccent:'i',proSecondary:'j',proTertiary:'k',styleSlots:'l',bellRowsDraft:'m',breakRowsDraft:'n',teacherCardsDraft:'o',__orbit:'p',app:'q',schema:'r',settings:'s'};
+const TRANSFER_KEYS={teacherDB:'a',locationDB:'b',weeklySchedule:'c',bellTimes:'d',breakTimes:'e',countdownEvents:'f',countdownEvent:'g',reverseWeek:'h',proAccent:'i',proSecondary:'j',proTertiary:'k',styleSlots:'l',bellRowsDraft:'m',breakRowsDraft:'n',teacherCardsDraft:'o',geminiApiKey:'t',__orbit:'p',app:'q',schema:'r',settings:'s'};
 const TRANSFER_KEYS_REVERSE=Object.fromEntries(Object.entries(TRANSFER_KEYS).map(([key,value])=>[value,key]));
 const TRANSFER_START='===== ORBIT COLOR SETTINGS BACKUP BEGIN =====\n';
 const TRANSFER_END='\n===== ORBIT COLOR SETTINGS BACKUP END =====';
@@ -2020,6 +2023,7 @@ function normalizeSettingsData(raw,{requireMarker=false}={}) {
     countdownEvents,
     countdownEvent:countdownEvents[0],
     reverseWeek:typeof source.reverseWeek==='boolean'?source.reverseWeek:REVERSE_WEEK_LOGIC_DEFAULT,
+    geminiApiKey:Object.prototype.hasOwnProperty.call(source,'geminiApiKey')?String(source.geminiApiKey||''):getStoredGeminiApiKey(),
     proAccent:normalizeProAccent(source.proAccent),
     proSecondary:normalizeProSecondary(source.proSecondary),
     proTertiary:normalizeProTertiary(source.proTertiary),
@@ -2291,8 +2295,10 @@ function mergeImportedSettings(current,imported) {
   const importedTeacherOrder=imported.teacherOrder||Object.keys(imported.teacherDB||{});
   const currentTeacherOrder=current.teacherOrder||Object.keys(current.teacherDB||{});
   merged.teacherOrder=[...new Set(importedTeacherOrder.concat(currentTeacherOrder).map(key=>teacherKeyMap[key]||key).filter(key=>merged.teacherDB[key]))];
-  if (JSON.stringify(current.bellTimes)!==JSON.stringify(imported.bellTimes)) replacedActions.push('取代節次時間');
-  merged.bellTimes=cloneSettingsData(imported.bellTimes);
+  if (Array.isArray(imported.bellTimes)&&imported.bellTimes.length) {
+    merged.bellTimes=cloneSettingsData(imported.bellTimes);
+    replacedActions.push('取代節次時間');
+  }
   const breaks=new Map((current.breakTimes||[]).map(item=>[item.name,item]));
   (imported.breakTimes||[]).forEach(item=> {
     const currentBreak=breaks.get(item.name);
@@ -2301,7 +2307,17 @@ function mergeImportedSettings(current,imported) {
     else replacedActions.push(`取代特殊時段「${item.name}」：${currentBreak.start}-${currentBreak.end} -> ${item.start}-${item.end}`);
     breaks.set(item.name,item)
   });
-  merged.breakTimes=[...breaks.values()];
+  // Drop only the specific breaks that no longer fit the merged bell schedule instead of aborting the whole merge.
+  const keptBreaks=[];
+  breaks.forEach(item=> {
+    try {
+      validateTimeIntervals(merged.bellTimes,[...keptBreaks,item]);
+      keptBreaks.push(item)
+    } catch (error) {
+      replacedActions.push(`移除特殊時段「${item.name}」（與匯入的節次時間衝突）`)
+    }
+  });
+  merged.breakTimes=keptBreaks;
   const events=new Map(getCountdownEvents(current).map(item=>[item.name,item]));
   getCountdownEvents(imported).forEach(item=> {
     const currentEvent=events.get(item.name);
@@ -2337,8 +2353,27 @@ function showEditorImportModeConfirm(current,next) {
   setEditorConfirmContent('匯入方式？','要合併目前設定與匯入設定嗎？','合併匯入會保留可共存內容；課表時間衝突時使用匯入內容。','合併匯入',()=>showEditorImportConfirm(current,next,true),'直接匯入',{cancelHandler:()=>showEditorImportConfirm(current,next,false),extraLabel:'取消',extraHandler:hideEditorDiscardConfirm});
   showEditorConfirmSheet()
 }
+function beginEditorImport(current,next) {
+  try {
+    const normalizedCurrent=normalizeSettingsData(current);
+    const normalizedNext=normalizeSettingsData(next);
+    pendingEditorImportData=normalizedNext;
+    showEditorImportModeConfirm(normalizedCurrent,normalizedNext);
+  } catch (error) {
+    pendingEditorImportData=null;
+    setTransferStatus(`匯入失敗：${error.message||error}`,true);
+  }
+}
 function showEditorImportConfirm(current,next,isMerge) {
-  const result=isMerge?mergeImportedSettings(current,next):{data:next,actions:[]};
+  let result;
+  try {
+    result=isMerge?mergeImportedSettings(current,next):{data:next,actions:[]};
+  } catch (error) {
+    pendingEditorImportData=null;
+    setEditorConfirmContent('匯入失敗','無法完成這次匯入，請調整後再試一次。',error.message||String(error),'返回',hideEditorDiscardConfirm,null);
+    showEditorConfirmSheet();
+    return;
+  }
   pendingEditorImportData=result.data;
   const diff=isMerge?['新增：',...result.addedActions.map(item=>`- ${item}`),'','合併：',...result.mergedActions.map(item=>`- ${item}`),'','取代：',...result.replacedActions.map(item=>`- ${item}`)].join('\n'):describeSettingsDiff(current,next,[],{isImport:true});
   const identical=!isMerge&&diff==='沒有變更。';
@@ -2347,6 +2382,7 @@ function showEditorImportConfirm(current,next,isMerge) {
 }
 function applyEditorSettingsData(next,{closeAfter=false,statusMessage=''}={}) {
   applicationData=cloneSettingsData(next);
+  if (Object.prototype.hasOwnProperty.call(applicationData,'geminiApiKey')) setStoredGeminiApiKey(applicationData.geminiApiKey);
   applicationData.proAccent=normalizeProAccent(applicationData.proAccent);
   applicationData.proSecondary=normalizeProSecondary(applicationData.proSecondary);
   applicationData.proTertiary=normalizeProTertiary(applicationData.proTertiary);
@@ -3518,24 +3554,30 @@ function setStoredGeminiApiKey(key) {
 
 class AIVisionProcessor {
   constructor() {
-    // Ordered fallback list; Google periodically retires older Gemini model IDs.
-    this.geminiModels = ['gemini-3.6-flash', 'gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+    // Ordered by free-tier quota/stability: 2.5-flash first, then higher-throughput/newer fallbacks.
+    this.geminiModels = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-3.7-flash', 'gemini-3.5-flash'];
   }
 
   buildPrompt() {
     return `Find the class timetable inside this photo (it may only occupy part of the frame — ignore background/margins) and return valid JSON only, matching this exact schema:
 {
-  "bellTimes": [["08:10","09:00"], ["09:10","10:00"]],
+  "bellTimes": [],
   "breakTimes": [{"name":"午休","start":"12:00","end":"13:00"}],
-  "teacherDB": {"國文": ["國文", "陳老師"], "英文": ["英文", "王老師"]},
+  "teacherDB": {"國文": ["國文", "陳老師", "A101"], "英文": ["英文", "王老師", "B202"]},
+  "locationDB": {"國文":"A101", "英文":"B202"},
   "weeklySchedule": {"1": ["國文","英文",null], "2": [], "3": [], "4": [], "5": []},
+  "reverseWeek": false,
   "countdownEvents": [{"name":"116 學測","date":"2027-01-22"}]
 }
 
 Rules:
-- bellTimes: one entry per class period, in order, as "HH:MM" 24-hour strings.
+- bellTimes: if class periods have readable start and end times, return one entry per period in order as "HH:MM" 24-hour strings. If no class times are visible, return an empty array. Never guess or use standard/default school times.
+- Read times exactly from the image, including the period start and end. Acceptable output is either ["08:10","09:00"] or {"start":"08:10","end":"09:00"}; do not return period numbers instead of clock times.
 - breakTimes: only lunch or other non-class blocks, not empty periods.
-- teacherDB: one entry per distinct subject actually visible in the photo. Pick your own short, readable key for each subject (its Chinese name or a short abbreviation) — do not invent subjects that aren't shown. Value is [full subject name, teacher name] (teacher name can be "" if unreadable).
+- teacherDB: one entry per distinct subject actually visible in the photo. Pick your own short, readable key for each subject (its Chinese name or a short abbreviation) — do not invent subjects that aren't shown. Value is [full subject name, teacher name, classroom/location]. Teacher and location can be "" if unreadable.
+- locationDB: return the classroom/location for each subject key when it is visible. Use an empty string when it is not visible.
+- odd/even weeks: if the photo has odd/even week columns or shows two alternating classes in one slot, combine the corresponding subject names with "/" (for example "國文/公民") and do the same for teacher names. Use one shared key for that slot so the app can switch the displayed course by week.
+- reverseWeek: return true only when the photo explicitly indicates that the app's odd/even week orientation must be reversed; otherwise return false.
 - weeklySchedule keys "1" through "5" (Monday–Friday) are REQUIRED and must all be present, even as an empty array — never omit or truncate "5" (Friday), even if it is the last column and partially cut off in the photo. Also include "6" (Saturday) and/or "0" (Sunday) ONLY if the photo's timetable actually has a column for that day; omit them entirely otherwise. Each day's array must have one entry per period matching bellTimes order; use null for a free/unreadable period; every non-null entry must be a key that exists in teacherDB.
 - countdownEvents (optional): if the photo shows a specific exam/event date (e.g. 段考, 學測, 模擬考 with a calendar date), include it here as {"name": short label, "date": "YYYY-MM-DD"}. Only include dates you can actually read; if no such date appears anywhere in the photo, return an empty array.
 - Return ONLY the raw JSON object — no markdown fences, no comments, no extra text.`;
@@ -3590,23 +3632,21 @@ Rules:
   }
 
   normalizeAIOutput(aiResult) {
+    const normalizeTime=value=> {
+      const match=String(value||'').trim().replace(/[：。．]/g,':').match(/^(\d{1,2})\s*:\s*(\d{2})$/);
+      if (!match) return '';
+      const hours=Number(match[1]), minutes=Number(match[2]);
+      return hours>=0&&hours<=23&&minutes>=0&&minutes<=59?`${String(hours).padStart(2,'0')}:${match[2]}`:'';
+    };
     const bellTimes = [];
     if (Array.isArray(aiResult.bellTimes)) {
       aiResult.bellTimes.forEach(item => {
-        if (Array.isArray(item) && item.length >= 2) {
-          const s = String(item[0] || '').trim();
-          const e = String(item[1] || '').trim();
+        if ((Array.isArray(item) && item.length >= 2) || (item && typeof item === 'object')) {
+          const s = normalizeTime(Array.isArray(item)?item[0]:item.start);
+          const e = normalizeTime(Array.isArray(item)?item[1]:item.end);
           if (s && e) bellTimes.push([s, e]);
         }
       });
-    }
-
-    if (bellTimes.length === 0) {
-      const defaultTimes = [
-        ['08:10', '09:00'], ['09:10', '10:00'], ['10:10', '11:00'], ['11:10', '12:00'],
-        ['13:00', '13:50'], ['14:00', '14:50'], ['15:00', '15:50']
-      ];
-      bellTimes.push(...defaultTimes);
     }
 
     const breakTimes = [];
@@ -3614,8 +3654,8 @@ Rules:
       aiResult.breakTimes.forEach(item => {
         if (!item || typeof item !== 'object') return;
         const name = String(item.name || item.label || item.category || '午休').trim() || '午休';
-        const start = String(item.start || item.from || '').trim();
-        const end = String(item.end || item.to || '').trim();
+        const start = normalizeTime(item.start || item.from || item[0]);
+        const end = normalizeTime(item.end || item.to || item[1]);
         if (start && end) breakTimes.push({ name, start, end });
       });
     }
@@ -3638,9 +3678,18 @@ Rules:
           subject = String(val || dbKey).trim();
         }
         if (!subject) return;
-        const key = String(dbKey || subject).trim() || `A${courseCounter++}`;
-        teacherDB[key] = [subject, teacher];
-        locationDB[key] = '';
+        subject=subject.replace(/／/g,'/');
+        teacher=teacher.replace(/／/g,'/');
+        const key = String(dbKey || subject).trim().replace(/／/g,'/') || `A${courseCounter++}`;
+        const location=Array.isArray(val)?String(val[2]||'').trim():String(val?.location||val?.room||val?.classroom||'').trim();
+        teacherDB[key] = [subject, teacher, location];
+        locationDB[key] = location;
+      });
+    }
+    if (aiResult.locationDB && typeof aiResult.locationDB === 'object') {
+      Object.entries(aiResult.locationDB).forEach(([dbKey,value]) => {
+        const key=String(dbKey||'').trim().replace(/／/g,'/');
+        if (key && teacherDB[key]) locationDB[key]=String(value||'').trim();
       });
     }
 
@@ -3651,8 +3700,10 @@ Rules:
       if (!Array.isArray(dayArr)) return;
       weeklySchedule[dayKey] = dayArr.map(item => {
         if (!item) return '';
-        const key = typeof item === 'string' ? item.trim() : String(item.key || item.code || '').trim();
-        return teacherDB[key] ? key : '';
+          const key = (typeof item === 'string' ? item.trim() : String(item.key || item.code || item.subject || item.name || '').trim()).replace(/／/g,'/');
+          if (teacherDB[key]) return key;
+          const matchingKey=Object.keys(teacherDB).find(candidateKey=>teacherDB[candidateKey][0]===key);
+          return matchingKey || '';
       });
     });
 
@@ -3680,11 +3731,12 @@ Rules:
       weeklySchedule,
       bellTimes,
       breakTimes,
+      reverseWeek: aiResult.reverseWeek === true,
       recognizedBlocks
     };
-    if (Array.isArray(aiResult.countdownEvents) && aiResult.countdownEvents.length) {
-      candidate.countdownEvents = normalizeCountdownEvents(aiResult.countdownEvents);
-    }
+    candidate.countdownEvents = Array.isArray(aiResult.countdownEvents)
+      ? normalizeCountdownEvents(aiResult.countdownEvents)
+      : [];
     return candidate;
   }
 }
@@ -3696,8 +3748,10 @@ class DataValidator {
       errors.push('AI 沒有回傳有效的課表資料。');
       return { valid: false, errors };
     }
-    if (!candidate.teacherDB || !Object.keys(candidate.teacherDB).length) errors.push('沒有辨識到任何科目。');
-    if (!Array.isArray(candidate.bellTimes) || !candidate.bellTimes.length) errors.push('沒有辨識到有效的節次時間。');
+    const hasCountdown=Array.isArray(candidate.countdownEvents)&&candidate.countdownEvents.length>0;
+    const hasClasses=Object.keys(candidate.teacherDB||{}).length>0;
+    if (!hasClasses&&!hasCountdown) errors.push('沒有辨識到課程或倒數日期。');
+    if (!Array.isArray(candidate.bellTimes)) errors.push('節次時間資料格式不正確。');
     if (candidate.bellTimes?.some(time => !Array.isArray(time) || time.length !== 2 || !/^\d{2}:\d{2}$/.test(time[0]) || !/^\d{2}:\d{2}$/.test(time[1]) || time[0] >= time[1])) errors.push('部分節次時間格式不正確。');
     if (!candidate.weeklySchedule || Object.values(candidate.weeklySchedule).some(day => !Array.isArray(day))) errors.push('課表資料格式不正確。');
     return { valid: errors.length === 0, errors };
@@ -3734,7 +3788,7 @@ class ImportPreview {
 
     const breakList = this.root.querySelector('[data-ocr-break-list]');
     const breakFold = this.root.querySelector('[data-ocr-break-fold]');
-    if (breakFold) breakFold.hidden = breakTimes.length === 0;
+    if (breakFold && !breakTimes.length) breakFold.remove();
     breakTimes.forEach(item => {
       const row = document.getElementById('ocr-break-row-template').content.cloneNode(true);
       row.querySelector('.break-name').value = item.name || '午休';
@@ -3742,6 +3796,8 @@ class ImportPreview {
       row.querySelector('.break-end').value = item.end || '';
       breakList.appendChild(row);
     });
+    const bellFold = this.root.querySelector('[data-ocr-bell-fold]');
+    if (bellFold && !bellTimes.length) bellFold.remove();
 
     const classList = this.root.querySelector('[data-ocr-class-list]');
     classRecords.forEach(([key, value]) => {
@@ -3753,6 +3809,8 @@ class ImportPreview {
       row.querySelector('.tc-location').value = candidate.locationDB?.[key] || '';
       classList.appendChild(row);
     });
+    const classFold = this.root.querySelector('[data-ocr-class-fold]');
+    if (classFold && !classRecords.length) classFold.remove();
 
     const weekdayLabels = { 0: '週日', 1: '週一', 2: '週二', 3: '週三', 4: '週四', 5: '週五', 6: '週六' };
     const weeklySchedule = candidate.weeklySchedule || {};
@@ -3777,11 +3835,12 @@ class ImportPreview {
       });
       assignmentGrid.appendChild(row);
     });
+    const assignmentFold = this.root.querySelector('[data-ocr-assignment-fold]');
+    if (assignmentFold && (!bellTimes.length || !classRecords.length)) assignmentFold.remove();
 
     const countdownEvents = Array.isArray(candidate.countdownEvents) ? candidate.countdownEvents : [];
     const countdownFold = this.root.querySelector('[data-ocr-countdown-fold]');
     if (countdownEvents.length) {
-      countdownFold.hidden = false;
       const countdownList = this.root.querySelector('[data-ocr-countdown-list]');
       countdownEvents.forEach(item => {
         const row = document.getElementById('ocr-countdown-row-template').content.cloneNode(true);
@@ -3789,6 +3848,8 @@ class ImportPreview {
         row.querySelector('.ocr-countdown-date').value = item.date || '';
         countdownList.appendChild(row);
       });
+    } else if (countdownFold) {
+      countdownFold.remove();
     }
 
     this.root.querySelector('[data-ocr-preview-note]').textContent = validation.valid
@@ -3818,7 +3879,7 @@ class ImportPreview {
     }));
 
     this.root.querySelector('[data-ocr-submit]')?.addEventListener('click', () => {
-      const edited = { bellTimes: [], breakTimes: [], teacherDB: {}, locationDB: {}, teacherOrder: [], weeklySchedule: { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] } };
+      const edited = { bellTimes: [], breakTimes: [], teacherDB: {}, locationDB: {}, teacherOrder: [], weeklySchedule: { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] }, reverseWeek: candidate.reverseWeek === true };
 
       this.root.querySelectorAll('[data-ocr-bell-list] .bell-row').forEach(item => {
         const start = (item.querySelector('[data-field="bell-start"]')?.value || '').trim();
@@ -3837,8 +3898,10 @@ class ImportPreview {
         const key = (card.querySelector('.tc-key')?.value || '').trim();
         const subject = (card.querySelector('[data-field="class-subject"]')?.value || '').trim();
         if (!key || !subject) return;
-        edited.teacherDB[key] = [subject, (card.querySelector('.tc-teacher')?.value || '').trim()];
-        edited.locationDB[key] = (card.querySelector('.tc-location')?.value || '').trim();
+        const teacher=(card.querySelector('.tc-teacher')?.value || '').trim();
+        const location=(card.querySelector('.tc-location')?.value || '').trim();
+        edited.teacherDB[key] = [subject, teacher, location];
+        edited.locationDB[key] = location;
         edited.teacherOrder.push(key);
       });
 
@@ -3855,7 +3918,7 @@ class ImportPreview {
         const date = (item.querySelector('.ocr-countdown-date')?.value || '').trim();
         if (name && date) countdownEvents.push({ name, date });
       });
-      if (countdownEvents.length) edited.countdownEvents = countdownEvents;
+      edited.countdownEvents = countdownEvents;
 
       this.onImport?.(edited);
     });
@@ -3967,7 +4030,7 @@ function activateOCRImporter() {
       onImport:data=> {
         try {
           const imported=normalizeSettingsData(data);
-          showEditorImportModeConfirm(settingsDataForExport(),imported);
+          beginEditorImport(settingsDataForExport(),imported);
         } catch (error) {
           statusElement.textContent=`匯入預覽失敗：${error.message||error}`;
           statusElement.classList.add('error');
