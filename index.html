@@ -834,19 +834,45 @@ function loadData()  {
       p.proSecondary=normalizeProSecondary(p.proSecondary);
       p.proTertiary=normalizeProTertiary(p.proTertiary);
       p.styleSlots=normalizeStyleSlots(p.styleSlots);
-      if (!Array.isArray(p.breakTimes))p.breakTimes=[...DEFAULT_BREAK_TIMES];
+      // Keep saved break times intact. Defaults are only a fallback for missing
+      // entries, and must never be allowed to invalidate an otherwise valid
+      // saved schedule (e.g. an AI-imported timetable with different bell times).
+      const savedBreakTimes=Array.isArray(p.breakTimes)?p.breakTimes:[];
       p.countdownEvents=normalizeCountdownEvents(p.countdownEvents||p.countdownEvent);
       p.countdownEvent=p.countdownEvents[0];
-      DEFAULT_BREAK_TIMES.forEach(defaultBreak=> {
-        const hasBreak=p.breakTimes.some(item=>item.name===defaultBreak.name);
-        if (!hasBreak)p.breakTimes.push({...defaultBreak})
-      });
-      p.breakTimes=p.breakTimes.map(item=> ({
+
+      const normalizedBreakTimes=savedBreakTimes.map(item=> ({
         name:item&&item.name||'',
         start:item&&item.start||'',
         end:item&&item.end||''
       })).filter(item=>!item.start&&!item.end||isValidTimeRange(item.start,item.end));
-      validateTimeIntervals(p.bellTimes,p.breakTimes);
+
+      // Validate breaks one at a time so a single conflicting break cannot
+      // invalidate the whole saved dataset.
+      const keptBreakTimes=[];
+      normalizedBreakTimes.forEach(item=> {
+        try {
+          validateTimeIntervals(p.bellTimes,[...keptBreakTimes,item]);
+          keptBreakTimes.push(item);
+        } catch (error) {
+          // Drop only the conflicting break; keep all other saved data.
+        }
+      });
+
+      // Preserve the old default-break behavior where possible, but only add a
+      // default if it actually fits the saved bell schedule.
+      DEFAULT_BREAK_TIMES.forEach(defaultBreak=> {
+        const hasBreak=keptBreakTimes.some(item=>item.name===defaultBreak.name);
+        if (hasBreak) return;
+        try {
+          validateTimeIntervals(p.bellTimes,[...keptBreakTimes,defaultBreak]);
+          keptBreakTimes.push({...defaultBreak});
+        } catch (error) {
+          // This default simply does not apply to this timetable.
+        }
+      });
+
+      p.breakTimes=keptBreakTimes;
       return p
     }
   }
