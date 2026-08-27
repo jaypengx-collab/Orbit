@@ -1661,10 +1661,22 @@ function keepActiveClassVisible(list,isDayFinished,scrollKey) {
     const rowRect=activeRow.getBoundingClientRect();
     const targetTop=Math.max(0,list.scrollTop + rowRect.top - listRect.top);
     const normalMaxScroll = getNaturalListMaxScroll(list);
-    const neededSpace = Math.max(0,targetTop-normalMaxScroll+2);
+    // Extra headroom (was +2). iOS Safari — notably on iPhone 15 Pro's Dynamic
+    // Island safe-area geometry — can commit the new padding-bottom a frame
+    // late, so a razor-thin margin leaves scrollTo just short of the target;
+    // the list then visibly snaps the rest of the way once layout catches up.
+    // A larger buffer absorbs that timing gap without changing where the
+    // active row visually lands.
+    const SCROLL_SAFETY_MARGIN = 24;
+    const neededSpace = Math.max(0,targetTop-normalMaxScroll+SCROLL_SAFETY_MARGIN);
 
     setListAutoScrollSpace(list,neededSpace);
     setListAutoAlignedTop(list,targetTop);
+    // Force a synchronous reflow so the new padding-bottom (and therefore the
+    // larger scrollHeight) is committed BEFORE scrollTop is set below.
+    // Without this, iOS Safari can clamp the scroll to the old, smaller
+    // scrollHeight for a frame and then jump again once it reflows.
+    void list.offsetHeight;
     allowProgrammaticListScroll=true;
     list.scrollTo({
       top:targetTop,
@@ -1687,7 +1699,8 @@ function setListAutoAlignedTop(list,top) {
 function clearListAutoAlignedTop(list) {
   if (!list) return;
   delete list.dataset.autoAlignedTop;
-  /* Manual interaction releases the temporary alignment room completely. */
+  /* Only called from keepActiveClassVisible when the day is finished or
+     there's no active row — never from a manual scroll/touch gesture. */
   setListAutoScrollSpace(list,0);
 }
 
@@ -3397,46 +3410,23 @@ function syncTestPlayPauseUi() {
     })
   })
 })();
-// Keeps manual scrolling out of the blank auto-alignment space, but only once the
-// user actually scrolls — a plain tap/click (e.g. opening a row) must not collapse
-// the reserved auto-scroll room, or the list visibly jumps out from under the tap.
+// The reserved auto-alignment space is only ever set/cleared by
+// keepActiveClassVisible itself (on real state changes — new period, day
+// finished, etc). We used to also try to eagerly "release" it the moment the
+// user's finger/wheel/keyboard moved, but touchmove fires many times per
+// drag, and deleting the reserved space the instant scrollTop happened to
+// pass through the natural-max threshold — even mid-fling, not at rest —
+// forced an immediate clamp back down, which is exactly the "jump back"
+// this was supposed to prevent. On phones, fast flicks made this fire on
+// almost every gesture. Simplest fix: don't touch the reserved space based
+// on gesture heuristics at all; let it persist until the schedule itself
+// changes. clampManualListScroll below still guards against scrollTop ever
+// exceeding the reserved ceiling (e.g. iOS elastic overscroll), but it never
+// deletes the reservation — only keepActiveClassVisible does that.
 (function initScheduleScrollClamp() {
   const list=document.getElementById('schedule-list');
 
   if (!list)return;
-
-  const SCROLL_KEYS=new Set(['ArrowUp','ArrowDown','PageUp','PageDown','Home','End']);
-  let touchStartX=null, touchStartY=null;
-
-  function releaseAutoAlignSpace() {
-    clearListAutoAlignedTop(list)
-  }
-
-  // A real wheel gesture always means the user is scrolling, never just clicking.
-  list.addEventListener('wheel',releaseAutoAlignSpace,{passive:true});
-
-  // Touch: only release once the finger actually drags vertically past a small
-  // threshold, so a tap-to-open-row never triggers it.
-  list.addEventListener('touchstart',event=>{
-    const t=event.touches&&event.touches[0];
-    touchStartX=t?t.clientX:null;
-    touchStartY=t?t.clientY:null
-  },{passive:true});
-  list.addEventListener('touchmove',event=>{
-    if (touchStartY==null)return;
-    const t=event.touches&&event.touches[0];
-    if (!t)return;
-    if (Math.abs(t.clientY-touchStartY)>4||Math.abs(t.clientX-touchStartX)>4) {
-      releaseAutoAlignSpace();
-      touchStartX=touchStartY=null
-    }
-  },{passive:true});
-
-  // Keyboard: only actual scroll/navigation keys count, not Enter/Space used to
-  // activate a focused row.
-  list.addEventListener('keydown',event=>{
-    if (SCROLL_KEYS.has(event.key)) releaseAutoAlignSpace()
-  },{passive:true});
 
   let scrollReleaseTimer=0;
   list.addEventListener('scroll',()=>{
