@@ -1276,12 +1276,12 @@ function applyPendingStyleSlot() {
   hideEditorDiscardConfirm();
   previewStyleSettings()
 }
-function toggleStylePanel() {
+async function toggleStylePanel() {
   const editor=document.getElementById('editor-sheet');
   if (editor.classList.contains('show')) {
-    if (isEditorDirty()||hasUnconsumedImportData()) {
+    if (isEditorDirty()||await hasUnconsumedImportData()) {
       pendingAfterEditorDiscard='style';
-      showEditorDiscardConfirm();
+      await showEditorDiscardConfirm();
       return
     }
     closeEditor(true)
@@ -1348,12 +1348,12 @@ let pendingStyleSlotIndex = null;
 let pendingStyleSlotSaveIndex = null;
 // Opens or closes the manual time simulation panel.
 // Modal and toolbar state is separate from saved schedule settings.
-function toggleTestPanel()  {
+async function toggleTestPanel()  {
   const editorSheet=document.getElementById('editor-sheet');
   if (editorSheet.classList.contains('show')) {
-    if (isEditorDirty()||hasUnconsumedImportData()) {
+    if (isEditorDirty()||await hasUnconsumedImportData()) {
       pendingAfterEditorDiscard='test';
-      showEditorDiscardConfirm();
+      await showEditorDiscardConfirm();
       return
     }
     closeEditor(true)
@@ -2890,14 +2890,14 @@ function getEditorUnsavedDiff() {
     return ''
   }
 }
-function showEditorDiscardConfirm() {
+async function showEditorDiscardConfirm() {
   // Pasted-text or AI/OCR import data that was never actually applied isn't reflected
   // in the settings diff below — it needs its own explanation so the user understands
   // what they're about to lose.
-  if (!isEditorDirty()&&hasUnconsumedImportData()) {
+  if (!isEditorDirty()&&await hasUnconsumedImportData()) {
     setEditorConfirmContent(
-      '尚未匯入的內容？',
-      '文字欄位中貼上的備份內容，或 AI／OCR 辨識出的結果尚未按下「匯入」套用，離開後將會遺失。',
+      '尚未匯入內容？',
+      getUnconsumedImportWarningText(),
       '',
       '捨棄離開',
       discardEditorChangesAndClose,
@@ -2958,13 +2958,38 @@ function discardEditorChangesAndClose() {
   }
 }
 
-// True when there is pasted-JSON or AI-photo-recognized import data sitting around that was
-// never actually applied — used so we can warn the user before it gets wiped on exit.
-function hasUnconsumedImportData() {
+function getUnconsumedImportWarningText() {
   const text = document.getElementById('settings-transfer-text');
   const hasPastedText = !!(text && text.value.trim());
   const result = document.getElementById('ocr-import-result');
   const hasAiPreview = !!(result && !result.hidden && result.childElementCount > 0);
+
+  if (hasPastedText && hasAiPreview) return '未匯入的貼上內容與 AI 辨識結果將被清除。';
+  if (hasPastedText) return '未匯入的貼上內容將被清除。';
+  if (hasAiPreview) return '未匯入的 AI 辨識結果將被清除。';
+  return '未匯入內容將被清除。'
+}
+
+async function hasDuplicateTransferData() {
+  const text = document.getElementById('settings-transfer-text');
+  if (!text || !text.value.trim()) return false;
+  try {
+    const next = normalizeSettingsData(await decodeTransferData(text.value), { requireMarker: true });
+    const current = settingsDataForExport();
+    return describeSettingsDiff(current, next) === '沒有變更。'
+  } catch (error) {
+    return false
+  }
+}
+
+// True when there is pasted-JSON or AI-photo-recognized import data sitting around that was
+// never actually applied — used so we can warn the user before it gets wiped on exit.
+async function hasUnconsumedImportData() {
+  const text = document.getElementById('settings-transfer-text');
+  const hasPastedText = !!(text && text.value.trim());
+  const result = document.getElementById('ocr-import-result');
+  const hasAiPreview = !!(result && !result.hidden && result.childElementCount > 0);
+  if (hasPastedText && await hasDuplicateTransferData()) return false;
   return hasPastedText || hasAiPreview || !!pendingEditorImportData;
 }
 
@@ -2973,7 +2998,7 @@ function notifyDiscardedImportData() {
   const toast = document.getElementById('save-toast');
   if (!toast) return;
   const previousText = toast.textContent;
-  toast.textContent = '尚未匯入的貼上內容／AI 辨識結果已清除。';
+  toast.textContent = '已清除未匯入內容。';
   toast.classList.add('show');
   setTimeout(() => {
     toast.classList.remove('show');
@@ -2982,7 +3007,7 @@ function notifyDiscardedImportData() {
 }
 
 // Closes the editor, asking for confirmation when there are unsaved changes.
-function closeEditor(force) {
+async function closeEditor(force) {
   const sheet = document.getElementById('editor-sheet');
 
   if (!sheet.classList.contains('show')) {
@@ -2991,13 +3016,13 @@ function closeEditor(force) {
     return
   }
 
-  if (!force && (isEditorDirty()||hasUnconsumedImportData())) {
+  if (!force && (isEditorDirty()||await hasUnconsumedImportData())) {
     showEditorDiscardConfirm();
     return
   }
 
   hideEditorDiscardConfirm();
-  const hadUnconsumedImportData = hasUnconsumedImportData();
+  const hadUnconsumedImportData = await hasUnconsumedImportData();
   sheet.classList.remove('show');
   document.body.classList.remove('editor-open');
   // Wipe any AI import data (pasted JSON and AI-recognized photo result) so it never lingers
@@ -5350,7 +5375,7 @@ ocrImageInput?.addEventListener('change',async event=>{
   #editor-confirm-overlay{z-index:1000002 !important}
   #editor-confirm-sheet{z-index:1000003 !important}
   .dashboard .time-card.v3-11-next-module .next-box{grid-template-columns:minmax(0,1fr) auto !important}
-  .dashboard .time-card.v3-11-next-module .title-next{white-space:normal !important;display:-webkit-box !important;-webkit-box-orient:vertical !important;-webkit-line-clamp:2 !important;overflow:hidden !important;text-wrap:balance !important;overflow-wrap:normal !important;word-break:normal !important;line-height:1.08 !important;font-size:clamp(20px,5.8vw,27px) !important}
+  .dashboard .time-card.v3-11-next-module .title-next{white-space:normal !important;display:-webkit-box !important;-webkit-box-orient:vertical !important;-webkit-line-clamp:2 !important;line-clamp:2 !important;overflow:hidden !important;text-wrap:balance !important;overflow-wrap:normal !important;word-break:normal !important;line-height:1.08 !important;font-size:clamp(20px,5.8vw,27px) !important}
   .dashboard .time-card.v3-11-next-module .next-meta{max-width:42% !important;flex-direction:row !important;flex-wrap:nowrap !important;justify-content:flex-end !important;align-items:center !important;gap:4px !important;white-space:nowrap !important;overflow:hidden !important}
   @media (max-width:430px){.assign-sheet{padding:15px;width:calc(100vw - 20px);border-radius:20px}.assign-day-tabs{gap:4px}.assign-day-tab{font-size:10px}.dashboard .time-card.v3-11-next-module .next-meta{max-width:42% !important}}
 </style>
