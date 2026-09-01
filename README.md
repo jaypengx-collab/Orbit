@@ -1,57 +1,35 @@
 # Orbit AI
 
-**Orbit AI** is a lightweight timetable dashboard for students. It turns a
-weekly school schedule into a glanceable view of today's classes, remaining
-time, the next class, teacher, classroom, and upcoming events.
+A lightweight browser-based timetable dashboard for students. See your schedule at a glance—current class, time remaining, next lesson, teacher, and classroom.
 
-## Open the app
+## Launch
 
-[**Launch Orbit AI**](https://jaypengx-collab.github.io/Orbit/)
+**[Open Orbit AI](https://jaypengx-collab.github.io/Orbit/)**
 
-The app runs entirely in the browser and is optimized for both desktop and
-iPhone-sized screens.
+Works on desktop and mobile. No installation, no account, no login.
 
 ## Features
 
-- Current class, teacher, classroom, and live class or break timer
-- Next-class preview with long-title wrapping and classroom details
-- Odd/even week timetable support
-- Exam and event countdowns
-- Editable subjects, teachers, classrooms, periods, breaks, and assignments
-- Drag-and-drop ordering plus numeric quick ordering
-- Visual timetable assignment panel with staged changes and conflict warnings
-- Time simulator for testing another day and time
-- Dark/light appearance and custom color presets
-- Timetable backup import and export
-- Optional timetable image import with Gemini AI recognition
+- **Live dashboard** — current class, remaining time, and next lesson with live countdown
+- **Edit your schedule** — subjects, teachers, classrooms, periods, and breaks
+- **Events & deadlines** — track exams, assignments, and countdowns
+- **Odd/even weeks** — automatic week rotation support
+- **Time simulator** — test what your schedule looks like at any time
+- **Dark/light mode** — with custom color themes
+- **Import/export** — backup and restore your timetable
+- **AI timetable import** — upload a schedule image and let Gemini recognize it
+- **Completely private** — no accounts, no servers, all data stored locally
 
-## Privacy and storage
+## How it works
 
-Orbit AI has no account system or hosted database. Timetable data, preferences,
-and saved style presets are stored in the browser's local storage.
+1. Add your subjects, teachers, and classrooms
+2. Build your weekly schedule by editing each day
+3. Set up periods and breaks
+4. Add exams, assignments, and other events
+5. Open the app each day to see what's happening right now
 
-Changing browsers, devices, or site origins creates a separate local dataset.
-Use **Import / Export** in the editor before moving devices or clearing browser
-data.
+Data is saved automatically in your browser.
 
-If Gemini image recognition is used, the API key is kept in that browser and is
-sent to Google's Gemini API only when recognition is requested. Always review
-the detected timetable before applying it.
+## Privacy
 
-## Run locally
-
-Open [`index.html`](./index.html) in a modern browser. A local web server is
-recommended when testing browser permissions or API integrations.
-
-## Publish with GitHub Pages
-
-1. Upload `index.html`, `README.md`, and `.nojekyll` to a repository.
-2. In GitHub, open **Settings → Pages**.
-3. Select **Deploy from a branch**, choose `main` and `/(root)`, then save.
-4. Open the generated GitHub Pages URL.
-
-The published app is available at:
-
-```text
-https://jaypengx-collab.github.io/Orbit/
-```
+All your data stays in your browser. No login, no servers, no tracking. If you use the Gemini image recognition feature, your API key and images are only sent to Google during recognition—review the results before applying them.
