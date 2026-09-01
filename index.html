@@ -173,6 +173,15 @@
 </style>
 
 </style>
+<style>
+.teacher-drag-handle{display:inline-flex;align-items:center;justify-content:center;width:28px;height:32px;cursor:grab;color:var(--sub);font-size:18px;touch-action:none;user-select:none}
+.teacher-drag-handle:active{cursor:grabbing}.teacher-card.is-dragging{opacity:.55}
+.dashboard .row-name{border-left:3px solid var(--class-color,var(--accent));padding-left:8px}
+.dashboard .meta-location,.dashboard #now-place,.dashboard #now-class-label,.dashboard #next-teacher{color:var(--current-class-color,var(--accent));font-weight:700}
+.dashboard #now-name,.dashboard #next-name{color:var(--current-class-color,var(--accent))}
+#next-teacher{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width:430px){#schedule-list .row{min-height:96px;padding:14px 13px}.dashboard{min-height:270px}}
+</style>
 </head>
 <body class="orbit-booting">
 <style id="countdown-editor-layout">.countdown-editor-list{display:flex;flex-direction:column;gap:8px}.countdown-event-row{position:relative;display:block;padding:44px 8px 8px}.countdown-event-header{position:absolute;top:8px;right:8px;display:flex;flex-direction:row;gap:4px;align-items:center;width:max-content}.countdown-event-fields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;min-width:0;width:100%}.countdown-event-row label{min-width:0}.countdown-event-remove,.countdown-event-move,.teacher-move{width:32px;height:32px;border:1px solid var(--bd);border-radius:10px;background:transparent;color:var(--txt);font-size:16px;cursor:pointer}.countdown-event-remove{color:#ff453a;border-color:rgba(255,69,58,.35)}.countdown-event-move:disabled,.teacher-move:disabled{opacity:.3;cursor:default}.teacher-order-actions{display:flex;gap:4px;margin-left:auto}.teacher-move{width:26px;height:26px;font-size:13px}.exam-countdown{touch-action:pan-y;cursor:grab}.exam-countdown:active{cursor:grabbing}</style>
@@ -1614,6 +1623,12 @@ function update()  {
   const statusLabel=document.getElementById('status-label');
   if (statusLabel) statusLabel.innerText=dot.classList.contains('status-active')?'上課中':dot.classList.contains('status-wait')?(timerGroup&&timerGroup.style.display!=='none'?'休息中':'等待中'):'無課';
   nowName.innerText=st;
+  const dashboard=document.querySelector('.dashboard');
+  if (dashboard) {
+    const activeClass=(curIdx>=0?today[curIdx]:null);
+    const upcomingClass=(nxtIdx>=0?today[nxtIdx]:null);
+    dashboard.style.setProperty('--current-class-color',getClassColor(activeClass?.key||upcomingClass?.key||''));
+  }
   nowName.classList.toggle('is-status',compactStatus);
   if (nowStack) nowStack.classList.toggle('is-status',compactStatus);
   const nowTeacher=document.getElementById('now-teacher');
@@ -1822,7 +1837,8 @@ function collectEditorFormState()  {
     if (key&&subject)  {
       newDB[key] =[
       subject,
-      teacher
+      teacher,
+      location
       ];
       newLoc[key] =location
     }
@@ -2025,20 +2041,31 @@ function normalizeSettingsData(raw,{requireMarker=false}={}) {
   const countdownEvents=normalizeCountdownEvents(source.countdownEvents||source.countdownEvent);
 
   const teacherDB={};
+  const teacherKeyMap={};
   Object.entries(source.teacherDB).forEach(([key,value])=> {
     if (!key || !Array.isArray(value)) return;
-    teacherDB[String(key)]=[String(value[0]||''),String(value[1]||'')]
+    const original=String(key).trim();
+    let normalized=original.slice(0,4);
+    if (!normalized) return;
+    let suffix=1;
+    while (teacherDB[normalized] && teacherKeyMap[original]!==normalized) {
+      const tail=String(suffix++);
+      normalized=(original.slice(0,Math.max(1,4-tail.length))+tail).slice(0,4);
+    }
+    teacherKeyMap[original]=normalized;
+    teacherDB[normalized]=[String(value[0]||''),String(value[1]||''),String(value[2]||'')];
   });
-  const teacherOrder=[...new Set((Array.isArray(source.teacherOrder)?source.teacherOrder:Object.keys(teacherDB)).map(key=>String(key)).filter(key=>teacherDB[key]))];
+  const teacherOrder=[...new Set((Array.isArray(source.teacherOrder)?source.teacherOrder:Object.keys(teacherDB)).map(key=>teacherKeyMap[String(key)]||String(key)).filter(key=>teacherDB[key]))];
   Object.keys(teacherDB).forEach(key=>{if(!teacherOrder.includes(key))teacherOrder.push(key)});
   const locationDB={};
   Object.entries(source.locationDB).forEach(([key,value])=> {
-    locationDB[String(key)]=String(value||'')
+    const normalizedKey=teacherKeyMap[String(key)]||String(key);
+    locationDB[normalizedKey]=String(value||'')
   });
   const weeklySchedule={};
   [0,1,2,3,4,5,6].forEach(day=> {
     const row=source.weeklySchedule[day]||source.weeklySchedule[String(day)]||[];
-    weeklySchedule[day]=Array.isArray(row)?row.map(item=>String(item||'')):[]
+    weeklySchedule[day]=Array.isArray(row)?row.map(item=>teacherKeyMap[String(item||'')]||String(item||'')):[]
   });
   if (Object.values(weeklySchedule).some(row=>row.some(key=>key&&!teacherDB[key]))) throw new Error('排課資料包含不存在的教師代碼。');
   if (source.bellTimes.some(item=>!Array.isArray(item)||!isValidTimeRange(String(item[0]||''),String(item[1]||'')))) throw new Error('節次時間必須是有效的開始與結束時間。');
@@ -2413,7 +2440,18 @@ function beginEditorImport(current,next) {
 function showEditorImportConfirm(current,next,isMerge) {
   let result;
   try {
-    result=isMerge?mergeImportedSettings(current,next):{data:next,actions:[]};
+    if (isMerge) result=mergeImportedSettings(current,next);
+    else {
+      const direct=cloneSettingsData(next);
+      // Direct imports replace timetable-only settings, including special periods.
+      // Visual preferences are intentionally local and are never imported.
+      direct.breakTimes=cloneSettingsData(next.breakTimes||[]);
+      direct.proAccent=current.proAccent;
+      direct.proSecondary=current.proSecondary;
+      direct.proTertiary=current.proTertiary;
+      direct.styleSlots=cloneSettingsData(current.styleSlots||[]);
+      result={data:normalizeSettingsData(direct),actions:[]};
+    }
   } catch (error) {
     pendingEditorImportData=null;
     setEditorConfirmContent('匯入失敗','無法完成這次匯入，請調整後再試一次。',error.message||String(error),'返回',hideEditorDiscardConfirm,null);
@@ -2899,20 +2937,55 @@ function renderEditorTeachers() {
 function makeTeacherCard(key, subject, teacher, location) {
   const div = document.createElement('div');
   div.className = 'teacher-card';
+  div.draggable = true;
   div.dataset.origKey = key;
   // syncKey tracks whatever value has already been mirrored into the schedule
   // dropdowns; origKey stays fixed to the last actually-saved key and is what
   // the changelog is built from. Keeping these separate is what prevents an
   // in-progress (not yet saved) rename from being mistaken for the baseline.
   div.dataset.syncKey = key;
-  div.innerHTML = `<div class="teacher-key">${esc(key || '?')}</div><div class="teacher-fields"><input class="editor-input tc-key" placeholder="縮寫" value="${esc(key)}" maxlength="4"><input class="editor-input tc-subject" placeholder="科目" value="${esc(subject)}"><input class="editor-input tc-teacher" placeholder="教師" value="${esc(teacher)}"><input class="editor-input tc-location" placeholder="教室(選填)" value="${esc(location || '')}"></div><div class="teacher-order-actions"><button type="button" class="teacher-move" onclick="moveEditorRow(this,-1)" aria-label="上移">↑</button><button type="button" class="teacher-move" onclick="moveEditorRow(this,1)" aria-label="下移">↓</button><button type="button" class="delete-btn" onclick="deleteTeacherCard(this)" aria-label="刪除">×</button></div>`;
+  div.innerHTML = `<div class="teacher-key">${esc(key || '?')}</div><div class="teacher-fields"><input class="editor-input tc-key" placeholder="縮寫" value="${esc(key)}" maxlength="4"><input class="editor-input tc-subject" placeholder="科目" value="${esc(subject)}"><input class="editor-input tc-teacher" placeholder="教師" value="${esc(teacher)}"><input class="editor-input tc-location" placeholder="教室(選填)" value="${esc(location || '')}"></div><div class="teacher-order-actions"><span class="teacher-drag-handle" title="拖曳排序" aria-label="拖曳排序">☰</span><button type="button" class="teacher-assign" onclick="assignTeacherFromMenu(this)" aria-label="指定課節">排課</button><button type="button" class="teacher-move" onclick="moveEditorRow(this,-1)" aria-label="上移">↑</button><button type="button" class="teacher-move" onclick="moveEditorRow(this,1)" aria-label="下移">↓</button><button type="button" class="delete-btn" onclick="deleteTeacherCard(this)" aria-label="刪除">×</button></div>`;
+  div.addEventListener('dragstart', event => {
+    if (!event.target.closest('.teacher-drag-handle')) { event.preventDefault(); return; }
+    div.classList.add('is-dragging');
+    event.dataTransfer.effectAllowed='move';
+    event.dataTransfer.setData('text/plain','teacher');
+  });
+  div.addEventListener('dragend', () => div.classList.remove('is-dragging'));
+  div.addEventListener('dragover', event => {
+    event.preventDefault();
+    const dragging=document.querySelector('#teacher-list .teacher-card.is-dragging');
+    if (dragging&&dragging!==div) {
+      const before=event.clientY<div.getBoundingClientRect().top+div.offsetHeight/2;
+      div.parentElement.insertBefore(dragging,before?div:div.nextSibling);
+    }
+  });
+  div.addEventListener('drop', event => { event.preventDefault(); refreshTeacherMoveButtons(); refreshPeriodSelectOptions(); });
 
   div.querySelector('.tc-key').addEventListener('input', function() {
+    if (this.value.length>4) this.value=this.value.slice(0,4);
     div.querySelector('.teacher-key').textContent = this.value.trim() || '?';
     refreshPeriodSelectOptions()
   });
 
   return div
+}
+function assignTeacherFromMenu(button) {
+  const card=button.closest('.teacher-card');
+  const key=(card?.querySelector('.tc-key')?.value||'').trim();
+  if (!key) return;
+  const dayInput=prompt('輸入星期（1=一，2=二，…，6=六，0=日）','1');
+  const periodInput=prompt('輸入節次（從 1 開始）','1');
+  if (dayInput===null||periodInput===null) return;
+  const day=Number(dayInput);
+  const period=Number(periodInput)-1;
+  if (!Number.isInteger(day)||day<0||day>6||!Number.isInteger(period)||period<0) return;
+  const row=document.querySelector(`#schedule-grid .schedule-day-row[data-day="${day}"]`);
+  const select=row?.querySelectorAll('.period-select')[period];
+  if (!select) return;
+  // Selecting a subject from its menu intentionally overwrites the target slot.
+  select.value=key;
+  select.dispatchEvent(new Event('change',{bubbles:true}));
 }
 function moveEditorRow(button,direction) {
   const row=button.closest('.teacher-card,.countdown-event-row');
@@ -2920,7 +2993,10 @@ function moveEditorRow(button,direction) {
   const sibling=direction<0?row.previousElementSibling:row.nextElementSibling;
   if (!sibling) return;
   row.parentElement.insertBefore(direction<0?row:sibling,direction<0?sibling:row);
-  if (row.classList.contains('teacher-card')) refreshTeacherMoveButtons();
+  if (row.classList.contains('teacher-card')) {
+    refreshTeacherMoveButtons();
+    refreshPeriodSelectOptions();
+  }
   else refreshCountdownMoveButtons();
 }
 function refreshTeacherMoveButtons() {
@@ -3085,7 +3161,12 @@ function showTeacherRenameBackConfirm() {
   return true;
 }
 function applyTeacherCardDelete(btn) {
-  btn.closest('.teacher-card').remove();
+  const card=btn.closest('.teacher-card');
+  const keys=new Set([(card?.dataset.origKey||'').trim(),(card?.querySelector('.tc-key')?.value||'').trim()]);
+  card?.remove();
+  document.querySelectorAll('#schedule-grid .period-select').forEach(select=>{
+    if (keys.has(select.value)) select.value='';
+  });
   refreshPeriodSelectOptions()
 }
 function confirmTeacherCardDelete() {
@@ -3512,6 +3593,13 @@ function createMetaChip(text,cls='') {
   span.textContent=text;
   return span;
 }
+function getClassColor(key) {
+  const slots=normalizeStyleSlots(applicationData.styleSlots).filter(slot=>slot.name);
+  if (!slots.length) return normalizeProAccent(applicationData.proAccent);
+  let hash=0;
+  for (const char of String(key||'')) hash=(hash*31+char.charCodeAt(0))>>>0;
+  return slots[hash%slots.length].primary;
+}
 function renderList(week,curIdx,nxtIdx,curDay,isDayFinished) {
   const list=document.getElementById('schedule-list');
   if (!list) return;
@@ -3535,6 +3623,7 @@ function renderList(week,curIdx,nxtIdx,curDay,isDayFinished) {
     const isNext=isToday&&i===nxtIdx;
     const row=document.createElement('div');
     row.className=`row ${isNow?'is-now':''} ${isNext?'is-next':''}`.trim();
+    row.style.setProperty('--class-color',getClassColor(c.key));
     row.tabIndex=0;
     row.role='button';
     row.addEventListener('click',()=>openModal(c));
@@ -3565,7 +3654,11 @@ function renderList(week,curIdx,nxtIdx,curDay,isDayFinished) {
     meta.className='row-meta';
     meta.append(createMetaChip(`${c.s} – ${c.e}`,'meta-time'));
     if (info.t) meta.append(createMetaChip(info.t,'meta-teacher'));
-    if (c.loc) meta.append(createMetaChip(c.loc,'meta-location'));
+    if (c.loc) {
+      const locationChip=createMetaChip(c.loc,'meta-location');
+      locationChip.style.setProperty('--class-color',getClassColor(c.key));
+      meta.append(locationChip);
+    }
     content.append(name,meta);
     row.append(badge,content);
     list.appendChild(row);
@@ -3800,7 +3893,12 @@ Interpret the timetable visually and use your best judgment to reconstruct its s
         if (!subject) return;
         subject=subject.replace(/／/g,'/');
         teacher=teacher.replace(/／/g,'/');
-        const key = String(dbKey || subject).trim().replace(/／/g,'/') || `A${courseCounter++}`;
+            const rawKey = String(dbKey || subject).trim().replace(/／/g,'/');
+            let key = rawKey.slice(0,4) || `A${courseCounter++}`;
+            while (teacherDB[key]) {
+              const suffix=String(courseCounter++);
+              key=(rawKey.slice(0,Math.max(1,4-suffix.length))+suffix).slice(0,4);
+            }
         const location=Array.isArray(val)?String(val[2]||'').trim():String(val?.location||val?.room||val?.classroom||'').trim();
         teacherDB[key] = [subject, teacher, location];
         locationDB[key] = location;
@@ -4150,7 +4248,16 @@ function activateOCRImporter() {
       result,
       onImport:data=> {
         try {
-          const imported=normalizeSettingsData(data);
+          const imported=normalizeSettingsData({
+            ...data,
+            // AI recognition has no knowledge of the app's visual theme or
+            // existing named breaks; retain those editor settings on import.
+            breakTimes:Array.isArray(data.breakTimes)?data.breakTimes:[],
+            proAccent:settingsDataForExport().proAccent,
+            proSecondary:settingsDataForExport().proSecondary,
+            proTertiary:settingsDataForExport().proTertiary,
+            styleSlots:settingsDataForExport().styleSlots
+          });
           beginEditorImport(settingsDataForExport(),imported);
         } catch (error) {
           statusElement.textContent=`匯入預覽失敗：${error.message||error}`;
