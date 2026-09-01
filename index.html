@@ -2708,15 +2708,27 @@ function refreshCountdownMoveButtons() {
     if (input) { input.max=String(rows.length); input.value=String(index+1); }
   });
 }
+function getEditorScrollContainer(handle) {
+  const sheet=handle.closest('.editor-sheet');
+  if (!sheet) return null;
+  const activeFold=sheet.querySelector('details.editor-fold.active .editor-fold-body');
+  const inner=sheet.querySelector('.editor-inner');
+  const candidates=[activeFold, inner, sheet].filter(Boolean);
+  for (const candidate of candidates) {
+    if (candidate.scrollHeight > candidate.clientHeight) return candidate;
+  }
+  return sheet;
+}
 function autoScrollEditorWhileDragging(handle,clientY) {
-  const scroller=handle.closest('.editor-sheet');
-  if (!scroller || scroller.scrollHeight<=scroller.clientHeight) return;
+  const scroller=getEditorScrollContainer(handle);
+  if (!scroller) return;
   const bounds=scroller.getBoundingClientRect();
   const edge=72;
+  const maxScroll=Math.max(0, scroller.scrollHeight-scroller.clientHeight);
   if (clientY<bounds.top+edge) {
-    scroller.scrollTop-=Math.ceil((bounds.top+edge-clientY)/4);
-  } else if (clientY>bounds.bottom-edge) {
-    scroller.scrollTop+=Math.ceil((clientY-(bounds.bottom-edge))/4);
+    scroller.scrollTop=Math.max(0, scroller.scrollTop-Math.ceil((bounds.top+edge-clientY)/4));
+  } else if (clientY>bounds.bottom - edge) {
+    scroller.scrollTop=Math.min(maxScroll, scroller.scrollTop+Math.ceil((clientY-(bounds.bottom - edge))/4));
   }
 }
 function bindCountdownDrag(row) {
@@ -2738,7 +2750,7 @@ function bindCountdownDrag(row) {
   };
   const autoScroll=()=>{
     if (!dragging) return;
-    const scroller=handle.closest('.editor-sheet');
+    const scroller=getEditorScrollContainer(handle);
     const before=scroller?.scrollTop||0;
     autoScrollEditorWhileDragging(handle,lastY);
     if (scroller && scroller.scrollTop!==before) move({clientY:lastY});
@@ -3060,7 +3072,7 @@ function makeTeacherCard(key, subject, teacher, location) {
   };
   const autoScroll=()=>{
     if (!pointerDragging) return;
-    const scroller=handle.closest('.editor-sheet');
+    const scroller=getEditorScrollContainer(handle);
     const before=scroller?.scrollTop||0;
     autoScrollEditorWhileDragging(handle,lastY);
     if (scroller && scroller.scrollTop!==before) movePointerDrag({clientY:lastY});
