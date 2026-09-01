@@ -2693,22 +2693,53 @@ function addCountdownEventRow(event={name:'',date:''},index) {
 function refreshCountdownMoveButtons() {
   document.querySelectorAll('#countdown-event-list .countdown-drag-handle').forEach(handle=>handle.setAttribute('aria-label','拖曳倒數活動排序'));
 }
+function autoScrollEditorWhileDragging(handle,clientY) {
+  const scroller=handle.closest('.editor-sheet');
+  if (!scroller || scroller.scrollHeight<=scroller.clientHeight) return;
+  const bounds=scroller.getBoundingClientRect();
+  const edge=72;
+  if (clientY<bounds.top+edge) {
+    scroller.scrollTop-=Math.ceil((bounds.top+edge-clientY)/4);
+  } else if (clientY>bounds.bottom-edge) {
+    scroller.scrollTop+=Math.ceil((clientY-(bounds.bottom-edge))/4);
+  }
+}
 function bindCountdownDrag(row) {
   const handle=row.querySelector('.countdown-drag-handle');
   if (!handle || handle.dataset.bound) return;
   handle.dataset.bound='1';
+  handle.style.touchAction='none';
   let dragging=false;
-  const finish=event=>{ if (!dragging) return; dragging=false; row.classList.remove('is-dragging'); handle.releasePointerCapture?.(event.pointerId); };
-  handle.addEventListener('pointerdown',event=>{
-    if (event.button!==undefined&&event.button!==0) return;
-    event.preventDefault(); dragging=true; row.classList.add('is-dragging'); handle.setPointerCapture?.(event.pointerId);
-  });
-  handle.addEventListener('pointermove',event=>{
+  const move=event=>{
     if (!dragging) return;
+    autoScrollEditorWhileDragging(handle,event.clientY);
     const rows=[...document.querySelectorAll('#countdown-event-list .countdown-event-row')].filter(item=>item!==row);
     const target=rows.find(item=>event.clientY<item.getBoundingClientRect().top+item.offsetHeight/2);
     if (target) target.parentElement.insertBefore(row,target);
     else if (rows.length) rows[rows.length-1].parentElement.appendChild(row);
+  };
+  const finish=event=>{
+    if (!dragging) return;
+    dragging=false;
+    row.classList.remove('is-dragging');
+    window.removeEventListener('pointermove',move);
+    window.removeEventListener('pointerup',finish);
+    window.removeEventListener('pointercancel',finish);
+    window.removeEventListener('blur',finish);
+    if (event?.pointerId!==undefined && handle.hasPointerCapture?.(event.pointerId)) {
+      handle.releasePointerCapture(event.pointerId);
+    }
+  };
+  handle.addEventListener('pointerdown',event=>{
+    if (event.button!==undefined&&event.button!==0) return;
+    event.preventDefault();
+    dragging=true;
+    row.classList.add('is-dragging');
+    handle.setPointerCapture?.(event.pointerId);
+    window.addEventListener('pointermove',move);
+    window.addEventListener('pointerup',finish);
+    window.addEventListener('pointercancel',finish);
+    window.addEventListener('blur',finish);
   });
   handle.addEventListener('pointerup',finish);
   handle.addEventListener('pointercancel',finish);
@@ -2966,7 +2997,6 @@ function renderEditorTeachers() {
 function makeTeacherCard(key, subject, teacher, location) {
   const div = document.createElement('div');
   div.className = 'teacher-card';
-  div.draggable = true;
   div.dataset.origKey = key;
   // syncKey tracks whatever value has already been mirrored into the schedule
   // dropdowns; origKey stays fixed to the last actually-saved key and is what
@@ -2974,41 +3004,38 @@ function makeTeacherCard(key, subject, teacher, location) {
   // in-progress (not yet saved) rename from being mistaken for the baseline.
   div.dataset.syncKey = key;
   div.innerHTML = `<div class="teacher-key">${esc(key || '?')}</div><div class="teacher-fields"><input class="editor-input tc-key" placeholder="縮寫" value="${esc(key)}" maxlength="4"><input class="editor-input tc-subject" placeholder="科目" value="${esc(subject)}"><input class="editor-input tc-teacher" placeholder="教師" value="${esc(teacher)}"><input class="editor-input tc-location" placeholder="教室(選填)" value="${esc(location || '')}"></div><div class="teacher-order-actions"><span class="teacher-drag-handle" role="button" tabindex="0" title="拖曳排序" aria-label="拖曳排序">☰</span><button type="button" class="teacher-assign" onclick="assignTeacherFromMenu(this)" aria-label="指定課節">排課</button><button type="button" class="delete-btn" onclick="deleteTeacherCard(this)" aria-label="刪除">×</button></div>`;
-  div.addEventListener('dragstart', event => {
-    if (!event.target.closest('.teacher-drag-handle')) { event.preventDefault(); return; }
-    div.classList.add('is-dragging');
-    event.dataTransfer.effectAllowed='move';
-    event.dataTransfer.setData('text/plain','teacher');
-  });
-  div.addEventListener('dragend', () => div.classList.remove('is-dragging'));
-  div.addEventListener('dragover', event => {
-    event.preventDefault();
-    const dragging=document.querySelector('#teacher-list .teacher-card.is-dragging');
-    if (dragging&&dragging!==div) {
-      const before=event.clientY<div.getBoundingClientRect().top+div.offsetHeight/2;
-      div.parentElement.insertBefore(dragging,before?div:div.nextSibling);
-    }
-  });
-  div.addEventListener('drop', event => { event.preventDefault(); refreshTeacherMoveButtons(); refreshPeriodSelectOptions(); });
   const handle=div.querySelector('.teacher-drag-handle');
+  handle.style.touchAction='none';
   let pointerDragging=false;
-  handle.addEventListener('pointerdown',event=>{
-    if (event.button!==undefined&&event.button!==0) return;
-    event.preventDefault(); pointerDragging=true; div.classList.add('is-dragging');
-    handle.setPointerCapture?.(event.pointerId);
-  });
-  handle.addEventListener('pointermove',event=>{
+  const movePointerDrag=event=>{
     if (!pointerDragging) return;
+    autoScrollEditorWhileDragging(handle,event.clientY);
     const cards=[...document.querySelectorAll('#teacher-list .teacher-card')].filter(card=>card!==div);
     const target=cards.find(card=>event.clientY<card.getBoundingClientRect().top+card.offsetHeight/2);
     if (target) target.parentElement.insertBefore(div,target);
     else if (cards.length) cards[cards.length-1].parentElement.appendChild(div);
-    refreshTeacherMoveButtons(); refreshPeriodSelectOptions();
+    refreshTeacherMoveButtons();
+    refreshPeriodSelectOptions();
+  };
+  handle.addEventListener('pointerdown',event=>{
+    if (event.button!==undefined&&event.button!==0) return;
+    event.preventDefault(); pointerDragging=true; div.classList.add('is-dragging');
+    handle.setPointerCapture?.(event.pointerId);
+    window.addEventListener('pointermove',movePointerDrag);
+    window.addEventListener('pointerup',finishPointerDrag);
+    window.addEventListener('pointercancel',finishPointerDrag);
+    window.addEventListener('blur',finishPointerDrag);
   });
   const finishPointerDrag=event=>{
     if (!pointerDragging) return;
     pointerDragging=false; div.classList.remove('is-dragging');
-    handle.releasePointerCapture?.(event.pointerId);
+    window.removeEventListener('pointermove',movePointerDrag);
+    window.removeEventListener('pointerup',finishPointerDrag);
+    window.removeEventListener('pointercancel',finishPointerDrag);
+    window.removeEventListener('blur',finishPointerDrag);
+    if (event?.pointerId!==undefined && handle.hasPointerCapture?.(event.pointerId)) {
+      handle.releasePointerCapture(event.pointerId);
+    }
     refreshTeacherMoveButtons(); refreshPeriodSelectOptions();
   };
   handle.addEventListener('pointerup',finishPointerDrag);
