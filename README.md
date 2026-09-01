@@ -6,7 +6,7 @@ time, the next class, teacher, classroom, and upcoming events.
 
 ## Open the app
 
-[**Launch Orbit AI**](./index.html)
+[**Launch Orbit AI**](https://jaypengx-collab.github.io/Orbit/)
 
 The app runs entirely in the browser and is optimized for both desktop and
 iPhone-sized screens.
@@ -50,8 +50,8 @@ recommended when testing browser permissions or API integrations.
 3. Select **Deploy from a branch**, choose `main` and `/(root)`, then save.
 4. Open the generated GitHub Pages URL.
 
-The published URL normally follows this format:
+The published app is available at:
 
 ```text
-https://YOUR-GITHUB-NAME.github.io/REPOSITORY-NAME/
+https://jaypengx-collab.github.io/Orbit/
 ```
