@@ -1,35 +1,35 @@
 # Orbit AI
 
-A lightweight browser-based timetable dashboard for students. See your schedule at a glance—current class, time remaining, next lesson, teacher, and classroom.
+為學生設計的輕量級瀏覽器課表儀表板。一目瞭然地查看您的課程表——下課時間、下一節課程、科目與教師。
 
-## Launch
+## 開啟應用
 
-**[Open Orbit AI](https://jaypengx-collab.github.io/Orbit/)**
+**[打開 Orbit AI](https://jaypengx-collab.github.io/Orbit/)**
 
-Works on desktop and mobile. No installation, no account, no login.
+適用於桌面和行動裝置。無需安裝、無需帳戶、無需登入。
 
-## Features
+## 功能特色
 
-- **Live dashboard** — current class, remaining time, and next lesson with live countdown
-- **Edit your schedule** — subjects, teachers, classrooms, periods, and breaks
-- **Events & deadlines** — track exams, assignments, and countdowns
-- **Odd/even weeks** — automatic week rotation support
-- **Time simulator** — test what your schedule looks like at any time
-- **Dark/light mode** — with custom color themes
-- **Import/export** — backup and restore your timetable
-- **AI timetable import** — upload a schedule image and let Gemini recognize it
-- **Completely private** — no accounts, no servers, all data stored locally
+- **首頁儀表板** — 實時顯示下課時間、下一節課程和科目與教師
+- **編輯課表** — 自訂科目與教師、節次時間、特殊時段
+- **倒數活動** — 追蹤考試、作業和其他重要截止日期
+- **單雙週對調** — 自動支援不同週次課表
+- **時間模擬** — 測試任何時間下的課表樣貌
+- **樣式工具** — 自訂深色/淺色主題與顏色
+- **匯入 / 匯出** — 備份和恢復您的課表設定
+- **圖片匯入** — 上傳課表圖片，讓 AI 識別並自動建立
+- **完全隱私** — 無帳戶、無伺服器、所有數據本地儲存
 
-## How it works
+## 使用方式
 
-1. Add your subjects, teachers, and classrooms
-2. Build your weekly schedule by editing each day
-3. Set up periods and breaks
-4. Add exams, assignments, and other events
-5. Open the app each day to see what's happening right now
+1. 新增您的科目與教師
+2. 設定節次時間和特殊時段
+3. 排課——按日建立每週課表
+4. 新增倒數活動（考試、作業等）
+5. 每天開啟首頁查看當前課程和下一節
 
-Data is saved automatically in your browser.
+數據會自動儲存在您的瀏覽器中。
 
-## Privacy
+## 隱私保護
 
-All your data stays in your browser. No login, no servers, no tracking. If you use the Gemini image recognition feature, your API key and images are only sent to Google during recognition—review the results before applying them.
+您的所有數據都保存在您的瀏覽器中。無登入、無伺服器、無追蹤。如果您使用 AI 圖片匯入功能，您的 API 金鑰和圖片僅會在辨識時發送至服務提供商——在匯入結果前請先檢查。
