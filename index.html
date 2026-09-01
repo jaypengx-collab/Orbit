@@ -177,9 +177,8 @@
 .teacher-drag-handle{display:inline-flex;align-items:center;justify-content:center;width:28px;height:32px;cursor:grab;color:var(--sub);font-size:18px;touch-action:none;user-select:none}
 .teacher-drag-handle:active{cursor:grabbing}.teacher-card.is-dragging{opacity:.55}
 .dashboard .row-name{border-left:3px solid var(--class-color,var(--accent));padding-left:8px}
-.dashboard .meta-location,.dashboard #now-place,.dashboard #now-class-label,.dashboard #next-teacher{color:var(--current-class-color,var(--accent));font-weight:700}
+.dashboard .meta-location,.dashboard #now-place,.dashboard #now-class-label{color:var(--current-class-color,var(--accent));font-weight:700}
 .dashboard #now-name,.dashboard #next-name{color:var(--current-class-color,var(--accent))}
-#next-teacher{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (max-width:430px){#schedule-list .row{min-height:96px;padding:14px 13px}.dashboard{min-height:270px}}
 </style>
 </head>
@@ -247,15 +246,16 @@
     </div>
   </div>
   <div class="next-box">
-    <div>
+    <div class="next-content">
       <span class="label">
         下一節
       </span>
       <div class="title-next" id="next-name">
         ---
       </div>
-    </div>
-    <div id="next-teacher">
+      <div class="next-meta" aria-label="下一節資訊">
+        <div id="next-meta-text"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -336,6 +336,14 @@
     <div class="editor-header">
       <div class="editor-title">
         編輯課表
+      </div>
+      <div id="assign-overlay" class="editor-confirm-overlay" onclick="closeAssignSheet()" aria-hidden="true"></div>
+      <div id="assign-sheet" class="assign-sheet" role="dialog" aria-modal="true" aria-labelledby="assign-title">
+        <div class="assign-header"><h2 id="assign-title" class="editor-confirm-title">排課</h2><button type="button" class="editor-close" onclick="closeAssignSheet()" aria-label="關閉">×</button></div>
+        <p id="assign-subtitle" class="editor-confirm-msg"></p>
+        <div id="assign-day-tabs" class="assign-day-tabs" role="tablist" aria-label="選擇星期"></div>
+        <div id="assign-grid" class="assign-grid"></div>
+        <button type="button" class="editor-confirm-btn editor-primary-btn" onclick="applyAssignments()">套用並完成</button>
       </div>
       <button type="button" class="editor-close" onclick="closeEditor()" aria-label="關閉">
         ×
@@ -1406,7 +1414,8 @@ document.addEventListener('click',event=>{
 },{capture:true});
 document.addEventListener('keydown',event=>{
   if (event.key!=='Escape') return;
-  if (document.getElementById('sheet')?.classList.contains('show')) closeModal();
+  if (document.getElementById('assign-sheet')?.classList.contains('show')) closeAssignSheet();
+  else if (document.getElementById('sheet')?.classList.contains('show')) closeModal();
   else if (document.getElementById('editor-confirm-sheet')?.classList.contains('show')) hideEditorDiscardConfirm();
   else if (document.getElementById('debug-panel')?.classList.contains('show')) closeTestPanel();
   else if (document.getElementById('style-panel')?.classList.contains('show')) closeStylePanel();
@@ -1646,8 +1655,10 @@ function update()  {
   if (metaRow) metaRow.style.display=(!compactStatus&&(ct||currentPlace||classLabel))?'flex':'none';
   fitNowTitleText();
   document.getElementById('next-name').innerText=nt;
-  document.getElementById('next-teacher').innerText=nextMeta;
-  fitNextTitleText();
+  const nextClass=nxtIdx>=0?today[nxtIdx]:null;
+  const nextInfo=nextClass?processSplitName(nextClass,week):null;
+  document.getElementById('next-meta-text').innerText=nextClass?
+    [nextClass.s,nextInfo?.t,nextClass.loc].filter(Boolean).join(' · '):"";
   const liveStateKey=`${window.MANUALLY_TEST?'T':'R'}-${curDay}-${week}-${curIdx}-${nxtIdx}-${activeBreak?activeBreak.name:''}-${isDayFinished}-${viewDay}`;
   if (lastListKey!==liveStateKey)  {
     renderList(week,curIdx,nxtIdx,curDay,isDayFinished);
@@ -2016,6 +2027,11 @@ async function encodeTransferData(data) {
 }
 async function decodeTransferData(text) {
   const value=String(text||'').trim();
+  // Accept the uncompressed JSON form used by earlier backups as well as the
+  // current compressed wrapper.
+  if (value.startsWith('{')) {
+    return JSON.parse(value);
+  }
   const wrapped=value.startsWith(TRANSFER_START)&&value.endsWith(TRANSFER_END);
   const encoded=wrapped
     ? value.slice(TRANSFER_START.length,-TRANSFER_END.length).trim()
@@ -2028,7 +2044,7 @@ async function decodeTransferData(text) {
 function normalizeSettingsData(raw,{requireMarker=false}={}) {
   if (!raw || typeof raw !== 'object') throw new Error('設定文字必須是 JSON 物件。');
   const marker=raw.__orbit;
-  if (requireMarker&&(!marker||marker.app!==ORBIT_APP_ID||marker.schema!==ORBIT_STORAGE_SCHEMA)) throw new Error('設定檔不是由目前版本的 Orbit_Color 建立。');
+  if (requireMarker&&marker&& (marker.app!==ORBIT_APP_ID||marker.schema!==ORBIT_STORAGE_SCHEMA)) throw new Error('設定檔不是由目前版本的 Orbit_Color 建立。');
   const source=raw.settings&&typeof raw.settings==='object'?raw.settings:raw;
   const required=['teacherDB','locationDB','weeklySchedule','bellTimes'];
   required.forEach(key=> {
@@ -2321,7 +2337,7 @@ async function previewImportEditorSettings() {
     setTransferStatus('匯入失敗：內容無效或已損毀。',true)
   }
 }
-function mergeImportedSettings(current,imported) {
+function mergeImportedSettings(current,imported,preserveStyle=false) {
   const merged=cloneSettingsData(current), addedActions=[], mergedActions=[], replacedActions=[];
   merged.teacherDB={...(current.teacherDB||{})};
   const teacherKeyMap={}, currentTeacherKeyMap={};
@@ -2403,53 +2419,46 @@ function mergeImportedSettings(current,imported) {
   merged.countdownEvent=merged.countdownEvents[0];
   if (current.reverseWeek!==imported.reverseWeek) replacedActions.push(`取代單雙週設定：${imported.reverseWeek?'開啟':'關閉'}`);
   merged.reverseWeek=imported.reverseWeek;
-  if (current.proAccent!==imported.proAccent||current.proSecondary!==imported.proSecondary) replacedActions.push('取代目前樣式的主色與次色');
-  merged.proAccent=imported.proAccent;
-  merged.proSecondary=imported.proSecondary;
-  merged.proTertiary=imported.proTertiary;
-  const slots=normalizeStyleSlots(current.styleSlots), importedSlots=normalizeStyleSlots(imported.styleSlots);
-  merged.styleSlots=slots.map(slot=>({...slot}));
-  importedSlots.forEach(importedSlot=> {
-    if (!importedSlot.name)return;
-    const sameNameIndex=merged.styleSlots.findIndex(slot=>slot.name===importedSlot.name);
-    const emptyIndex=merged.styleSlots.findIndex(slot=>!slot.name);
-    const index=sameNameIndex>=0?sameNameIndex:(emptyIndex>=0?emptyIndex:0);
-    const old=merged.styleSlots[index];
-    const action=sameNameIndex>=0?'合併':(emptyIndex>=0?'新增':'取代');
-    const actionLabel=action==='新增'?`新增樣式 ${index+1}「${importedSlot.name}」`:action==='合併'?`合併樣式 ${index+1}「${importedSlot.name}」`:`取代樣式 ${index+1}：名稱 ${old.name||'未命名'} -> ${importedSlot.name}`;
-    (action==='取代'?replacedActions:action==='新增'?addedActions:mergedActions).push(`${actionLabel}：主色 ${importedSlot.primary}，次色 ${importedSlot.secondary}`);
-    merged.styleSlots[index]={...importedSlot}
-  });
+  // AI imports keep this browser's visual preferences; regular backups retain
+  // the imported palette and saved presets.
+  if (preserveStyle) {
+    merged.proAccent=current.proAccent;
+    merged.proSecondary=current.proSecondary;
+    merged.proTertiary=current.proTertiary;
+    merged.styleSlots=normalizeStyleSlots(current.styleSlots).map(slot=>({...slot}));
+  }
   return {data:normalizeSettingsData(merged),addedActions,mergedActions,replacedActions}
 }
-function showEditorImportModeConfirm(current,next) {
-  setEditorConfirmContent('匯入方式？','要合併目前設定與匯入設定嗎？','合併匯入會保留可共存內容；課表時間衝突時使用匯入內容。','合併匯入',()=>showEditorImportConfirm(current,next,true),'直接匯入',{cancelHandler:()=>showEditorImportConfirm(current,next,false),extraLabel:'取消',extraHandler:hideEditorDiscardConfirm});
+function showEditorImportModeConfirm(current,next,preserveStyle=false) {
+  setEditorConfirmContent('匯入方式？','要合併目前設定與匯入設定嗎？','合併匯入會保留可共存內容；課表時間衝突時使用匯入內容。','合併匯入',()=>showEditorImportConfirm(current,next,true,preserveStyle),'直接匯入',{cancelHandler:()=>showEditorImportConfirm(current,next,false,preserveStyle),extraLabel:'取消',extraHandler:hideEditorDiscardConfirm});
   showEditorConfirmSheet()
 }
-function beginEditorImport(current,next) {
+function beginEditorImport(current,next,{preserveStyle=false}={}) {
   try {
     const normalizedCurrent=normalizeSettingsData(current);
     const normalizedNext=normalizeSettingsData(next);
     pendingEditorImportData=normalizedNext;
-    showEditorImportModeConfirm(normalizedCurrent,normalizedNext);
+    showEditorImportModeConfirm(normalizedCurrent,normalizedNext,preserveStyle);
   } catch (error) {
     pendingEditorImportData=null;
     setTransferStatus(`匯入失敗：${error.message||error}`,true);
   }
 }
-function showEditorImportConfirm(current,next,isMerge) {
+function showEditorImportConfirm(current,next,isMerge,preserveStyle=false) {
   let result;
   try {
-    if (isMerge) result=mergeImportedSettings(current,next);
+    if (isMerge) result=mergeImportedSettings(current,next,preserveStyle);
     else {
       const direct=cloneSettingsData(next);
-      // Direct imports replace timetable-only settings, including special periods.
-      // Visual preferences are intentionally local and are never imported.
+      // AI imports are timetable-only and must not change this browser's visual
+      // preferences; regular backups restore the saved visual preferences.
       direct.breakTimes=cloneSettingsData(next.breakTimes||[]);
-      direct.proAccent=current.proAccent;
-      direct.proSecondary=current.proSecondary;
-      direct.proTertiary=current.proTertiary;
-      direct.styleSlots=cloneSettingsData(current.styleSlots||[]);
+      if (preserveStyle) {
+        direct.proAccent=current.proAccent;
+        direct.proSecondary=current.proSecondary;
+        direct.proTertiary=current.proTertiary;
+        direct.styleSlots=cloneSettingsData(current.styleSlots||[]);
+      }
       result={data:normalizeSettingsData(direct),actions:[]};
     }
   } catch (error) {
@@ -2461,7 +2470,7 @@ function showEditorImportConfirm(current,next,isMerge) {
   pendingEditorImportData=result.data;
   const diff=isMerge?['新增：',...result.addedActions.map(item=>`- ${item}`),'','合併：',...result.mergedActions.map(item=>`- ${item}`),'','取代：',...result.replacedActions.map(item=>`- ${item}`)].join('\n'):describeSettingsDiff(current,next,[],{isImport:true});
   const identical=!isMerge&&diff==='沒有變更。';
-  setEditorConfirmContent(isMerge?'確認合併匯入？':'確認直接匯入？',identical?'匯入內容與目前設定完全相同，仍可匯入。':isMerge?'以下分開列出新增、合併與取代的內容。':'匯入設定將取代目前已儲存的課表資料。',identical?'內容相同，沒有需要變更的項目。':diff,isMerge?'確認合併':'確認匯入',applyPendingImportSettings,'返回',{cancelHandler:()=>showEditorImportModeConfirm(current,next)});
+  setEditorConfirmContent(isMerge?'確認合併匯入？':'確認直接匯入？',identical?'匯入內容與目前設定完全相同，仍可匯入。':isMerge?'以下分開列出新增、合併與取代的內容。':'匯入設定將取代目前已儲存的課表資料。',identical?'內容相同，沒有需要變更的項目。':diff,isMerge?'確認合併':'確認匯入',applyPendingImportSettings,'返回',{cancelHandler:()=>showEditorImportModeConfirm(current,next,preserveStyle)});
   showEditorConfirmSheet()
 }
 function applyEditorSettingsData(next,{closeAfter=false,statusMessage=''}={}) {
@@ -2611,6 +2620,7 @@ function esc(s) {
 // Opens the schedule editor and prepares its editable fields.
 // Editor navigation and confirmation sheets manage unsaved changes safely.
 function openEditor() {
+  closeAssignSheet();
   hideEditorDiscardConfirm();
   closeTestPanel();
   actionMenuOpen=false;
@@ -2669,20 +2679,39 @@ function addCountdownEventRow(event={name:'',date:''},index) {
   if (!list||list.children.length>=12) return;
   const row=document.createElement('div');
   row.className='countdown-event-row';
-  row.innerHTML='<div class="countdown-event-header"><span class="countdown-event-title">倒數活動</span><div class="countdown-event-actions"><button type="button" class="countdown-event-move" aria-label="上移">↑</button><button type="button" class="countdown-event-move" aria-label="下移">↓</button><button type="button" class="countdown-event-remove" aria-label="移除倒數">×</button></div></div><div class="countdown-event-fields"><label>活動名稱<input class="editor-input countdown-event-name" maxlength="80" placeholder="例如：116 學測"></label><label>日期<input class="editor-input countdown-event-date" type="date"></label></div>';
+  row.innerHTML='<div class="countdown-event-header"><span class="countdown-event-title">倒數活動</span><div class="countdown-event-actions"><span class="countdown-drag-handle" role="button" tabindex="0" title="拖曳排序" aria-label="拖曳排序">☰</span><button type="button" class="countdown-event-remove" aria-label="移除倒數">×</button></div></div><div class="countdown-event-fields"><label>活動名稱<input class="editor-input countdown-event-name" maxlength="80" placeholder="例如：116 學測"></label><label>日期<input class="editor-input countdown-event-date" type="date"></label></div>';
   row.querySelector('.countdown-event-name').value=event.name;
   row.querySelector('.countdown-event-date').value=event.date;
   row.querySelector('.countdown-event-remove').addEventListener('click',()=> {
     if (list.children.length>1) row.remove();
     else row.querySelectorAll('input').forEach(input=>input.value='');
   });
-  row.querySelectorAll('.countdown-event-move').forEach((button,index)=>button.addEventListener('click',()=>moveEditorRow(button,index===0?-1:1)));
   list.appendChild(row);
+  bindCountdownDrag(row);
   refreshCountdownMoveButtons()
 }
 function refreshCountdownMoveButtons() {
-  const rows=Array.from(document.querySelectorAll('#countdown-event-list .countdown-event-row'));
-  rows.forEach((row,index)=>row.querySelectorAll('.countdown-event-move').forEach((button,buttonIndex)=>button.disabled=buttonIndex===0?index===0:index===rows.length-1));
+  document.querySelectorAll('#countdown-event-list .countdown-drag-handle').forEach(handle=>handle.setAttribute('aria-label','拖曳倒數活動排序'));
+}
+function bindCountdownDrag(row) {
+  const handle=row.querySelector('.countdown-drag-handle');
+  if (!handle || handle.dataset.bound) return;
+  handle.dataset.bound='1';
+  let dragging=false;
+  const finish=event=>{ if (!dragging) return; dragging=false; row.classList.remove('is-dragging'); handle.releasePointerCapture?.(event.pointerId); };
+  handle.addEventListener('pointerdown',event=>{
+    if (event.button!==undefined&&event.button!==0) return;
+    event.preventDefault(); dragging=true; row.classList.add('is-dragging'); handle.setPointerCapture?.(event.pointerId);
+  });
+  handle.addEventListener('pointermove',event=>{
+    if (!dragging) return;
+    const rows=[...document.querySelectorAll('#countdown-event-list .countdown-event-row')].filter(item=>item!==row);
+    const target=rows.find(item=>event.clientY<item.getBoundingClientRect().top+item.offsetHeight/2);
+    if (target) target.parentElement.insertBefore(row,target);
+    else if (rows.length) rows[rows.length-1].parentElement.appendChild(row);
+  });
+  handle.addEventListener('pointerup',finish);
+  handle.addEventListener('pointercancel',finish);
 }
 function moveEditorControlsIntoLayers() {
   const inner=document.querySelector('#editor-sheet .editor-inner');
@@ -2944,7 +2973,7 @@ function makeTeacherCard(key, subject, teacher, location) {
   // the changelog is built from. Keeping these separate is what prevents an
   // in-progress (not yet saved) rename from being mistaken for the baseline.
   div.dataset.syncKey = key;
-  div.innerHTML = `<div class="teacher-key">${esc(key || '?')}</div><div class="teacher-fields"><input class="editor-input tc-key" placeholder="縮寫" value="${esc(key)}" maxlength="4"><input class="editor-input tc-subject" placeholder="科目" value="${esc(subject)}"><input class="editor-input tc-teacher" placeholder="教師" value="${esc(teacher)}"><input class="editor-input tc-location" placeholder="教室(選填)" value="${esc(location || '')}"></div><div class="teacher-order-actions"><span class="teacher-drag-handle" title="拖曳排序" aria-label="拖曳排序">☰</span><button type="button" class="teacher-assign" onclick="assignTeacherFromMenu(this)" aria-label="指定課節">排課</button><button type="button" class="teacher-move" onclick="moveEditorRow(this,-1)" aria-label="上移">↑</button><button type="button" class="teacher-move" onclick="moveEditorRow(this,1)" aria-label="下移">↓</button><button type="button" class="delete-btn" onclick="deleteTeacherCard(this)" aria-label="刪除">×</button></div>`;
+  div.innerHTML = `<div class="teacher-key">${esc(key || '?')}</div><div class="teacher-fields"><input class="editor-input tc-key" placeholder="縮寫" value="${esc(key)}" maxlength="4"><input class="editor-input tc-subject" placeholder="科目" value="${esc(subject)}"><input class="editor-input tc-teacher" placeholder="教師" value="${esc(teacher)}"><input class="editor-input tc-location" placeholder="教室(選填)" value="${esc(location || '')}"></div><div class="teacher-order-actions"><span class="teacher-drag-handle" role="button" tabindex="0" title="拖曳排序" aria-label="拖曳排序">☰</span><button type="button" class="teacher-assign" onclick="assignTeacherFromMenu(this)" aria-label="指定課節">排課</button><button type="button" class="delete-btn" onclick="deleteTeacherCard(this)" aria-label="刪除">×</button></div>`;
   div.addEventListener('dragstart', event => {
     if (!event.target.closest('.teacher-drag-handle')) { event.preventDefault(); return; }
     div.classList.add('is-dragging');
@@ -2961,6 +2990,29 @@ function makeTeacherCard(key, subject, teacher, location) {
     }
   });
   div.addEventListener('drop', event => { event.preventDefault(); refreshTeacherMoveButtons(); refreshPeriodSelectOptions(); });
+  const handle=div.querySelector('.teacher-drag-handle');
+  let pointerDragging=false;
+  handle.addEventListener('pointerdown',event=>{
+    if (event.button!==undefined&&event.button!==0) return;
+    event.preventDefault(); pointerDragging=true; div.classList.add('is-dragging');
+    handle.setPointerCapture?.(event.pointerId);
+  });
+  handle.addEventListener('pointermove',event=>{
+    if (!pointerDragging) return;
+    const cards=[...document.querySelectorAll('#teacher-list .teacher-card')].filter(card=>card!==div);
+    const target=cards.find(card=>event.clientY<card.getBoundingClientRect().top+card.offsetHeight/2);
+    if (target) target.parentElement.insertBefore(div,target);
+    else if (cards.length) cards[cards.length-1].parentElement.appendChild(div);
+    refreshTeacherMoveButtons(); refreshPeriodSelectOptions();
+  });
+  const finishPointerDrag=event=>{
+    if (!pointerDragging) return;
+    pointerDragging=false; div.classList.remove('is-dragging');
+    handle.releasePointerCapture?.(event.pointerId);
+    refreshTeacherMoveButtons(); refreshPeriodSelectOptions();
+  };
+  handle.addEventListener('pointerup',finishPointerDrag);
+  handle.addEventListener('pointercancel',finishPointerDrag);
 
   div.querySelector('.tc-key').addEventListener('input', function() {
     if (this.value.length>4) this.value=this.value.slice(0,4);
@@ -2970,22 +3022,110 @@ function makeTeacherCard(key, subject, teacher, location) {
 
   return div
 }
+let pendingAssignment=null;
+let assignmentDraft=null;
+let assignmentDay=1;
+function closeAssignSheet() {
+  document.getElementById('assign-overlay')?.classList.remove('show');
+  document.getElementById('assign-sheet')?.classList.remove('show');
+  document.getElementById('assign-overlay')?.setAttribute('aria-hidden','true');
+  pendingAssignment=null;
+  assignmentDraft=null;
+}
+function openAssignSheet(key) {
+  const grid=document.getElementById('assign-grid'), subtitle=document.getElementById('assign-subtitle'), tabs=document.getElementById('assign-day-tabs');
+  if (!grid) return;
+  subtitle.textContent=`選擇「${key}」要放置的星期與節次`;
+  grid.replaceChildren();
+  assignmentDraft={key,original:new Map(),draft:new Map()};
+  const labels={1:'週一',2:'週二',3:'週三',4:'週四',5:'週五',6:'週六',0:'週日'};
+  const count=getEditorBellPeriodCount();
+  [1,2,3,4,5,6,0].forEach(day=>{
+    for(let period=0;period<count;period++){
+      const select=document.querySelector(`#schedule-grid .schedule-day-row[data-day="${day}"]`)?.querySelectorAll('.period-select')[period];
+      const slot=`${day}:${period}`, original=select?.value||'';
+      assignmentDraft.original.set(slot,original); assignmentDraft.draft.set(slot,original);
+    }
+  });
+  tabs.replaceChildren();
+  [1,2,3,4,5,6,0].forEach(day=>{
+    const tab=document.createElement('button');
+    tab.type='button'; tab.className='assign-day-tab'; tab.dataset.day=day; tab.setAttribute('role','tab');
+    tab.textContent=labels[day]; tab.onclick=()=>renderAssignmentDay(day);
+    tabs.appendChild(tab);
+  });
+  assignmentDay=1;
+  renderAssignmentDay(assignmentDay);
+  document.getElementById('assign-overlay').classList.add('show');
+  document.getElementById('assign-sheet').classList.add('show');
+  document.getElementById('assign-overlay').setAttribute('aria-hidden','false');
+}
+function renderAssignmentDay(day) {
+  const grid=document.getElementById('assign-grid');
+  if (!grid||!assignmentDraft) return;
+  assignmentDay=day;
+  document.querySelectorAll('#assign-day-tabs .assign-day-tab').forEach(tab=>{
+    const active=Number(tab.dataset.day)===day;
+    tab.classList.toggle('active',active); tab.setAttribute('aria-selected',active?'true':'false');
+  });
+  grid.replaceChildren();
+  const count=getEditorBellPeriodCount();
+    const row=document.createElement('div'); row.className='assign-day-row';
+    const label=document.createElement('div'); label.className='assign-day-label'; label.textContent=({1:'週一',2:'週二',3:'週三',4:'週四',5:'週五',6:'週六',0:'週日'})[day]; row.appendChild(label);
+    const periods=document.createElement('div'); periods.className='assign-periods';
+    for(let period=0;period<count;period++){
+      const slot=`${day}:${period}`, original=assignmentDraft.original.get(slot)||'', value=assignmentDraft.draft.get(slot)||'';
+      const box=document.createElement('button'); box.type='button'; box.dataset.slot=slot;
+      box.className='assign-box'+(value?' occupied':'')+(value===assignmentDraft.key?' assigned':'');
+      box.textContent=`${period+1} · ${value||'—'}`; box.title=value?`第 ${period+1} 節目前是：${value}`:`第 ${period+1} 節（空白）`;
+      box.onclick=()=>assignToSlot(assignmentDraft.key,day,period);
+      periods.appendChild(box);
+    }
+    row.appendChild(periods); grid.appendChild(row);
+}
+function assignToSlot(key,day,period) {
+  if (!assignmentDraft) return;
+  const slot=`${day}:${period}`, box=document.querySelector(`#assign-grid .assign-box[data-slot="${slot}"]`);
+  const current=assignmentDraft.draft.get(slot)||'', original=assignmentDraft.original.get(slot)||'';
+  if (current===key) assignmentDraft.draft.set(slot,original===key?'':original);
+  else {
+    if (current && current!==key) {
+      pendingAssignment={key,day,period};
+      setEditorConfirmContent('覆蓋這個時段？',`第 ${period+1} 節目前是「${current}」，確定改成「${key}」嗎？`,'','確定覆蓋',confirmAssignment,'返回');
+      showEditorConfirmSheet();
+      return;
+    }
+    assignmentDraft.draft.set(slot,key);
+  }
+  if (box) {
+    const value=assignmentDraft.draft.get(slot)||'';
+    box.textContent=`${period+1} · ${value||'—'}`;
+    box.classList.toggle('assigned',value===key);
+    box.classList.toggle('occupied',!!value);
+  }
+}
+function confirmAssignment() {
+  const pending=pendingAssignment;
+  pendingAssignment=null; hideEditorDiscardConfirm();
+  if (pending && assignmentDraft) {
+    assignmentDraft.draft.set(`${pending.day}:${pending.period}`,pending.key);
+    renderAssignmentDay(pending.day);
+  }
+}
+function applyAssignments() {
+  if (!assignmentDraft) return;
+  assignmentDraft.draft.forEach((value,slot)=>{
+    const [day,period]=slot.split(':').map(Number);
+    const select=document.querySelector(`#schedule-grid .schedule-day-row[data-day="${day}"]`)?.querySelectorAll('.period-select')[period];
+    if (select && select.value!==value) { select.value=value; select.dispatchEvent(new Event('change',{bubbles:true})); }
+  });
+  closeAssignSheet();
+}
 function assignTeacherFromMenu(button) {
   const card=button.closest('.teacher-card');
   const key=(card?.querySelector('.tc-key')?.value||'').trim();
   if (!key) return;
-  const dayInput=prompt('輸入星期（1=一，2=二，…，6=六，0=日）','1');
-  const periodInput=prompt('輸入節次（從 1 開始）','1');
-  if (dayInput===null||periodInput===null) return;
-  const day=Number(dayInput);
-  const period=Number(periodInput)-1;
-  if (!Number.isInteger(day)||day<0||day>6||!Number.isInteger(period)||period<0) return;
-  const row=document.querySelector(`#schedule-grid .schedule-day-row[data-day="${day}"]`);
-  const select=row?.querySelectorAll('.period-select')[period];
-  if (!select) return;
-  // Selecting a subject from its menu intentionally overwrites the target slot.
-  select.value=key;
-  select.dispatchEvent(new Event('change',{bubbles:true}));
+  openAssignSheet(key);
 }
 function moveEditorRow(button,direction) {
   const row=button.closest('.teacher-card,.countdown-event-row');
@@ -3571,22 +3711,6 @@ function fitNowTitleText(force=false) {
     title.style.fontSize=Math.floor(best)+'px';
   });
 }
-// Keeps the next-class title within its available width.
-function fitNextTitleText() {
-  const title=document.getElementById('next-name');
-  const box=document.querySelector('.time-card.v3-11-next-module .next-box');
-  if (!title||!box) return;
-  const available=Math.max(56,Math.floor(box.clientWidth));
-  title.style.setProperty('font-size','30px','important');
-  let low=24, high=30, best=24;
-  for (let i=0;i<16;i+=1) {
-    const mid=(low+high)/2;
-    title.style.setProperty('font-size',mid+'px','important');
-    if (title.scrollWidth<=available) { best=mid; low=mid; }
-    else high=mid;
-  }
-  title.style.setProperty('font-size',Math.floor(best)+'px','important');
-}
 function createMetaChip(text,cls='') {
   const span=document.createElement('span');
   span.className='meta-chip '+cls;
@@ -3671,9 +3795,9 @@ function renderList(week,curIdx,nxtIdx,curDay,isDayFinished) {
   }
   keepActiveClassVisible(list,isDayFinished,`${viewDay}-${curIdx}-${nxtIdx}-${isDayFinished}`);
 }
-window.addEventListener('resize',()=>{ fitNowTitleText(true); fitNextTitleText(); });
-window.addEventListener('orientationchange',()=>setTimeout(()=>{ fitNowTitleText(true); fitNextTitleText(); },120));
-window.addEventListener('load',()=>{ fitNowTitleText(true); fitNextTitleText(); });
+window.addEventListener('resize',()=>fitNowTitleText(true));
+window.addEventListener('orientationchange',()=>setTimeout(()=>fitNowTitleText(true),120));
+window.addEventListener('load',()=>fitNowTitleText(true));
 
 
 /* Test mode advances from one clock tick; the consolidated controller handles input changes. */
@@ -4252,13 +4376,15 @@ function activateOCRImporter() {
             ...data,
             // AI recognition has no knowledge of the app's visual theme or
             // existing named breaks; retain those editor settings on import.
-            breakTimes:Array.isArray(data.breakTimes)?data.breakTimes:[],
+            breakTimes:(Array.isArray(data.breakTimes)&&data.breakTimes.length)
+              ?data.breakTimes
+              :settingsDataForExport().breakTimes,
             proAccent:settingsDataForExport().proAccent,
             proSecondary:settingsDataForExport().proSecondary,
             proTertiary:settingsDataForExport().proTertiary,
             styleSlots:settingsDataForExport().styleSlots
           });
-          beginEditorImport(settingsDataForExport(),imported);
+          beginEditorImport(settingsDataForExport(),imported,{preserveStyle:true});
         } catch (error) {
           statusElement.textContent=`匯入預覽失敗：${error.message||error}`;
           statusElement.classList.add('error');
@@ -4286,9 +4412,9 @@ ocrImageInput?.addEventListener('change',async event=>{
 </script>
 
 
-<style id="dashboard-next-module">.dashboard{height:clamp(262px,39dvh,308px) !important;max-height:clamp(262px,39dvh,308px) !important;}.dashboard .label-row{min-height:26px !important;align-items:center !important;}.dashboard .top-actions{align-self:center !important;transform:translateY(-1px);}.dashboard #btn-menu.top-action-btn{width:25px !important;height:25px !important;min-width:25px !important;min-height:25px !important;border-radius:9px !important;font-size:12px !important;padding:0 !important;line-height:1 !important;}.dashboard .top-actions-menu{top:30px !important;gap:5px !important;padding:6px !important;border-radius:13px !important;}.dashboard .top-actions-menu .top-action-btn{width:30px !important;height:30px !important;min-width:30px !important;min-height:30px !important;font-size:13px !important;border-radius:10px !important;padding:0 !important;}.dashboard .time-card.v3-11-next-module{display:grid !important;grid-template-columns:minmax(0,1fr) auto !important;grid-template-areas:"progress progress" "next timer" !important;align-items:center !important;column-gap:10px !important;row-gap:6px !important;padding:8px 10px 9px !important;min-height:66px !important;flex:0 0 auto !important;}.dashboard .time-card.v3-11-next-module .break-progress-wrap{grid-area:progress !important;height:6px !important;}.dashboard .time-card.v3-11-next-module .timer-container{grid-area:timer !important;justify-content:flex-end !important;align-items:center !important;gap:5px !important;min-width:max-content !important;}.dashboard .time-card.v3-11-next-module .timer-badge{font-size:clamp(15px,4.2vw,19px) !important;padding:4px 8px !important;border-radius:9px !important;}.dashboard .time-card.v3-11-next-module .timer-label{font-size:9px !important;white-space:nowrap !important;}.dashboard .time-card.v3-11-next-module .next-box{grid-area:next !important;margin:0 !important;padding:0 !important;min-height:0 !important;border:0 !important;background:transparent !important;box-shadow:none !important;border-radius:0 !important;display:grid !important;grid-template-columns:minmax(0,1fr) auto !important;align-items:center !important;gap:8px !important;overflow:hidden !important;}.dashboard .time-card.v3-11-next-module .next-box .label{font-size:9px !important;letter-spacing:.35px !important;margin-bottom:2px !important;}.dashboard .time-card.v3-11-next-module .title-next{font-size:clamp(17px,4.9vw,22px) !important;font-weight:850 !important;line-height:1.05 !important;white-space:nowrap !important;overflow:hidden !important;text-overflow:ellipsis !important;}.dashboard .time-card.v3-11-next-module #next-teacher{max-width:28vw !important;font-size:10.5px !important;line-height:1.15 !important;opacity:.82 !important;white-space:nowrap !important;text-overflow:ellipsis !important;}@media (max-width:360px){.dashboard{height:clamp(252px,38dvh,294px) !important;max-height:clamp(252px,38dvh,294px) !important;}.dashboard .time-card.v3-11-next-module{min-height:62px !important;column-gap:7px !important;padding:7px 9px 8px !important;}.dashboard .time-card.v3-11-next-module .title-next{font-size:clamp(16px,4.6vw,20px) !important;}.dashboard .time-card.v3-11-next-module #next-teacher{max-width:22vw !important;font-size:10px !important;}}@media (max-height:700px){.dashboard{height:clamp(246px,38dvh,288px) !important;max-height:clamp(246px,38dvh,288px) !important;}.dashboard .time-card.v3-11-next-module{min-height:60px !important;row-gap:5px !important;padding:7px 9px 8px !important;}.dashboard .time-card.v3-11-next-module .timer-badge{font-size:clamp(14px,4vw,18px) !important;}}</style>
+<style id="dashboard-next-module">.dashboard{height:clamp(262px,39dvh,308px) !important;max-height:clamp(262px,39dvh,308px) !important;}.dashboard .label-row{min-height:26px !important;align-items:center !important;}.dashboard .top-actions{align-self:center !important;transform:translateY(-1px);}.dashboard #btn-menu.top-action-btn{width:25px !important;height:25px !important;min-width:25px !important;min-height:25px !important;border-radius:9px !important;font-size:12px !important;padding:0 !important;line-height:1 !important;}.dashboard .top-actions-menu{top:30px !important;gap:5px !important;padding:6px !important;border-radius:13px !important;}.dashboard .top-actions-menu .top-action-btn{width:30px !important;height:30px !important;min-width:30px !important;min-height:30px !important;font-size:13px !important;border-radius:10px !important;padding:0 !important;}.dashboard .time-card.v3-11-next-module{display:grid !important;grid-template-columns:minmax(0,1fr) auto !important;grid-template-areas:"progress progress" "next timer" !important;align-items:center !important;column-gap:10px !important;row-gap:6px !important;padding:8px 10px 9px !important;min-height:66px !important;flex:0 0 auto !important;}.dashboard .time-card.v3-11-next-module .break-progress-wrap{grid-area:progress !important;height:6px !important;}.dashboard .time-card.v3-11-next-module .timer-container{grid-area:timer !important;justify-content:flex-end !important;align-items:center !important;gap:5px !important;min-width:max-content !important;}.dashboard .time-card.v3-11-next-module .timer-badge{font-size:clamp(15px,4.2vw,19px) !important;padding:4px 8px !important;border-radius:9px !important;}.dashboard .time-card.v3-11-next-module .timer-label{font-size:9px !important;white-space:nowrap !important;}.dashboard .time-card.v3-11-next-module .next-box{grid-area:next !important;margin:0 !important;padding:0 !important;min-height:0 !important;border:0 !important;background:transparent !important;box-shadow:none !important;border-radius:0 !important;display:grid !important;grid-template-columns:minmax(0,1fr) auto !important;align-items:center !important;gap:8px !important;overflow:hidden !important;}.dashboard .time-card.v3-11-next-module .next-box .label{font-size:9px !important;letter-spacing:.35px !important;margin-bottom:2px !important;}.dashboard .time-card.v3-11-next-module .title-next{font-size:clamp(17px,4.9vw,22px) !important;font-weight:850 !important;line-height:1.05 !important;white-space:nowrap !important;overflow:hidden !important;text-overflow:ellipsis !important;}@media (max-width:360px){.dashboard{height:clamp(252px,38dvh,294px) !important;max-height:clamp(252px,38dvh,294px) !important;}.dashboard .time-card.v3-11-next-module{min-height:62px !important;column-gap:7px !important;padding:7px 9px 8px !important;}.dashboard .time-card.v3-11-next-module .title-next{font-size:clamp(16px,4.6vw,20px) !important;}}@media (max-height:700px){.dashboard{height:clamp(246px,38dvh,288px) !important;max-height:clamp(246px,38dvh,288px) !important;}.dashboard .time-card.v3-11-next-module{min-height:60px !important;row-gap:5px !important;padding:7px 9px 8px !important;}.dashboard .time-card.v3-11-next-module .timer-badge{font-size:clamp(14px,4vw,18px) !important;}}</style>
 
-<style id="dashboard-content-fill">.dashboard{display:flex !important;flex-direction:column !important;justify-content:space-between !important;}.dashboard .time-card.v3-11-next-module{min-height:86px !important;padding:11px 12px 12px !important;row-gap:9px !important;column-gap:12px !important;align-self:stretch !important;}.dashboard .time-card.v3-11-next-module .break-progress-wrap{height:8px !important;border-radius:999px !important;}.dashboard .time-card.v3-11-next-module .next-box .label{font-size:10px !important;margin-bottom:4px !important;opacity:.78 !important;}.dashboard .time-card.v3-11-next-module .title-next{font-size:clamp(20px,5.8vw,27px) !important;line-height:1.05 !important;letter-spacing:-.35px !important;}.dashboard .time-card.v3-11-next-module #next-teacher{max-width:30vw !important;font-size:11.5px !important;line-height:1.2 !important;}.dashboard .time-card.v3-11-next-module .timer-container{gap:6px !important;}.dashboard .time-card.v3-11-next-module .timer-badge{font-size:clamp(18px,5vw,23px) !important;padding:6px 10px !important;border-radius:11px !important;min-width:58px !important;text-align:center !important;}.dashboard .time-card.v3-11-next-module .timer-label{font-size:10px !important;opacity:.7 !important;}.dashboard .label-row{flex:0 0 auto !important;margin-bottom:4px !important;}@media (max-width:360px){.dashboard .time-card.v3-11-next-module{min-height:78px !important;padding:10px 10px 11px !important;row-gap:7px !important;}.dashboard .time-card.v3-11-next-module .title-next{font-size:clamp(18px,5.3vw,24px) !important;}.dashboard .time-card.v3-11-next-module .timer-badge{font-size:clamp(16px,4.5vw,21px) !important;padding:5px 8px !important;min-width:52px !important;}}@media (max-height:700px){.dashboard .time-card.v3-11-next-module{min-height:74px !important;padding:9px 10px 10px !important;row-gap:6px !important;}.dashboard .time-card.v3-11-next-module .title-next{font-size:clamp(18px,5vw,23px) !important;}.dashboard .time-card.v3-11-next-module .timer-badge{font-size:clamp(16px,4.4vw,20px) !important;padding:5px 8px !important;}}</style>
+<style id="dashboard-content-fill">.dashboard{display:flex !important;flex-direction:column !important;justify-content:space-between !important;}.dashboard .time-card.v3-11-next-module{min-height:86px !important;padding:11px 12px 12px !important;row-gap:9px !important;column-gap:12px !important;align-self:stretch !important;}.dashboard .time-card.v3-11-next-module .break-progress-wrap{height:8px !important;border-radius:999px !important;}.dashboard .time-card.v3-11-next-module .next-box .label{font-size:10px !important;margin-bottom:4px !important;opacity:.78 !important;}.dashboard .time-card.v3-11-next-module .title-next{font-size:clamp(20px,5.8vw,27px) !important;line-height:1.05 !important;letter-spacing:-.35px !important;}.dashboard .time-card.v3-11-next-module .timer-container{gap:6px !important;}.dashboard .time-card.v3-11-next-module .timer-badge{font-size:clamp(18px,5vw,23px) !important;padding:6px 10px !important;border-radius:11px !important;min-width:58px !important;text-align:center !important;}.dashboard .time-card.v3-11-next-module .timer-label{font-size:10px !important;opacity:.7 !important;}.dashboard .label-row{flex:0 0 auto !important;margin-bottom:4px !important;}@media (max-width:360px){.dashboard .time-card.v3-11-next-module{min-height:78px !important;padding:10px 10px 11px !important;row-gap:7px !important;}.dashboard .time-card.v3-11-next-module .title-next{font-size:clamp(18px,5.3vw,24px) !important;}.dashboard .time-card.v3-11-next-module .timer-badge{font-size:clamp(16px,4.5vw,21px) !important;padding:5px 8px !important;min-width:52px !important;}}@media (max-height:700px){.dashboard .time-card.v3-11-next-module{min-height:74px !important;padding:9px 10px 10px !important;row-gap:6px !important;}.dashboard .time-card.v3-11-next-module .title-next{font-size:clamp(18px,5vw,23px) !important;}.dashboard .time-card.v3-11-next-module .timer-badge{font-size:clamp(16px,4.4vw,20px) !important;padding:5px 8px !important;}}</style>
 
 
 <style id="dashboard-gap-layout">.dashboard{justify-content:flex-start !important;gap:8px !important;}.dashboard .label-row{flex:0 0 auto !important;min-height:22px !important;margin-bottom:0 !important;}.dashboard .time-card.v3-11-next-module{margin-top:0 !important;min-height:104px !important;padding:13px 13px 14px !important;row-gap:11px !important;column-gap:13px !important;flex:0 0 auto !important;}.dashboard .time-card.v3-11-next-module .break-progress-wrap{height:9px !important;}.dashboard .time-card.v3-11-next-module .title-next{font-size:clamp(23px,6.6vw,31px) !important;line-height:1.02 !important;}.dashboard .time-card.v3-11-next-module .next-box .label{font-size:10.5px !important;margin-bottom:5px !important;}.dashboard .time-card.v3-11-next-module #next-teacher{font-size:12px !important;max-width:32vw !important;}.dashboard .time-card.v3-11-next-module .timer-badge{font-size:clamp(20px,5.7vw,26px) !important;padding:7px 11px !important;min-width:64px !important;}.dashboard .time-card.v3-11-next-module .timer-label{font-size:10.5px !important;}.dashboard > *{margin-top:0 !important;}.dashboard > * + *{margin-top:0 !important;}@media (max-width:360px){.dashboard{gap:6px !important;}.dashboard .time-card.v3-11-next-module{min-height:92px !important;padding:11px 11px 12px !important;row-gap:9px !important;}.dashboard .time-card.v3-11-next-module .title-next{font-size:clamp(20px,6vw,27px) !important;}.dashboard .time-card.v3-11-next-module .timer-badge{font-size:clamp(18px,5.2vw,23px) !important;min-width:58px !important;padding:6px 9px !important;}}@media (max-height:700px){.dashboard{gap:5px !important;}.dashboard .time-card.v3-11-next-module{min-height:86px !important;padding:10px 11px 11px !important;row-gap:8px !important;}.dashboard .time-card.v3-11-next-module .title-next{font-size:clamp(19px,5.7vw,25px) !important;}.dashboard .time-card.v3-11-next-module .timer-badge{font-size:clamp(17px,5vw,22px) !important;min-width:56px !important;}}</style>
@@ -4819,6 +4945,40 @@ ocrImageInput?.addEventListener('change',async event=>{
 <style id="mobile-class-assignment">@media (max-width:480px){.schedule-day-row{display:block !important;padding:11px !important;border-radius:14px !important;overflow:hidden !important;}.schedule-day-label{display:block !important;margin:0 0 8px !important;font-size:12px !important;font-weight:800 !important;}.schedule-periods{display:flex !important;flex-wrap:nowrap !important;gap:8px !important;width:100% !important;overflow-x:auto !important;overflow-y:hidden !important;padding:1px 1px 6px !important;scroll-snap-type:x proximity;}.schedule-periods .period-select{flex:0 0 68px !important;width:68px !important;min-width:68px !important;height:38px !important;min-height:38px !important;padding:0 8px !important;box-sizing:border-box !important;scroll-snap-align:start;}}
 </style>
 <style id="split-week-style-colors">body.pro-style .row-name .week-label.label-odd{background:color-mix(in srgb,var(--pro-accent) 18%,transparent) !important;color:var(--pro-accent) !important;}body.pro-style .row-name .week-label.label-even{background:color-mix(in srgb,var(--pro-secondary) 18%,transparent) !important;color:var(--pro-secondary) !important;}</style>
+<style id="follow-up-mobile-polish">
+  .teacher-drag-handle,.countdown-drag-handle{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;min-width:40px;border-radius:12px;color:var(--sub);font-size:21px;line-height:1;cursor:grab;touch-action:none;user-select:none;background:rgba(255,255,255,.06)}
+  .teacher-drag-handle:active,.countdown-drag-handle:active{cursor:grabbing;background:color-mix(in srgb,var(--accent) 18%,transparent)}
+  .countdown-event-row.is-dragging,.teacher-card.is-dragging{opacity:.68;transform:scale(.985);box-shadow:0 8px 24px rgba(0,0,0,.25)}
+  .teacher-assign{min-height:40px;padding:0 14px;border:0;border-radius:12px;background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 88%,#fff),color-mix(in srgb,var(--accent) 58%,#fff));color:#06131c;font-weight:850;letter-spacing:.04em;box-shadow:0 6px 16px color-mix(in srgb,var(--accent) 22%,transparent);touch-action:manipulation}
+  .teacher-assign:active{transform:scale(.95)}
+  .assign-box{min-height:46px;padding:7px 5px;font-size:12px;transition:background .16s,border-color .16s,color .16s,transform .12s}
+  .assign-box.assigned{background:color-mix(in srgb,var(--ok) 22%,transparent);border-color:var(--ok);color:var(--ok);box-shadow:0 0 0 1px color-mix(in srgb,var(--ok) 35%,transparent)}
+  .assign-sheet .editor-confirm-btn{min-height:46px;width:100%;margin-top:8px}
+  @media (max-width:480px){
+    body{padding-left:max(10px,env(safe-area-inset-left));padding-right:max(10px,env(safe-area-inset-right));}
+    .editor-sheet{padding-left:8px;padding-right:8px}
+    .editor-inner{padding:11px;border-radius:22px}
+    .teacher-card{padding:14px!important;margin-bottom:10px!important}
+    .teacher-card .teacher-fields{gap:10px!important;width:calc(100% - 44px)!important}
+    .teacher-card .teacher-fields .editor-input{min-height:44px!important;font-size:15px!important}
+    .teacher-card .teacher-order-actions{display:flex;align-items:center;gap:7px;margin-top:10px}
+    .teacher-card .teacher-order-actions .teacher-drag-handle{order:-1}
+    .countdown-event-row{padding:12px!important;margin-bottom:9px}
+    .countdown-event-fields{grid-template-columns:minmax(0,1fr)!important;gap:9px!important}
+    .countdown-event-fields .editor-input{min-height:44px!important;font-size:15px!important}
+    .countdown-event-header{margin-bottom:10px!important}
+    .countdown-event-actions{gap:7px!important}
+    .assign-sheet{width:calc(100vw - 20px);max-height:calc(100dvh - 28px);padding:14px;border-radius:20px}
+    .assign-day-row{grid-template-columns:39px minmax(0,1fr);gap:6px}
+    .assign-periods{grid-template-columns:repeat(auto-fit,minmax(58px,1fr));gap:6px}
+    .assign-box{min-height:48px;font-size:11px}
+    .teacher-assign{min-height:44px;padding:0 13px}
+    #schedule-list .row{min-height:78px;padding:15px 16px;border-radius:18px}
+    #schedule-list .row-name{font-size:clamp(17px,5vw,22px);line-height:1.18}
+    #schedule-list .row-location{font-size:clamp(11px,3.2vw,14px)}
+    #schedule-list .row-meta{font-size:clamp(11px,3vw,13px)}
+  }
+</style>
 </body>
 
 <style id="orbit-116-exam-countdown">.exam-countdown{flex:0 0 auto;min-height:42px;padding:7px 10px 7px 12px;border-radius:14px;border:1px solid rgba(10,132,255,.18);background:linear-gradient(135deg,rgba(10,132,255,.07),rgba(255,255,255,.035));display:flex;align-items:center;justify-content:space-between;gap:10px;box-shadow:inset 0 1px 0 rgba(255,255,255,.035);}.exam-countdown-copy{display:flex;align-items:baseline;gap:7px;min-width:0;}.exam-countdown-label{font-size:12px;font-weight:850;letter-spacing:.15px;color:var(--accent);white-space:nowrap;}.exam-countdown-date{font-size:9px;font-weight:700;color:var(--sub);letter-spacing:.25px;white-space:nowrap;}.exam-countdown-value{flex:0 0 auto;min-width:62px;padding:4px 8px;border-radius:9px;background:rgba(10,132,255,.11);border:1px solid rgba(10,132,255,.17);color:var(--accent);font-family:ui-monospace,SFMono-Regular,monospace;font-size:16px;line-height:1.05;font-weight:850;text-align:center;letter-spacing:-.25px;}body.light-mode .exam-countdown{background:linear-gradient(135deg,rgba(10,132,255,.045),#fff);border-color:rgba(10,132,255,.16);box-shadow:0 3px 12px rgba(25,28,33,.05);}body.light-mode .exam-countdown-value{background:rgba(10,132,255,.07);border-color:rgba(10,132,255,.15);color:var(--accent);}@media (max-width:380px){.exam-countdown{min-height:38px;padding:6px 8px 6px 10px;}.exam-countdown-label{font-size:11px;}.exam-countdown-date{font-size:8px;}.exam-countdown-value{min-width:58px;font-size:15px;padding:4px 7px;}}@media (max-height:700px){.exam-countdown{min-height:37px;padding-block:5px;}.exam-countdown-value{font-size:15px;}}</style>
@@ -4970,10 +5130,6 @@ ocrImageInput?.addEventListener('change',async event=>{
     overflow: visible !important;
     text-overflow: clip !important;
   }
-  .dashboard .time-card.v3-11-next-module #next-teacher {
-    font-size: 14px !important;
-    line-height: 1.3 !important;
-  }
 </style>
 <style id="dashboard-next-space-balance">
   .dashboard .time-card.v3-11-next-module {
@@ -5074,3 +5230,72 @@ ocrImageInput?.addEventListener('change',async event=>{
   }
 </style>
 </html>
+<style id="follow-up-fixes">.next-box>div:first-child{min-width:0;flex:1}.assign-sheet{position:fixed;z-index:1000001;top:50%;left:50%;width:min(94vw,520px);max-height:88dvh;overflow:auto;transform:translate(-50%,-50%) scale(.96);opacity:0;visibility:hidden;pointer-events:none;background:var(--card);border:1px solid var(--bd);border-radius:24px;padding:18px;box-shadow:0 24px 60px rgba(0,0,0,.5);transition:.2s}.assign-sheet.show{opacity:1;visibility:visible;pointer-events:auto;transform:translate(-50%,-50%) scale(1)}.assign-header{display:flex;align-items:center;justify-content:space-between}.assign-header .editor-close{margin:0}.assign-grid{display:grid;gap:8px;margin:12px 0}.assign-day-row{display:grid;grid-template-columns:42px minmax(0,1fr);gap:8px;align-items:center}.assign-day-label{font-size:12px;font-weight:800;color:var(--sub)}.assign-periods{display:grid;grid-template-columns:repeat(auto-fit,minmax(54px,1fr));gap:5px}.assign-box{min-height:38px;border:1px solid var(--bd);border-radius:9px;background:rgba(255,255,255,.06);color:var(--txt);font-weight:700;cursor:pointer}.assign-box.occupied{border-color:color-mix(in srgb,var(--accent) 50%,transparent);color:var(--accent)}.assign-box:active{transform:scale(.95)}.teacher-card.is-dragging{opacity:.55;outline:2px solid var(--accent)}.teacher-drag-handle{touch-action:none!important;cursor:grab}.editor-sheet input,.editor-sheet select,.editor-sheet textarea,.editor-input,.period-select{ text-align:left!important; text-align-last:left!important;}
+</style>
+<style id="mobile-polish-fixes">
+  .assign-day-tabs{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;margin:12px 0 8px}
+  .assign-day-tab{min-height:34px;padding:0 3px;border:1px solid var(--bd);border-radius:10px;background:rgba(255,255,255,.055);color:var(--sub);font:800 11px/1 inherit;cursor:pointer}
+  .assign-day-tab.active{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 5px 14px color-mix(in srgb,var(--accent) 28%,transparent)}
+  .assign-grid{margin:8px 0 14px}
+  .assign-periods{grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+  .assign-box{min-height:42px;padding:4px 3px;font-size:11px;line-height:1.15}
+  #editor-confirm-overlay{z-index:1000002 !important}
+  #editor-confirm-sheet{z-index:1000003 !important}
+  .dashboard .time-card.v3-11-next-module .next-box{grid-template-columns:minmax(0,1fr) auto !important}
+  .dashboard .time-card.v3-11-next-module .title-next{white-space:normal !important;display:-webkit-box !important;-webkit-box-orient:vertical !important;-webkit-line-clamp:2 !important;overflow:hidden !important;text-wrap:balance !important;overflow-wrap:normal !important;word-break:normal !important;line-height:1.08 !important;font-size:clamp(20px,5.8vw,27px) !important}
+  .dashboard .time-card.v3-11-next-module .next-meta{max-width:42% !important;flex-direction:row !important;flex-wrap:nowrap !important;justify-content:flex-end !important;align-items:center !important;gap:4px !important;white-space:nowrap !important;overflow:hidden !important}
+  @media (max-width:430px){.assign-sheet{padding:15px;width:calc(100vw - 20px);border-radius:20px}.assign-day-tabs{gap:4px}.assign-day-tab{font-size:10px}.dashboard .time-card.v3-11-next-module .next-meta{max-width:42% !important}}
+</style>
+<style id="next-metadata-readability">
+  .dashboard .time-card.v3-11-next-module .next-box {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: center !important;
+  }
+  .dashboard .time-card.v3-11-next-module .next-content {
+    min-width: 0 !important;
+    width: 100% !important;
+    text-align: center !important;
+  }
+  .dashboard .time-card.v3-11-next-module .next-content > .label {
+    display: block !important;
+    text-align: center !important;
+  }
+  .dashboard .time-card.v3-11-next-module .next-box .next-meta {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 0 0 auto !important;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+    align-items: baseline !important;
+    gap: 2px 8px !important;
+    overflow: visible !important;
+  }
+  .dashboard .time-card.v3-11-next-module .next-box .next-meta > div {
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+    text-align: center !important;
+    font-size: clamp(12px, 3.3vw, 14px) !important;
+    line-height: 1.2 !important;
+    font-weight: 500 !important;
+  }
+  .dashboard .time-card.v3-11-next-module .next-box .next-meta #next-meta-text {
+    display: block !important;
+    width: 100% !important;
+    color: var(--sub) !important;
+    font: 500 clamp(13px, 3.6vw, 15px)/1.2 inherit !important;
+    text-align: center !important;
+  }
+  @media (max-width: 430px) {
+    .dashboard .time-card.v3-11-next-module .next-box .next-meta {
+      gap: 2px 7px !important;
+    }
+  }
+</style>
