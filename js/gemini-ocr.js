@@ -71,7 +71,7 @@ Return valid JSON only, matching this exact schema:
   "locationDB": {"國文":"A101", "英文":"B202"},
   "weeklySchedule": {"1": ["國文","英文",null], "2": [], "3": [], "4": [], "5": []},
   "reverseWeek": false,
-  "countdownEvents": [{"name":"116 學測","date":"2027-01-22"}]
+  "countdownEvents": [{"name":"116 學測","startDate":"2027-01-22","endDate":"2027-01-24"}]
 }
 
 Interpret the timetable visually and use your best judgment to reconstruct its structure. Rules:
@@ -83,7 +83,7 @@ Interpret the timetable visually and use your best judgment to reconstruct its s
 - If odd/even weeks contain alternatives in the same slot, combine them with "/" (e.g. "國文/公民") and do the same for the corresponding teacher names, using one shared key for that slot.
 - Set reverseWeek to true only when the photo clearly indicates a reversed odd/even week orientation; otherwise false.
 - Add breakTimes only for explicitly shown non-class periods such as lunch or cleaning — not empty/free periods.
-- Add countdownEvents only for clearly visible events/exams with a readable calendar date, formatted as "YYYY-MM-DD". Only include dates you can actually read; otherwise return an empty array.
+- Add countdownEvents only for clearly visible events/exams with a readable calendar date, formatted as "YYYY-MM-DD". Set startDate and endDate to the same date for a single-day event; use the visible first and last dates for a multi-day event/exam period. Only include dates you can actually read; otherwise return an empty array.
 - Do not invent information. When uncertain, prefer an empty value or null.
 - Keep all fields internally consistent.
 - Return ONLY the raw JSON object — no markdown fences, no comments, no extra text.`;
@@ -378,7 +378,13 @@ class ImportPreview {
       countdownEvents.forEach(item => {
         const row = document.getElementById('ocr-countdown-row-template').content.cloneNode(true);
         row.querySelector('.ocr-countdown-name').value = item.name || '';
-        row.querySelector('.ocr-countdown-date').value = item.date || '';
+        const startInput = row.querySelector('.ocr-countdown-start');
+        const endInput = row.querySelector('.ocr-countdown-end');
+        startInput.value = item.startDate || item.date || '';
+        endInput.value = item.endDate || item.date || '';
+        startInput.addEventListener('change', () => {
+          if (!endInput.value || endInput.value < startInput.value) endInput.value = startInput.value;
+        });
         countdownList.appendChild(row);
       });
     } else if (countdownFold) {
@@ -450,8 +456,9 @@ class ImportPreview {
       const countdownEvents = [];
       this.root.querySelectorAll('[data-ocr-countdown-list] .bell-row').forEach(item => {
         const name = (item.querySelector('.ocr-countdown-name')?.value || '').trim();
-        const date = (item.querySelector('.ocr-countdown-date')?.value || '').trim();
-        if (name && date) countdownEvents.push({ name, date });
+        const startDate = (item.querySelector('.ocr-countdown-start')?.value || '').trim();
+        const endDate = (item.querySelector('.ocr-countdown-end')?.value || '').trim();
+        if (name && startDate) countdownEvents.push({ name, startDate, endDate: endDate || startDate });
       });
       edited.countdownEvents = countdownEvents;
 

@@ -3001,7 +3001,7 @@ body.pro-style .row-name .week-label.label-even {
     min-height:74px;
   }
   .title-now {
-    font-size:43px;
+    font-size:32px;
   }
   .time-card {
     padding-block:7px;
@@ -3456,8 +3456,8 @@ body::before {
   overflow:visible;
   text-overflow:clip;
   max-width:100%;
-  font-size:48px;
-  line-height:.96;
+  font-size:34px;
+  line-height:1.02;
   letter-spacing:-.04em;
   text-shadow:none !important;
 }
@@ -4257,16 +4257,29 @@ body.pro-style .time-card.v3-11-next-module .timer-container {
 }
 .countdown-event-fields {
   min-width:0;
-  display:grid;
-  grid-template-columns:minmax(0,1fr) minmax(140px,.7fr);
+  display:flex;
+  flex-direction:column;
   gap:10px;
   width:100% !important;
 }
-.countdown-event-fields .countdown-event-date {
+.countdown-date-range {
+  display:flex;
+  align-items:center;
+  gap:7px;
+  width:100%;
+}
+.countdown-date-range .time-sep {
+  flex:0 0 auto;
+  color:var(--sub);
+  font-size:13px;
+}
+.countdown-event-fields .countdown-event-start,
+.countdown-event-fields .countdown-event-end {
   display:block !important;
   width:100% !important;
   min-width:0 !important;
   max-width:100% !important;
+  flex:1 1 0;
   box-sizing:border-box !important;
   font-size:16px !important;
   min-height:38px !important;
@@ -4369,7 +4382,7 @@ html body .dashboard > .label-row > .exam-countdown .exam-countdown-label {
     padding-top:calc(env(safe-area-inset-top) + 52px);
   }
   .title-now {
-    font-size:44px;
+    font-size:32px;
   }
   .now-meta-row {
     max-width:21vw;
@@ -4405,9 +4418,6 @@ html body .dashboard > .label-row > .exam-countdown .exam-countdown-label {
     padding:6px 9px !important;
     min-width:60px !important;
     font-size:clamp(18px,5.2vw,24px) !important;
-  }
-  .countdown-event-fields {
-    grid-template-columns:minmax(0,1fr) minmax(140px,140px) !important;
   }
   .dashboard .time-card.v3-11-next-module {
     min-height:92px !important;
@@ -4925,7 +4935,6 @@ html body .dashboard > .label-row > .exam-countdown .exam-countdown-label {
     font-size:clamp(11px,3vw,13px);
   }
   .countdown-event-fields {
-    grid-template-columns:minmax(0,1fr) !important;
     gap:9px !important;
   }
   .style-preset-grid {
@@ -5019,7 +5028,6 @@ html body .dashboard > .label-row > .exam-countdown .exam-countdown-label {
     display:none !important;
   }
   .editor-sheet .countdown-event-fields {
-    grid-template-columns:minmax(0,1fr) !important;
     gap:8px !important;
   }
   html body .dashboard > .label-row {
@@ -5174,7 +5182,7 @@ html body .dashboard > .label-row > .exam-countdown .exam-countdown-label {
   }
   .title-now {
     line-height:1.02;
-    font-size:48px;
+    font-size:34px;
   }
   .now-meta-row {
     min-width:0;
@@ -5213,4 +5221,32 @@ html body .dashboard > .label-row > .exam-countdown .exam-countdown-label {
   .dashboard .time-card.v3-11-next-module .next-box .next-meta {
     gap:2px 7px !important;
   }
+}
+
+/* Keeps the countdown label and date on a single line each, truncating with
+   an ellipsis instead of wrapping — a column flex item with align-items:flex-start
+   and a percentage max-width shrinks to a near-zero content box, which forced
+   the label to break mid-word once the date grew from a single date to a range. */
+html body .dashboard > .label-row > .exam-countdown .exam-countdown-copy,
+html body.pro-style .dashboard > .label-row > .exam-countdown .exam-countdown-copy {
+  align-items:stretch !important;
+}
+html body .dashboard > .label-row > .exam-countdown .exam-countdown-label,
+html body .dashboard > .label-row > .exam-countdown .exam-countdown-date {
+  display:block !important;
+  width:100% !important;
+  white-space:nowrap !important;
+  overflow:hidden !important;
+  text-overflow:ellipsis !important;
+  overflow-wrap:normal !important;
+}
+/* Below 480px, pro-style switches the copy block to a row (label and date side
+   by side) instead of stacked — those two now need to share that row and
+   shrink independently instead of one overflowing past the box. */
+html body.pro-style .dashboard > .label-row > .exam-countdown .exam-countdown-label,
+html body.pro-style .dashboard > .label-row > .exam-countdown .exam-countdown-date {
+  display:inline-block !important;
+  width:auto !important;
+  flex:1 1 auto !important;
+  min-width:0 !important;
 }

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
     <title>Orbit AI</title>
-    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/styles.css?v=20260902">
   </head>
 <body class="orbit-booting">
 <div id="test-banner" class="test-banner">
@@ -192,7 +192,7 @@
       <div class="editor-fold-body">
         <div class="countdown-editor-list" id="countdown-event-list"></div>
         <button type="button" class="add-btn" onclick="addCountdownEventRow()">新增倒數</button>
-        <div class="editor-hint"><div class="editor-hint-body">首頁顯示第一個倒數活動，可在首頁左右滑動切換。</div></div>
+        <div class="editor-hint"><div class="editor-hint-body">首頁顯示第一個倒數活動，可在首頁左右滑動切換。日期可設定一段範圍（例如考試週），單日活動請將開始與結束日期設為同一天。</div></div>
       </div>
     </details>
     <details class="editor-fold" id="editor-fold-teachers">
@@ -326,7 +326,7 @@
 <template id="ocr-break-row-template"><div class="bell-row break-row"><div class="teacher-fields"><input class="editor-input break-name" placeholder="名稱"><div class="bell-inputs"><input class="time-input break-start" type="time"><span class="time-sep">→</span><input class="time-input break-end" type="time"></div></div></div></template>
 <template id="ocr-class-row-template"><div class="teacher-card ocr-import-class-card"><div class="teacher-avatar"></div><div class="teacher-fields"><input class="editor-input tc-subject" data-field="class-subject" placeholder="科目"><input class="editor-input tc-teacher" placeholder="教師"><input class="editor-input tc-location" placeholder="教室(選填)"></div></div></template>
 <template id="ocr-day-row-template"><div class="schedule-day-row"><div class="schedule-day-label"></div><div class="schedule-periods"></div></div></template>
-<template id="ocr-countdown-row-template"><div class="bell-row"><div class="teacher-fields"><input class="editor-input ocr-countdown-name" maxlength="80" placeholder="活動名稱"><input class="editor-input ocr-countdown-date" type="date"></div></div></template>
+<template id="ocr-countdown-row-template"><div class="bell-row"><div class="teacher-fields"><input class="editor-input ocr-countdown-name" maxlength="80" placeholder="活動名稱"><div class="bell-inputs"><input class="editor-input ocr-countdown-start" type="date" aria-label="開始日期"><span class="time-sep">→</span><input class="editor-input ocr-countdown-end" type="date" aria-label="結束日期"></div></div></div></template>
 <div id="editor-confirm-overlay" class="editor-confirm-overlay" onclick="hideEditorDiscardConfirm()" aria-hidden="true">
 </div>
 <div id="editor-confirm-sheet" class="editor-confirm-sheet" role="alertdialog" aria-modal="true" aria-labelledby="editor-confirm-title" aria-describedby="editor-confirm-msg">
@@ -483,17 +483,17 @@
   </div>
   <div class="style-panel-actions" id="style-editor-actions"><button type="button" class="style-apply-btn" onclick="enterStylePreview()">預覽並儲存</button></div>
 </div>
-  <script src="js/data.js"></script>
-  <script src="js/schedule.js"></script>
-  <script src="js/appearance.js"></script>
-  <script src="js/dashboard.js"></script>
-  <script src="js/editor-backup.js"></script>
-  <script src="js/editor-core.js"></script>
-  <script src="js/editor-teachers.js"></script>
-  <script src="js/editor-schedule.js"></script>
-  <script src="js/dashboard-render.js"></script>
-  <script src="js/gemini-ocr.js"></script>
-  <script src="js/bootstrap.js"></script>
-  <script id="orbit-consolidated-behavior-controller" src="js/testsim-runtime.js"></script>
+  <script src="js/data.js?v=20260902"></script>
+  <script src="js/schedule.js?v=20260902"></script>
+  <script src="js/appearance.js?v=20260902"></script>
+  <script src="js/dashboard.js?v=20260902"></script>
+  <script src="js/editor-backup.js?v=20260902"></script>
+  <script src="js/editor-core.js?v=20260902"></script>
+  <script src="js/editor-teachers.js?v=20260902"></script>
+  <script src="js/editor-schedule.js?v=20260902"></script>
+  <script src="js/dashboard-render.js?v=20260902"></script>
+  <script src="js/gemini-ocr.js?v=20260902"></script>
+  <script src="js/bootstrap.js?v=20260902"></script>
+  <script id="orbit-consolidated-behavior-controller" src="js/testsim-runtime.js?v=20260902"></script>
 </body>
 </html>

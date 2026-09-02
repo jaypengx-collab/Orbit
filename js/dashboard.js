@@ -100,18 +100,25 @@ function updateExamCountdown() {
   const label=document.querySelector('.exam-countdown-label');
   const dateLabel=document.querySelector('.exam-countdown-date');
   if (label) label.textContent=event.name;
-  if (dateLabel) dateLabel.textContent=event.date.replaceAll('-','.');
-  const [year,month,day]=event.date.split('-').map(Number);
-  const examStart = new Date(year,month-1,day);
+  if (dateLabel) dateLabel.textContent=formatCountdownEventDate(event);
+  const toDate=value=> { const [year,month,day]=value.split('-').map(Number); return new Date(year,month-1,day) };
+  const examStart = toDate(event.startDate);
+  const examEnd = toDate(event.endDate);
   const now = new Date();
-  const diffDays = Math.ceil((examStart - now) / 86400000);
+  const today = new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  const diffStart = Math.round((examStart - today) / 86400000);
+  const diffEnd = Math.round((examEnd - today) / 86400000);
+  const isSingleDay = event.startDate===event.endDate;
 
-  if (diffDays > 0) {
-    el.textContent = `${diffDays} 天`;
-    card.setAttribute('aria-label', `${event.name}倒數 ${diffDays} 天`);
-  } else if (diffDays === 0) {
+  if (diffStart > 0) {
+    el.textContent = `${diffStart} 天`;
+    card.setAttribute('aria-label', `${event.name}倒數 ${diffStart} 天`);
+  } else if (isSingleDay && diffStart === 0) {
     el.textContent = '今天';
     card.setAttribute('aria-label', `${event.name}今天開始`);
+  } else if (diffEnd >= 0) {
+    el.textContent = '進行中';
+    card.setAttribute('aria-label', `${event.name}進行中`);
   } else {
     el.textContent = '已結束';
     card.setAttribute('aria-label', `${event.name}已結束`);

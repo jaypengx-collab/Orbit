@@ -117,7 +117,7 @@ const DEFAULT_BREAK_TIMES = [
     end: "13:00"
   }
 ];
-const DEFAULT_COUNTDOWN_EVENT = { name: '116 學測', date: '2027-01-22' };
+const DEFAULT_COUNTDOWN_EVENT = { name: '116 學測', startDate: '2027-01-22', endDate: '2027-01-24' };
 const DEFAULT_COUNTDOWN_EVENTS = [DEFAULT_COUNTDOWN_EVENT];
 // Shared validation and normalization keeps saved and imported data predictable.
 function isValidTime(value) {
@@ -149,9 +149,21 @@ function validateTimeIntervals(bellTimes,breakTimes) {
 function normalizeCountdownEvent(value) {
   const source=value&&typeof value==='object'?value:{};
   const name=String(source.name||'').trim().slice(0,80);
-  const date=String(source.date||'').trim();
-  if (!name || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
-  return { name, date };
+  const isDate=v=>/^\d{4}-\d{2}-\d{2}$/.test(String(v||'').trim());
+  const legacyDate=String(source.date||'').trim();
+  let startDate=String(source.startDate||legacyDate||'').trim();
+  let endDate=String(source.endDate||legacyDate||startDate||'').trim();
+  if (!name || !isDate(startDate) || !isDate(endDate)) return null;
+  if (endDate<startDate) { const swap=startDate; startDate=endDate; endDate=swap; }
+  return { name, startDate, endDate };
+}
+// Formats a countdown event's date(s) for display, e.g. "2027.01.22" or "2027.01.22–01.24".
+function formatCountdownEventDate(event) {
+  const dot=value=>String(value||'').replaceAll('-','.');
+  if (!event) return '';
+  if (event.startDate===event.endDate) return dot(event.startDate);
+  const endShort=event.endDate.slice(event.startDate.slice(0,4)===event.endDate.slice(0,4)?5:0);
+  return `${dot(event.startDate)}–${dot(endShort)}`;
 }
 function normalizeCountdownEvents(value) {
   const source=Array.isArray(value)?value:[];

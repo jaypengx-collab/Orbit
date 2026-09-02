@@ -150,14 +150,20 @@ function renderCountdownEvent() {
   getCountdownEvents().forEach((event,index)=>addCountdownEventRow(event,index));
   refreshCountdownMoveButtons()
 }
-function addCountdownEventRow(event={name:'',date:''},index) {
+function addCountdownEventRow(event={name:'',startDate:'',endDate:''},index) {
   const list=document.getElementById('countdown-event-list');
   if (!list||list.children.length>=12) return;
   const row=document.createElement('div');
   row.className='countdown-event-row';
-  row.innerHTML='<div class="countdown-event-header"><span class="countdown-event-title">倒數活動</span><div class="countdown-event-actions"><span class="countdown-drag-handle" role="button" tabindex="0" title="拖曳排序" aria-label="拖曳排序">☰</span><label class="order-position-label">順序<input class="order-position" type="number" min="1" inputmode="numeric" aria-label="倒數活動順序"></label><button type="button" class="countdown-event-remove" aria-label="移除倒數">×</button></div></div><div class="countdown-event-fields"><label>活動名稱<input class="editor-input countdown-event-name" maxlength="80" placeholder="例如：116 學測"></label><label>日期<input class="editor-input countdown-event-date" type="date"></label></div>';
+  row.innerHTML='<div class="countdown-event-header"><span class="countdown-event-title">倒數活動</span><div class="countdown-event-actions"><span class="countdown-drag-handle" role="button" tabindex="0" title="拖曳排序" aria-label="拖曳排序">☰</span><label class="order-position-label">順序<input class="order-position" type="number" min="1" inputmode="numeric" aria-label="倒數活動順序"></label><button type="button" class="countdown-event-remove" aria-label="移除倒數">×</button></div></div><div class="countdown-event-fields"><label>活動名稱<input class="editor-input countdown-event-name" maxlength="80" placeholder="例如：116 學測"></label><label class="countdown-event-daterange-label">日期（可選一段範圍，單日請選同一天）<div class="countdown-date-range"><input class="editor-input countdown-event-start" type="date" aria-label="開始日期"><span class="time-sep">→</span><input class="editor-input countdown-event-end" type="date" aria-label="結束日期"></div></label></div>';
   row.querySelector('.countdown-event-name').value=event.name;
-  row.querySelector('.countdown-event-date').value=event.date;
+  const startInput=row.querySelector('.countdown-event-start');
+  const endInput=row.querySelector('.countdown-event-end');
+  startInput.value=event.startDate||event.date||'';
+  endInput.value=event.endDate||event.date||'';
+  startInput.addEventListener('change',()=> {
+    if (!endInput.value||endInput.value<startInput.value) endInput.value=startInput.value;
+  });
   row.querySelector('.countdown-event-remove').addEventListener('click',()=> {
     if (list.children.length>1) row.remove();
     else row.querySelectorAll('input').forEach(input=>input.value='');

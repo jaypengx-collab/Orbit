@@ -47,8 +47,9 @@ function collectEditorFormState()  {
   const reverseWeek=document.getElementById('toggle-reverse').classList.contains('on');
   const countdownEvents=Array.from(document.querySelectorAll('#countdown-event-list .countdown-event-row')).map(row=>normalizeCountdownEvent({
     name:row.querySelector('.countdown-event-name')?.value,
-    date:row.querySelector('.countdown-event-date')?.value
-  })).filter(event=>event.name&&event.date);
+    startDate:row.querySelector('.countdown-event-start')?.value,
+    endDate:row.querySelector('.countdown-event-end')?.value
+  })).filter(Boolean);
   const normalizedCountdownEvents=normalizeCountdownEvents(countdownEvents);
   const proAccent=normalizeProAccent(applicationData.proAccent);
   const derivedProColors=deriveProSupportColors(proAccent);
@@ -398,11 +399,11 @@ function describeSettingsDiff(current,next,{isImport=false}={}) {
   const currentCountdownEvents=getCountdownEvents(current);
   const nextCountdownEvents=getCountdownEvents(next);
   const countdownItems=[];
-  const eventText=event=>`${event.name} (${event.date})`;
+  const eventText=event=>`${event.name} (${formatCountdownEventDate(event)})`;
   const matchedCurrent=new Set();
   nextCountdownEvents.forEach(event=>{
     const exact=currentCountdownEvents.findIndex((item,index)=>
-      !matchedCurrent.has(index)&&item.name===event.name&&item.date===event.date);
+      !matchedCurrent.has(index)&&item.name===event.name&&item.startDate===event.startDate&&item.endDate===event.endDate);
     if (exact!==-1) {
       matchedCurrent.add(exact);
       return
@@ -554,9 +555,9 @@ function mergeImportedSettings(current,imported,preserveStyle=false) {
   const events=new Map(getCountdownEvents(current).map(item=>[item.name,item]));
   getCountdownEvents(imported).forEach(item=> {
     const currentEvent=events.get(item.name);
-    if (!currentEvent) addedActions.push(`新增倒數活動：${item.name}（${item.date}）`);
-    else if (currentEvent.date===item.date) mergedActions.push(`合併倒數活動：${item.name}（${item.date}）`);
-    else replacedActions.push(`取代倒數活動：${item.name}（${currentEvent.date} -> ${item.date}）`);
+    if (!currentEvent) addedActions.push(`新增倒數活動：${item.name}（${formatCountdownEventDate(item)}）`);
+    else if (currentEvent.startDate===item.startDate&&currentEvent.endDate===item.endDate) mergedActions.push(`合併倒數活動：${item.name}（${formatCountdownEventDate(item)}）`);
+    else replacedActions.push(`取代倒數活動：${item.name}（${formatCountdownEventDate(currentEvent)} -> ${formatCountdownEventDate(item)}）`);
     events.set(item.name,item)
   });
   merged.countdownEvents=[...events.values()];
