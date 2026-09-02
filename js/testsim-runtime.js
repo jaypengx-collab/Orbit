@@ -22,7 +22,12 @@
   ];
   function fetchTextSync(url){
     var request=new XMLHttpRequest();
-    request.open('GET',url,false);
+    // Cache-busted: this hash must reflect the files actually on disk, not
+    // whatever the browser last cached them as, or the tag stops changing
+    // when the files change.
+    var bustedUrl=url+(url.indexOf('?')===-1?'?':'&')+'_v='+Date.now()+Math.random();
+    request.open('GET',bustedUrl,false);
+    request.setRequestHeader('Cache-Control','no-cache');
     request.send(null);
     if (request.status===0||request.status>=200&&request.status<300) return request.responseText;
     throw new Error('Unable to fetch '+url);
