@@ -822,10 +822,16 @@ const ORBIT_STORAGE_SCHEMA='r8N3wL0yS5qM9uV7';
 function prepareStorageForCurrentVersion() {
   try {
     const saved=JSON.parse(localStorage.getItem('classFocusData')||'null');
-    if (!saved||saved.__orbit?.app!==ORBIT_APP_ID||saved.__orbit?.schema!==ORBIT_STORAGE_SCHEMA) localStorage.clear();
+    if (!saved||saved.__orbit?.app!==ORBIT_APP_ID||saved.__orbit?.schema!==ORBIT_STORAGE_SCHEMA) {
+      const testState=localStorage.getItem('orbitTestState');
+      localStorage.clear();
+      if (testState) localStorage.setItem('orbitTestState',testState);
+    }
   }
   catch (e) {
+    const testState=localStorage.getItem('orbitTestState');
     localStorage.clear();
+    if (testState) localStorage.setItem('orbitTestState',testState);
   }
 }
 prepareStorageForCurrentVersion();
@@ -1201,7 +1207,8 @@ function exitStylePreview() {
 }
 function applyStyleVisual(style) {
   document.body.classList.add('pro-style');
-  applyProAccent(style)
+  applyProAccent(style);
+  if (typeof update==='function') update()
 }
 // Builds the preview draft into a full settings object and saves it with the
 // same settings pipeline used by the class editor.
@@ -1683,9 +1690,10 @@ function keepActiveClassVisible(list,isDayFinished,scrollKey) {
   }
 
   requestAnimationFrame(() => {
-    const listRect=list.getBoundingClientRect();
-    const rowRect=activeRow.getBoundingClientRect();
-    const targetTop=Math.max(0,list.scrollTop + rowRect.top - listRect.top);
+    // Use the row's layout position rather than its client rect. The list
+    // entrance animation transforms the row briefly, which otherwise makes
+    // the initial alignment land a few pixels too high.
+    const targetTop=Math.max(0,activeRow.offsetTop);
     const normalMaxScroll = getNaturalListMaxScroll(list);
     // Extra headroom (was +2). iOS Safari — notably on iPhone 15 Pro's Dynamic
     // Island safe-area geometry — can commit the new padding-bottom a frame
@@ -2265,17 +2273,26 @@ function describeSettingsDiff(current,next,renameChanges=[],{isImport=false}={})
   const currentCountdownEvents=getCountdownEvents(current);
   const nextCountdownEvents=getCountdownEvents(next);
   const countdownItems=[];
-  const countdownTotal=Math.max(currentCountdownEvents.length,nextCountdownEvents.length);
-  for (let i=0;i<countdownTotal;i++) {
-    const before=currentCountdownEvents[i];
-    const after=nextCountdownEvents[i];
-    const beforeText=before?`${before.name} (${before.date})`:'（無）';
-    const afterText=after?`${after.name} (${after.date})`:'（無）';
-    if (beforeText===afterText) continue;
-    if (!before) countdownItems.push(`新增第 ${i+1} 項：${afterText}`);
-    else if (!after) countdownItems.push(`移除第 ${i+1} 項：${beforeText}`);
-    else countdownItems.push(`第 ${i+1} 項：${beforeText} -> ${afterText}`)
-  }
+  const eventText=event=>`${event.name} (${event.date})`;
+  const matchedCurrent=new Set();
+  nextCountdownEvents.forEach(event=>{
+    const exact=currentCountdownEvents.findIndex((item,index)=>
+      !matchedCurrent.has(index)&&item.name===event.name&&item.date===event.date);
+    if (exact!==-1) {
+      matchedCurrent.add(exact);
+      return
+    }
+    const changed=currentCountdownEvents.findIndex((item,index)=>
+      !matchedCurrent.has(index)&&item.name===event.name);
+    if (changed!==-1) {
+      matchedCurrent.add(changed);
+      countdownItems.push(`活動：${eventText(currentCountdownEvents[changed])} -> ${eventText(event)}`);
+    }
+    else countdownItems.push(`新增活動：${eventText(event)}`)
+  });
+  currentCountdownEvents.forEach((event,index)=>{
+    if (!matchedCurrent.has(index)) countdownItems.push(`移除活動：${eventText(event)}`)
+  });
   pushDiff(lines,'倒數活動',countdownItems);
   if (!!current.reverseWeek!==!!next.reverseWeek) lines.push(`單雙週對調：${current.reverseWeek?'開啟':'關閉'} -> ${next.reverseWeek?'開啟':'關閉'}`);
   const currentProAccent=normalizeProAccent(current.proAccent);
@@ -3783,9 +3800,26 @@ function syncTestPlayPauseUi() {
   if (!list)return;
 
   let scrollReleaseTimer=0;
+  let userScrolled=false;
+  const markUserScroll=()=> {
+    userScrolled=true;
+  };
+  list.addEventListener('pointerdown',markUserScroll,{passive:true});
+  list.addEventListener('touchstart',markUserScroll,{passive:true});
+  list.addEventListener('wheel',markUserScroll,{passive:true});
   list.addEventListener('scroll',()=>{
     clearTimeout(scrollReleaseTimer);
-    scrollReleaseTimer=setTimeout(clampManualListScroll,80);
+    scrollReleaseTimer=setTimeout(()=>{
+      const reserved=parseFloat(list.dataset.autoScrollSpace||'0')||0;
+      const naturalMax=Math.max(0,list.scrollHeight-list.clientHeight-reserved);
+      if (userScrolled&&reserved>0&&list.scrollTop>=naturalMax-1) {
+        userScrolled=false;
+        setListAutoScrollSpace(list,0);
+        list.scrollTop=Math.min(list.scrollTop,naturalMax);
+        return
+      }
+      clampManualListScroll();
+    },80);
   },{passive:true})
 })();
 
@@ -3851,11 +3885,11 @@ function createMetaChip(text,cls='') {
   return span;
 }
 function getClassColor(key) {
-  const slots=normalizeStyleSlots(applicationData.styleSlots).filter(slot=>slot.name);
-  if (!slots.length) return normalizeProAccent(applicationData.proAccent);
-  let hash=0;
-  for (const char of String(key||'')) hash=(hash*31+char.charCodeAt(0))>>>0;
-  return slots[hash%slots.length].primary;
+  const draftPanel=document.getElementById('style-panel');
+  const activeStyle=stylePanelDraft&&draftPanel?.classList.contains('style-draft-dirty')
+    ? stylePanelDraft
+    : applicationData;
+  return normalizeProAccent(activeStyle.proAccent);
 }
 function renderList(week,curIdx,nxtIdx,curDay,isDayFinished) {
   const list=document.getElementById('schedule-list');
@@ -4583,6 +4617,7 @@ ocrImageInput?.addEventListener('change',async event=>{
   var updatePatched = false;
   var panelPatched = false;
   var defaultsInitialized = false;
+  var TEST_STATE_STORAGE_KEY = 'orbitTestState';
 
   function el(id){ return document.getElementById(id); }
   function clampInt(value, min, max, fallback){
@@ -4614,6 +4649,50 @@ ocrImageInput?.addEventListener('change',async event=>{
     var dayInput = el('test-day-input');
     if (dayInput) dayInput.value = String(window.TEST_DAY);
     resetRenderState();
+  }
+  function persistTestState(){
+    try {
+      if (!window.MANUALLY_TEST) {
+        localStorage.removeItem(TEST_STATE_STORAGE_KEY);
+        return
+      }
+      localStorage.setItem(TEST_STATE_STORAGE_KEY,JSON.stringify({
+        day:normalizeDay(window.TEST_DAY),
+        seconds:Number.isFinite(window.TEST_TIME_SEC)?window.TEST_TIME_SEC:DAY_START_SECONDS,
+        simulating:!!window.IS_SIMULATING,
+        endOfDayArmed:!!endOfDayArmed,
+        pausedAtManualRollover:!!pausedAtManualRollover,
+        savedPausedSecond:Number.isFinite(savedPausedSecond)?savedPausedSecond:null,
+        savedPausedDay:Number.isFinite(savedPausedDay)?savedPausedDay:null
+      }));
+    } catch (error) {
+      console.warn('Unable to persist test mode state.',error)
+    }
+  }
+  function restoreTestState(){
+    try {
+      const raw=localStorage.getItem(TEST_STATE_STORAGE_KEY);
+      if (!raw) return false;
+      const state=JSON.parse(raw);
+      if (!state||typeof state!=='object'||typeof state.day!=='number'||typeof state.seconds!=='number') {
+        localStorage.removeItem(TEST_STATE_STORAGE_KEY);
+        return false
+      }
+      window.MANUALLY_TEST=true;
+      window.TEST_DAY=normalizeDay(state.day);
+      window.TEST_TIME_SEC=Math.max(0,Math.min(END_OF_DAY_SECONDS,Math.round(state.seconds)));
+      window.IS_SIMULATING=state.simulating===true;
+      endOfDayArmed=state.endOfDayArmed===true;
+      pausedAtManualRollover=state.pausedAtManualRollover===true;
+      savedPausedSecond=Number.isFinite(state.savedPausedSecond)?state.savedPausedSecond:null;
+      savedPausedDay=Number.isFinite(state.savedPausedDay)?normalizeDay(state.savedPausedDay):null;
+      writeDay(window.TEST_DAY);
+      return true
+    } catch (error) {
+      console.warn('Unable to restore test mode state.',error);
+      localStorage.removeItem(TEST_STATE_STORAGE_KEY);
+      return false
+    }
   }
   function unlockTestControls(){
     var slider = el('test-time-slider');
@@ -4821,6 +4900,7 @@ ocrImageInput?.addEventListener('change',async event=>{
       applyDashboardState();
       syncTestingBody();
       lastTestingState = !!(window.MANUALLY_TEST || window.IS_SIMULATING);
+      persistTestState();
       finishBoot();
       return result;
     };
@@ -4998,6 +5078,7 @@ ocrImageInput?.addEventListener('change',async event=>{
     endOfDayArmed = false;
     pausedAtManualRollover = false;
     clearSavedPausedTime();
+    try { localStorage.removeItem(TEST_STATE_STORAGE_KEY) } catch (error) { console.warn('Unable to clear test mode state.',error) }
     var status = el('sim-status');
     if (status) status.innerText = '';
     var indicator = el('sim-indicator');
@@ -5052,9 +5133,15 @@ ocrImageInput?.addEventListener('change',async event=>{
   function init(){
     mergeNextClassWithTimer();
     unlockTestControls();
-    if (!defaultsInitialized) {
+    var restoredTestState = restoreTestState();
+    if (!defaultsInitialized && !restoredTestState) {
       setDefaultsToCurrentTime(true);
       defaultsInitialized = true;
+    }
+    if (restoredTestState) {
+      updateInputDisplay();
+      var slider=el('test-time-slider');
+      if (slider) slider.value=String(Math.floor(window.TEST_TIME_SEC/60));
     }
     patchPanelOpeners();
     patchUpdate();
@@ -5112,6 +5199,7 @@ ocrImageInput?.addEventListener('change',async event=>{
     #schedule-list .row-meta{font-size:clamp(11px,3vw,13px)}
   }
 </style>
+<style id="schedule-list-bottom-spacing">.list-container{padding-bottom:calc(16px + var(--auto-scroll-space,0px) + env(safe-area-inset-bottom)) !important;}</style>
 </body>
 
 <style id="orbit-116-exam-countdown">.exam-countdown{flex:0 0 auto;min-height:42px;padding:7px 10px 7px 12px;border-radius:14px;border:1px solid rgba(10,132,255,.18);background:linear-gradient(135deg,rgba(10,132,255,.07),rgba(255,255,255,.035));display:flex;align-items:center;justify-content:space-between;gap:10px;box-shadow:inset 0 1px 0 rgba(255,255,255,.035);}.exam-countdown-copy{display:flex;align-items:baseline;gap:7px;min-width:0;}.exam-countdown-label{font-size:12px;font-weight:850;letter-spacing:.15px;color:var(--accent);white-space:nowrap;}.exam-countdown-date{font-size:9px;font-weight:700;color:var(--sub);letter-spacing:.25px;white-space:nowrap;}.exam-countdown-value{flex:0 0 auto;min-width:62px;padding:4px 8px;border-radius:9px;background:rgba(10,132,255,.11);border:1px solid rgba(10,132,255,.17);color:var(--accent);font-family:ui-monospace,SFMono-Regular,monospace;font-size:16px;line-height:1.05;font-weight:850;text-align:center;letter-spacing:-.25px;}body.light-mode .exam-countdown{background:linear-gradient(135deg,rgba(10,132,255,.045),#fff);border-color:rgba(10,132,255,.16);box-shadow:0 3px 12px rgba(25,28,33,.05);}body.light-mode .exam-countdown-value{background:rgba(10,132,255,.07);border-color:rgba(10,132,255,.15);color:var(--accent);}@media (max-width:380px){.exam-countdown{min-height:38px;padding:6px 8px 6px 10px;}.exam-countdown-label{font-size:11px;}.exam-countdown-date{font-size:8px;}.exam-countdown-value{min-width:58px;font-size:15px;padding:4px 7px;}}@media (max-height:700px){.exam-countdown{min-height:37px;padding-block:5px;}.exam-countdown-value{font-size:15px;}}</style>
