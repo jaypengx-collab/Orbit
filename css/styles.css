@@ -1904,7 +1904,7 @@ body {
   background:var(--bg);
   color:var(--txt);
   margin:0;
-  padding:calc(env(safe-area-inset-top) + 52px) max(12px,env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));
+  padding:calc(env(safe-area-inset-top) + 52px) max(12px,env(safe-area-inset-right)) 10px max(12px,env(safe-area-inset-left));
   display:flex;
   flex-direction:column;
   align-items:center;
