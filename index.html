@@ -553,6 +553,9 @@
     <div class="editor-title">
       時間模擬
       <span class="app-version" id="app-version">版本載入中…</span>
+      <button type="button" id="test-refresh-btn" onclick="forceAppRefresh()" aria-label="更新版本">
+        更新
+      </button>
       <span class="test-status-pill" id="sim-indicator" style="display:none">
         模擬中
         <span id="sim-status">
@@ -611,9 +614,6 @@
   </div>
   <button type="button" id="test-play-pause-btn" onclick="toggleTestPlayPause()" class="sim-btn">
     開始
-  </button>
-  <button type="button" id="test-refresh-btn" onclick="forceAppRefresh()" class="sim-btn">
-    更新版本
   </button>
   <button type="button" id="test-exit-btn" onclick="exitTestMode()" class="test-exit-btn">
     結束模擬
@@ -4587,9 +4587,10 @@ ocrImageInput?.addEventListener('change',async event=>{
 
   function el(id){ return document.getElementById(id); }
   function getAppVersion(){
-    var source=Array.from(document.querySelectorAll('style,script'))
-      .map(function(node){ return node.textContent||''; })
-      .join('\n');
+    var source=document.documentElement.outerHTML.replace(
+      /(<span id="app-version"[^>]*>)[\s\S]*?(<\/span>)/,
+      '$1$2'
+    );
     var hash=2166136261;
     for (var i=0;i<source.length;i++) {
       hash^=source.charCodeAt(i);
@@ -5189,6 +5190,7 @@ ocrImageInput?.addEventListener('change',async event=>{
 <style id="schedule-list-bottom-spacing">.list-container{padding-bottom:calc(16px + var(--auto-scroll-space,0px) + env(safe-area-inset-bottom)) !important;scrollbar-color:rgba(255,255,255,.3) transparent;scrollbar-width:thin;}.list-container::-webkit-scrollbar{width:6px;background:transparent;}.list-container::-webkit-scrollbar-track{background:transparent;}.list-container::-webkit-scrollbar-thumb{background:rgba(255,255,255,.3);border-radius:999px;}</style>
 <style id="mobile-dashboard-paint-isolation">.dashboard{isolation:isolate;contain:layout paint;}</style>
 <style id="test-version-label">.app-version{font-size:9px;font-weight:700;letter-spacing:.08em;color:var(--sub);opacity:.8;white-space:nowrap;}</style>
+<style id="test-refresh-button-style">#test-refresh-btn{flex:0 0 auto;min-height:24px;width:auto;padding:3px 7px;border-radius:7px;background:color-mix(in srgb,var(--pro-accent,var(--accent)) 15%,transparent) !important;color:var(--pro-accent,var(--accent)) !important;border:1px solid color-mix(in srgb,var(--pro-accent,var(--accent)) 42%,transparent) !important;box-shadow:none !important;font-size:9px;font-weight:800;line-height:1;letter-spacing:0;cursor:pointer;touch-action:manipulation;}#test-refresh-btn:hover{background:color-mix(in srgb,var(--pro-accent,var(--accent)) 25%,transparent) !important;}#test-refresh-btn:active{transform:scale(.95);}</style>
 </body>
 
 <style id="orbit-116-exam-countdown">.exam-countdown{flex:0 0 auto;min-height:42px;padding:7px 10px 7px 12px;border-radius:14px;border:1px solid rgba(10,132,255,.18);background:linear-gradient(135deg,rgba(10,132,255,.07),rgba(255,255,255,.035));display:flex;align-items:center;justify-content:space-between;gap:10px;box-shadow:inset 0 1px 0 rgba(255,255,255,.035);}.exam-countdown-copy{display:flex;align-items:baseline;gap:7px;min-width:0;}.exam-countdown-label{font-size:12px;font-weight:850;letter-spacing:.15px;color:var(--accent);white-space:nowrap;}.exam-countdown-date{font-size:9px;font-weight:700;color:var(--sub);letter-spacing:.25px;white-space:nowrap;}.exam-countdown-value{flex:0 0 auto;min-width:62px;padding:4px 8px;border-radius:9px;background:rgba(10,132,255,.11);border:1px solid rgba(10,132,255,.17);color:var(--accent);font-family:ui-monospace,SFMono-Regular,monospace;font-size:16px;line-height:1.05;font-weight:850;text-align:center;letter-spacing:-.25px;}body.light-mode .exam-countdown{background:linear-gradient(135deg,rgba(10,132,255,.045),#fff);border-color:rgba(10,132,255,.16);box-shadow:0 3px 12px rgba(25,28,33,.05);}body.light-mode .exam-countdown-value{background:rgba(10,132,255,.07);border-color:rgba(10,132,255,.15);color:var(--accent);}@media (max-width:380px){.exam-countdown{min-height:38px;padding:6px 8px 6px 10px;}.exam-countdown-label{font-size:11px;}.exam-countdown-date{font-size:8px;}.exam-countdown-value{min-width:58px;font-size:15px;padding:4px 7px;}}@media (max-height:700px){.exam-countdown{min-height:37px;padding-block:5px;}.exam-countdown-value{font-size:15px;}}</style>
