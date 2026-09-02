@@ -488,6 +488,16 @@ function notifyDiscardedImportData() {
 async function closeEditor(force) {
   const sheet = document.getElementById('editor-sheet');
 
+  if (typeof isOcrProcessing !== 'undefined' && isOcrProcessing) {
+    const toast = document.getElementById('save-toast');
+    if (toast) {
+      toast.textContent = 'AI 辨識中，請稍候再關閉。';
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2000);
+    }
+    return
+  }
+
   if (!sheet.classList.contains('show')) {
     hideEditorDiscardConfirm();
     document.body.classList.remove('editor-open');

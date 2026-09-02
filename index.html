@@ -326,7 +326,7 @@
 <template id="ocr-break-row-template"><div class="bell-row break-row"><div class="teacher-fields"><input class="editor-input break-name" placeholder="名稱"><div class="bell-inputs"><input class="time-input break-start" type="time"><span class="time-sep">→</span><input class="time-input break-end" type="time"></div></div></div></template>
 <template id="ocr-class-row-template"><div class="teacher-card ocr-import-class-card"><div class="teacher-avatar"></div><div class="teacher-fields"><input class="editor-input tc-subject" data-field="class-subject" placeholder="科目"><input class="editor-input tc-teacher" placeholder="教師"><input class="editor-input tc-location" placeholder="教室(選填)"></div></div></template>
 <template id="ocr-day-row-template"><div class="schedule-day-row"><div class="schedule-day-label"></div><div class="schedule-periods"></div></div></template>
-<template id="ocr-countdown-row-template"><div class="bell-row"><div class="teacher-fields"><input class="editor-input ocr-countdown-name" maxlength="80" placeholder="活動名稱"><div class="bell-inputs"><input class="editor-input ocr-countdown-start" type="date" aria-label="開始日期"><span class="time-sep">→</span><input class="editor-input ocr-countdown-end" type="date" aria-label="結束日期"></div></div></div></template>
+<template id="ocr-countdown-row-template"><div class="bell-row break-row"><div class="teacher-fields"><input class="editor-input ocr-countdown-name" maxlength="80" placeholder="活動名稱"><div class="bell-inputs"><input class="editor-input ocr-countdown-start" type="date" aria-label="開始日期"><span class="time-sep">→</span><input class="editor-input ocr-countdown-end" type="date" aria-label="結束日期"></div></div></div></template>
 <div id="editor-confirm-overlay" class="editor-confirm-overlay" onclick="hideEditorDiscardConfirm()" aria-hidden="true">
 </div>
 <div id="editor-confirm-sheet" class="editor-confirm-sheet" role="alertdialog" aria-modal="true" aria-labelledby="editor-confirm-title" aria-describedby="editor-confirm-msg">
@@ -483,17 +483,17 @@
   </div>
   <div class="style-panel-actions" id="style-editor-actions"><button type="button" class="style-apply-btn" onclick="enterStylePreview()">預覽並儲存</button></div>
 </div>
-  <script src="js/data.js?v=20260902b"></script>
-  <script src="js/schedule.js?v=20260902b"></script>
-  <script src="js/appearance.js?v=20260902b"></script>
-  <script src="js/dashboard.js?v=20260902b"></script>
-  <script src="js/editor-backup.js?v=20260902b"></script>
-  <script src="js/editor-core.js?v=20260902b"></script>
-  <script src="js/editor-teachers.js?v=20260902b"></script>
-  <script src="js/editor-schedule.js?v=20260902b"></script>
-  <script src="js/dashboard-render.js?v=20260902b"></script>
-  <script src="js/gemini-ocr.js?v=20260902b"></script>
-  <script src="js/bootstrap.js?v=20260902b"></script>
-  <script id="orbit-consolidated-behavior-controller" src="js/testsim-runtime.js?v=20260902b"></script>
+  <script src="js/data.js?v=20260902b" defer></script>
+  <script src="js/schedule.js?v=20260902b" defer></script>
+  <script src="js/appearance.js?v=20260902b" defer></script>
+  <script src="js/dashboard.js?v=20260902b" defer></script>
+  <script src="js/editor-backup.js?v=20260902b" defer></script>
+  <script src="js/editor-core.js?v=20260902b" defer></script>
+  <script src="js/editor-teachers.js?v=20260902b" defer></script>
+  <script src="js/editor-schedule.js?v=20260902b" defer></script>
+  <script src="js/dashboard-render.js?v=20260902b" defer></script>
+  <script src="js/gemini-ocr.js?v=20260902b" defer></script>
+  <script src="js/bootstrap.js?v=20260902b" defer></script>
+  <script id="orbit-consolidated-behavior-controller" src="js/testsim-runtime.js?v=20260902b" defer></script>
 </body>
 </html>

@@ -36,6 +36,10 @@ function capCanvasDimension(canvas, maxDimension = 1600) {
   return scaled;
 }
 
+// True while a Gemini OCR request is in flight; the editor sheet checks this to block
+// closing mid-recognition (closing would abandon the in-progress import silently).
+let isOcrProcessing = false;
+
 // Gemini API keys are user-supplied and kept only in this browser's localStorage; never
 // hardcode a real key in this file (it would be exposed to anyone who opens/shares it).
 const GEMINI_API_KEY_STORAGE_KEY = 'orbitAiGeminiApiKey';
@@ -114,8 +118,8 @@ Interpret the timetable visually and use your best judgment to reconstruct its s
         continue;
       }
       if (response.ok) {
-        report('AI 已回應，正在解析辨識結果…');
-        return this.parseResponse(await response.json());
+        report(`AI 已回應（使用模型：${model}），正在解析辨識結果…`);
+        return { candidate: this.parseResponse(await response.json()), modelUsed: model };
       }
 
       const errorJson = await response.json().catch(() => ({}));
@@ -495,20 +499,22 @@ function mountOCRImporter({ input, runButton, imagePreview, status, result, onIm
       if (!apiKey) return;
     }
     runButton.disabled = true;
+    isOcrProcessing = true;
     try {
       const workingCanvas = capCanvasDimension(source.canvas, 1600);
 
       status('準備圖片中…');
-      const candidate = await aiProcessor.recognizeSchedule(workingCanvas, apiKey, (message) => status(message));
+      const { candidate, modelUsed } = await aiProcessor.recognizeSchedule(workingCanvas, apiKey, (message) => status(message));
       status('正在驗證課表資料…');
       const validation = validator.validate(candidate);
 
-      status(validation.valid ? '課表辨識完成，請確認下方內容後進行匯入。' : (validation.errors.join('') || 'AI 辨識結果不完整，請手動修正後再匯入。'));
+      status(validation.valid ? `課表辨識完成（模型：${modelUsed}），請確認下方內容後進行匯入。` : (validation.errors.join('') || 'AI 辨識結果不完整，請手動修正後再匯入。'));
       preview.render(candidate, validation);
     } catch (error) {
       status(error.message, true);
     } finally {
       runButton.disabled = false;
+      isOcrProcessing = false;
     }
   });
 
@@ -579,6 +585,10 @@ function activateOCRImporter() {
             breakTimes:(Array.isArray(data.breakTimes)&&data.breakTimes.length)
               ?data.breakTimes
               :settingsDataForExport().breakTimes,
+            // A photo recognized with no classes (e.g. one taken just for a countdown date)
+            // carries no real signal about odd/even week orientation — keep the existing
+            // setting instead of silently resetting it to the AI's unset default.
+            reverseWeek:Object.keys(data.teacherDB||{}).length?data.reverseWeek:settingsDataForExport().reverseWeek,
             proAccent:settingsDataForExport().proAccent,
             proSecondary:settingsDataForExport().proSecondary,
             proTertiary:settingsDataForExport().proTertiary,

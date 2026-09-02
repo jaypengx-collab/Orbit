@@ -3678,8 +3678,8 @@ body.pro-style .timer-badge {
   background:color-mix(in srgb,var(--pro-accent) 13%,var(--orbit-panel)) !important;
 }
 .exam-countdown,body.pro-style .exam-countdown{
-  min-height:48px !important;
-  padding:8px 10px 8px 13px !important;
+  min-height:52px !important;
+  padding:9px 11px 9px 14px !important;
   border:1px solid color-mix(in srgb,var(--orbit-line) 78%,#ffffff 4%) !important;
   border-radius:12px !important;
   background:linear-gradient(135deg,color-mix(in srgb,var(--pro-accent) 18%,var(--orbit-panel)),color-mix(in srgb,var(--pro-secondary) 16%,var(--orbit-panel))) !important;
@@ -3688,25 +3688,25 @@ body.pro-style .timer-badge {
 .exam-countdown-label {
   white-space:nowrap;
   color:#fff !important;
-  font-size:12px !important;
+  font-size:13px !important;
   font-weight:900 !important;
   letter-spacing:.02em !important;
 }
 .exam-countdown-date {
-  font-size:9px;
+  font-size:10px;
   font-weight:700;
   letter-spacing:.25px;
   white-space:nowrap;
   color:color-mix(in srgb,var(--pro-secondary) 58%,#fff) !important;
 }
 .exam-countdown-value,body.pro-style .exam-countdown-value{
-  min-width:68px !important;
-  padding:6px 9px !important;
+  min-width:74px !important;
+  padding:7px 10px !important;
   border:1px solid color-mix(in srgb,var(--orbit-line) 86%,#ffffff 5%) !important;
   border-radius:8px !important;
   background:linear-gradient(135deg,color-mix(in srgb,var(--pro-accent) 22%,var(--orbit-panel)),color-mix(in srgb,var(--pro-secondary) 26%,var(--orbit-panel))) !important;
   color:#fff !important;
-  font-size:17px !important;
+  font-size:19px !important;
   letter-spacing:.02em !important;
 }
 .dashboard > .label-row > .top-actions {
@@ -3727,6 +3727,7 @@ body.pro-style .dashboard > .label-row > .top-actions {
 .dashboard > .label-row > .exam-countdown .exam-countdown-label,.dashboard > .label-row > .exam-countdown .exam-countdown-date {
   overflow:hidden;
   text-overflow:ellipsis;
+  min-width:0;
 }
 body.pro-style .break-progress-bar {
   background:linear-gradient(90deg,var(--pro-accent),var(--pro-secondary)) !important;
@@ -4006,7 +4007,7 @@ body.pro-style .time-card.v3-11-next-module .timer-label {
   line-height:1.2 !important;
   letter-spacing:.01em !important;
 }
-@media (max-width:380px) {
+@media (max-width:400px) {
   .pro-preset-grid {
     grid-template-columns:repeat(2,minmax(0,1fr));
   }
@@ -4560,13 +4561,13 @@ html body .dashboard > .label-row > .exam-countdown .exam-countdown-label {
   margin:12px 0 8px;
 }
 .assign-day-tab {
-  min-height:34px;
+  min-height:42px;
   padding:0 3px;
   border:1px solid var(--bd);
   border-radius:10px;
   background:rgba(255,255,255,.055);
   color:var(--sub);
-  font:800 11px/1 inherit;
+  font:800 13px/1 inherit;
   cursor:pointer;
 }
 .assign-day-tab.active {
@@ -5213,7 +5214,7 @@ html body .dashboard > .label-row > .exam-countdown .exam-countdown-label {
     gap:4px;
   }
   .assign-day-tab {
-    font-size:10px;
+    font-size:11px;
   }
   .dashboard .time-card.v3-11-next-module .next-meta {
     max-width:42% !important;
