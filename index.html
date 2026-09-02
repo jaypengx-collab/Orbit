@@ -1739,8 +1739,6 @@ function clearListAutoAlignedTop(list) {
 }
 
 // Real content boundary for manual scrolling.
-// Auto-scroll may temporarily create extra room, but once the user touches
-// the list that room is removed and the user can scroll to the actual end.
 function getNaturalListMaxScroll(list) {
   return Math.max(0,list.scrollHeight-list.clientHeight)
 }
@@ -3781,45 +3779,15 @@ function syncTestPlayPauseUi() {
     })
   })
 })();
-// The reserved auto-alignment space is only ever set/cleared by
-// keepActiveClassVisible itself (on real state changes — new period, day
-// finished, etc). We used to also try to eagerly "release" it the moment the
-// user's finger/wheel/keyboard moved, but touchmove fires many times per
-// drag, and deleting the reserved space the instant scrollTop happened to
-// pass through the natural-max threshold — even mid-fling, not at rest —
-// forced an immediate clamp back down, which is exactly the "jump back"
-// this was supposed to prevent. On phones, fast flicks made this fire on
-// almost every gesture. Simplest fix: don't touch the reserved space based
-// on gesture heuristics at all; let it persist until the schedule itself
-// changes. clampManualListScroll below still guards against scrollTop ever
-// exceeding the reserved ceiling (e.g. iOS elastic overscroll), but it never
-// deletes the reservation — only keepActiveClassVisible does that.
+// The reserved auto-alignment space remains available during manual scrolling
+// so late classes can still be brought to the intended viewport position.
 (function initScheduleScrollClamp() {
   const list=document.getElementById('schedule-list');
 
   if (!list)return;
 
-  let scrollReleaseTimer=0;
-  let userScrolled=false;
-  const markUserScroll=()=> {
-    userScrolled=true;
-  };
-  list.addEventListener('pointerdown',markUserScroll,{passive:true});
-  list.addEventListener('touchstart',markUserScroll,{passive:true});
-  list.addEventListener('wheel',markUserScroll,{passive:true});
   list.addEventListener('scroll',()=>{
-    clearTimeout(scrollReleaseTimer);
-    scrollReleaseTimer=setTimeout(()=>{
-      const reserved=parseFloat(list.dataset.autoScrollSpace||'0')||0;
-      const naturalMax=Math.max(0,list.scrollHeight-list.clientHeight-reserved);
-      if (userScrolled&&reserved>0&&list.scrollTop>=naturalMax-1) {
-        userScrolled=false;
-        setListAutoScrollSpace(list,0);
-        list.scrollTop=Math.min(list.scrollTop,naturalMax);
-        return
-      }
-      clampManualListScroll();
-    },80);
+    clampManualListScroll();
   },{passive:true})
 })();
 
