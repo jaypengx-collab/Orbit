@@ -4587,10 +4587,9 @@ ocrImageInput?.addEventListener('change',async event=>{
 
   function el(id){ return document.getElementById(id); }
   function getAppVersion(){
-    var source=document.documentElement.outerHTML.replace(
-      /(<span id="app-version"[^>]*>)[\s\S]*?(<\/span>)/,
-      '$1$2'
-    );
+    var source=Array.from(document.querySelectorAll('style,script'))
+      .map(function(node){ return node.textContent||''; })
+      .join('\n');
     var hash=2166136261;
     for (var i=0;i<source.length;i++) {
       hash^=source.charCodeAt(i);
