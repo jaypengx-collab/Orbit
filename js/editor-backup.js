@@ -5,7 +5,7 @@ function collectEditorFormState()  {
   newLoc=  {
   };
   document.querySelectorAll('#teacher-list .teacher-card').forEach(card=>  {
-    const key=card.querySelector('.tc-key').value.trim(),
+    const key=(card.dataset.origKey||'').trim(),
     subject=card.querySelector('.tc-subject').value.trim(),
     teacher=card.querySelector('.tc-teacher').value.trim(),
     location=card.querySelector('.tc-location').value.trim();
@@ -55,7 +55,7 @@ function collectEditorFormState()  {
   const proSecondary=normalizeProSecondary(applicationData.proSecondary||derivedProColors.secondary);
   const proTertiary=derivedProColors.tertiary;
   return  {
-    teacherDB: newDB, teacherOrder:Array.from(document.querySelectorAll('#teacher-list .teacher-card')).map(card=>card.querySelector('.tc-key').value.trim()).filter(Boolean), locationDB: newLoc, weeklySchedule: newWeekly, bellTimes: newBells,
+    teacherDB: newDB, teacherOrder:Array.from(document.querySelectorAll('#teacher-list .teacher-card')).map(card=>(card.dataset.origKey||'').trim()).filter(Boolean), locationDB: newLoc, weeklySchedule: newWeekly, bellTimes: newBells,
     breakTimes: newBreaks, countdownEvents:normalizedCountdownEvents, reverseWeek, proAccent, proSecondary, proTertiary, styleSlots:normalizeStyleSlots(applicationData.styleSlots)
   }
 }
@@ -66,7 +66,7 @@ function editorFormSnapshotString()  {
   ];
   document.querySelectorAll('#teacher-list .teacher-card').forEach(card=>  {
     tcd.push([
-    card.querySelector('.tc-key').value,
+    card.dataset.origKey||'',
     card.querySelector('.tc-subject').value,
     card.querySelector('.tc-teacher').value,
     card.querySelector('.tc-location').value
@@ -322,7 +322,7 @@ function formatClassRef(key,data) {
   const subject=info[0]||'';
   const teacher=info[1]||'';
   const details=[subject,teacher].filter(Boolean).join(' / ');
-  return details?`${key} (${details})`:String(key)
+  return details||'（未命名課程）'
 }
 function pushDiff(lines,title,items) {
   if (!items.length) return;
@@ -333,47 +333,26 @@ function dayDiffLabel(day) {
   const labels={0:'週日',1:'週一',2:'週二',3:'週三',4:'週四',5:'週五',6:'週六'};
   return labels[day]||`第 ${day} 天`
 }
-function describeSettingsDiff(current,next,renameChanges=[],{isImport=false}={}) {
+function describeSettingsDiff(current,next,{isImport=false}={}) {
   const lines=[];
-  const confirmedRenames=(renameChanges||[]).filter(change=>
-    change&&change.oldKey&&change.newKey&&change.oldKey!==change.newKey&&
-    (current.teacherDB||{})[change.oldKey]&&(next.teacherDB||{})[change.newKey]
-  );
-  const renamedOldKeys=new Set(confirmedRenames.map(change=>change.oldKey));
-  const renamedNewKeys=new Set(confirmedRenames.map(change=>change.newKey));
-  const isRenameScheduleChange=(before,after)=>confirmedRenames.some(change=>change.oldKey===before&&change.newKey===after);
   const teacherItems=[];
-  confirmedRenames.forEach(change=> {
-    const before=(current.teacherDB||{})[change.oldKey]||[];
-    const after=(next.teacherDB||{})[change.newKey]||[];
-    const label=after[0]||before[0]||change.newKey;
-    teacherItems.push(`${label} 縮寫：${change.oldKey} -> ${change.newKey}`);
-    if ((before[0]||'')!==(after[0]||'')) teacherItems.push(`${change.newKey} 科目：${formatDiffValue(before[0])} -> ${formatDiffValue(after[0])}`);
-    if ((before[1]||'')!==(after[1]||'')) teacherItems.push(`${change.newKey} 老師：${formatDiffValue(before[1])} -> ${formatDiffValue(after[1])}`)
-  });
-  const teacherKeys=[...new Set(Object.keys(current.teacherDB||{}).concat(Object.keys(next.teacherDB||{})))].sort((a,b)=>a.localeCompare(b,'zh-Hant'));
+  const sortByLabel=(data)=>(a,b)=>formatClassRef(a,data).localeCompare(formatClassRef(b,data),'zh-Hant');
+  const teacherKeys=[...new Set(Object.keys(current.teacherDB||{}).concat(Object.keys(next.teacherDB||{})))].sort(sortByLabel(next.teacherDB?next:current));
   teacherKeys.forEach(key=> {
-    if (renamedOldKeys.has(key)||renamedNewKeys.has(key)) return;
     const before=(current.teacherDB||{})[key];
     const after=(next.teacherDB||{})[key];
     if (!before && after) teacherItems.push(`新增 ${formatClassRef(key,next)}`);
     else if (before && !after) teacherItems.push(`移除 ${formatClassRef(key,current)}`);
     else if (before && after) {
-      if ((before[0]||'')!==(after[0]||'')) teacherItems.push(`${key} 科目：${formatDiffValue(before[0])} -> ${formatDiffValue(after[0])}`);
-      if ((before[1]||'')!==(after[1]||'')) teacherItems.push(`${key} 老師：${formatDiffValue(before[1])} -> ${formatDiffValue(after[1])}`);
+      if ((before[0]||'')!==(after[0]||'')) teacherItems.push(`${formatClassRef(key,next)} 科目：${formatDiffValue(before[0])} -> ${formatDiffValue(after[0])}`);
+      if ((before[1]||'')!==(after[1]||'')) teacherItems.push(`${formatClassRef(key,next)} 老師：${formatDiffValue(before[1])} -> ${formatDiffValue(after[1])}`);
     }
   });
   pushDiff(lines,'課程與老師',teacherItems);
 
   const locationItems=[];
-  confirmedRenames.forEach(change=> {
-    const before=(current.locationDB||{})[change.oldKey]||'';
-    const after=(next.locationDB||{})[change.newKey]||'';
-    if (before!==after) locationItems.push(`${formatClassRef(change.newKey,next)} 地點：${formatDiffValue(before)} -> ${formatDiffValue(after)}`)
-  });
-  const locationKeys=[...new Set(Object.keys(current.locationDB||{}).concat(Object.keys(next.locationDB||{})))].sort((a,b)=>a.localeCompare(b,'zh-Hant'));
+  const locationKeys=[...new Set(Object.keys(current.locationDB||{}).concat(Object.keys(next.locationDB||{})))].sort(sortByLabel(next.teacherDB?next:current));
   locationKeys.forEach(key=> {
-    if (renamedOldKeys.has(key)||renamedNewKeys.has(key)) return;
     const before=(current.locationDB||{})[key]||'';
     const after=(next.locationDB||{})[key]||'';
     const data=after?next:current;
@@ -411,7 +390,6 @@ function describeSettingsDiff(current,next,renameChanges=[],{isImport=false}={})
     for (let i=0;i<total;i++) {
       const before=beforeRow[i]||'';
       const after=afterRow[i]||'';
-      if (isRenameScheduleChange(before,after)) continue;
       if (before!==after) scheduleItems.push(`${dayDiffLabel(day)}第 ${i+1} 節：${formatClassRef(before,current)} -> ${formatClassRef(after,next)}`)
     }
   });
@@ -517,15 +495,17 @@ function mergeImportedSettings(current,imported,preserveStyle=false) {
       delete merged.teacherDB[matchedKey]
     }
     merged.teacherDB[importedKey]=importedInfo;
-    (matchedKey?mergedActions:addedActions).push(matchedKey?`合併課程「${targetKey}」（縮寫或名稱相同，使用匯入縮寫與名稱）`:`新增課程「${targetKey}」`)
+    const targetLabel=importedInfo[0]||targetKey;
+    (matchedKey?mergedActions:addedActions).push(matchedKey?`合併課程「${targetLabel}」（名稱相同，使用匯入的課程資料）`:`新增課程「${targetLabel}」`)
   });
   merged.locationDB={...(current.locationDB||{})};
   Object.entries(imported.locationDB||{}).forEach(([importedKey,value])=> {
     const targetKey=teacherKeyMap[importedKey]||importedKey;
+    const targetLabel=merged.teacherDB[targetKey]?.[0]||targetKey;
     const oldKey=Object.keys(currentTeacherKeyMap).find(key=>currentTeacherKeyMap[key]===targetKey);
     if (oldKey&&oldKey!==targetKey) delete merged.locationDB[oldKey];
     const currentValue=current.locationDB?.[targetKey]||current.locationDB?.[oldKey]||'';
-    if (currentValue!==value) replacedActions.push(`取代課程「${targetKey}」地點：${currentValue||'（空白）'} -> ${value||'（空白）'}`);
+    if (currentValue!==value) replacedActions.push(`取代課程「${targetLabel}」地點：${currentValue||'（空白）'} -> ${value||'（空白）'}`);
     merged.locationDB[targetKey]=value
   });
   merged.weeklySchedule={};
@@ -534,8 +514,8 @@ function mergeImportedSettings(current,imported,preserveStyle=false) {
     const total=Math.max(currentRow.length,importedRow.length);
     merged.weeklySchedule[day]=Array.from({length:total},(_,index)=> {
       const currentKey=currentTeacherKeyMap[currentRow[index]]||currentRow[index]||'', importedKey=teacherKeyMap[importedRow[index]]||importedRow[index]||'';
-      if (currentKey&&importedKey&&currentKey!==importedKey) replacedActions.push(`取代${dayDiffLabel(day)}第 ${index+1} 節：${currentKey} -> ${importedKey}`);
-      else if (!currentKey&&importedKey) addedActions.push(`新增${dayDiffLabel(day)}第 ${index+1} 節：${importedKey}`);
+      if (currentKey&&importedKey&&currentKey!==importedKey) replacedActions.push(`取代${dayDiffLabel(day)}第 ${index+1} 節：${formatClassRef(currentKey,current)} -> ${formatClassRef(importedKey,merged)}`);
+      else if (!currentKey&&importedKey) addedActions.push(`新增${dayDiffLabel(day)}第 ${index+1} 節：${formatClassRef(importedKey,merged)}`);
       return importedKey||currentKey
     })
   });
@@ -631,7 +611,7 @@ function showEditorImportConfirm(current,next,isMerge,preserveStyle=false) {
     return;
   }
   pendingEditorImportData=result.data;
-  const diff=isMerge?['新增：',...result.addedActions.map(item=>`- ${item}`),'','合併：',...result.mergedActions.map(item=>`- ${item}`),'','取代：',...result.replacedActions.map(item=>`- ${item}`)].join('\n'):describeSettingsDiff(current,next,[],{isImport:true});
+  const diff=isMerge?['新增：',...result.addedActions.map(item=>`- ${item}`),'','合併：',...result.mergedActions.map(item=>`- ${item}`),'','取代：',...result.replacedActions.map(item=>`- ${item}`)].join('\n'):describeSettingsDiff(current,next,{isImport:true});
   const identical=!isMerge&&diff==='沒有變更。';
   setEditorConfirmContent(isMerge?'確認合併匯入？':'確認直接匯入？',identical?'匯入內容與目前設定完全相同，仍可匯入。':isMerge?'以下分開列出新增、合併與取代的內容。':'匯入設定將取代目前已儲存的課表資料。',identical?'內容相同，沒有需要變更的項目。':diff,isMerge?'確認合併':'確認匯入',applyPendingImportSettings,'返回',{cancelHandler:()=>showEditorImportModeConfirm(current,next,preserveStyle)});
   showEditorConfirmSheet()

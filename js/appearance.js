@@ -281,7 +281,6 @@ let pendingEditorSaveData = null;
 let editorBaselineData = null;
 let pendingBellDelete = null;
 let pendingTeacherDelete = null;
-let pendingTeacherRenameSave = null;
 let pendingStyleSaveData = null;
 let pendingStyleSlotIndex = null;
 let pendingStyleSlotSaveIndex = null;

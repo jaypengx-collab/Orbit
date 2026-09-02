@@ -1,13 +1,37 @@
-// Collects available teacher keys from the editor form.
-function getEditorTeacherKeysFromDom()  {
-  const keys=[
-  ];
-  document.querySelectorAll('#teacher-list .teacher-card').forEach(card=>  {
-    const k=card.querySelector('.tc-key').value.trim();
-    if (k)keys.push(k)
-  })
-  ;
-  return [...new Set(keys)]
+// Builds a short display label for a class from its subject/teacher text.
+// Teacher is appended in parentheses whenever the subject alone would be
+// ambiguous (shared by another class) or when the subject is blank.
+function formatClassLabel(subject,teacher,needsTeacher) {
+  const cleanSubject=(subject||'').trim();
+  const cleanTeacher=(teacher||'').trim();
+  if (!cleanSubject) return cleanTeacher||'未命名';
+  if (needsTeacher&&cleanTeacher) return `${cleanSubject}（${cleanTeacher}）`;
+  return cleanSubject
+}
+// Collects available classes (key + display label) from the editor form's
+// live subject/teacher inputs, so labels stay accurate mid-edit.
+function getEditorTeacherEntriesFromDom()  {
+  const cards=[...document.querySelectorAll('#teacher-list .teacher-card')];
+  const rows=cards.map(card=>({
+    key:(card.dataset.origKey||'').trim(),
+    subject:(card.querySelector('.tc-subject')?.value||'').trim(),
+    teacher:(card.querySelector('.tc-teacher')?.value||'').trim()
+  })).filter(row=>row.key);
+  const subjectCounts={};
+  rows.forEach(row=>{subjectCounts[row.subject]=(subjectCounts[row.subject]||0)+1});
+  const seen=new Set();
+  const entries=[];
+  rows.forEach(row=>{
+    if (seen.has(row.key)) return;
+    seen.add(row.key);
+    entries.push({key:row.key,label:formatClassLabel(row.subject,row.teacher,subjectCounts[row.subject]>1)})
+  });
+  return entries
+}
+// Looks up a single class's display label by key from the editor form's live inputs.
+function getEditorClassLabelFromDom(key) {
+  const entry=getEditorTeacherEntriesFromDom().find(item=>item.key===key);
+  return entry?entry.label:''
 }
 // Returns how many bell periods the editor should render.
 function getEditorBellPeriodCount()  {
@@ -52,13 +76,13 @@ function sortEditorPeriodsByTime() {
 
   refreshBellNumbers()
 }
-// Refreshes every class-period dropdown after teacher keys change.
+// Refreshes every class-period dropdown after teacher keys or names change.
 function refreshPeriodSelectOptions()  {
-  const keys=getEditorTeacherKeysFromDom();
+  const entries=getEditorTeacherEntriesFromDom();
   document.querySelectorAll('#schedule-grid .period-select').forEach(sel=>  {
     const cur=sel.value;
-    const optionKeys=keys.includes(cur)||!cur?keys:keys.concat(cur);
-    const opts=`<option value="">-</option>`+optionKeys.map(k=>`<option value="${esc(k)}">${esc(k)}</option>`).join('');
+    const list=entries.some(item=>item.key===cur)||!cur?entries:entries.concat({key:cur,label:cur});
+    const opts=`<option value="">-</option>`+list.map(item=>`<option value="${esc(item.key)}" title="${esc(item.label)}">${esc(item.label)}</option>`).join('');
     sel.innerHTML=opts;
     sel.value=cur})
 }
@@ -279,9 +303,6 @@ function clearTransferField() {
   setTransferStatus('')
 }
 function openEditorFold(id,force=false) {
-  if (!force && id==='editor-fold-schedule' && document.querySelector('#editor-fold-teachers.active')) {
-    if (showTeacherRenameBackConfirm()) return
-  }
   document.querySelectorAll('#editor-sheet details.editor-fold').forEach(section=> {
     const active=section.id===id;
     section.open=active;
@@ -386,7 +407,6 @@ function hideEditorDiscardConfirm() {
   pendingEditorSaveData=null;
   pendingBellDelete=null;
   pendingTeacherDelete=null;
-  pendingTeacherRenameSave=null;
   pendingStyleSaveData=null;
   pendingStyleSlotIndex=null;
   pendingStyleSlotSaveIndex=null;

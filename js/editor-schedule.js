@@ -3,7 +3,7 @@
 function renderEditorSchedule(weeklyScheduleOverride) {
   const container = document.getElementById('schedule-grid');
   const dayLabels = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
-  const keys = getEditorTeacherKeysFromDom();
+  const entries = getEditorTeacherEntriesFromDom();
   const periodCount = getEditorBellPeriodCount();
   const weeklySchedule = weeklyScheduleOverride || applicationData.weeklySchedule;
 
@@ -19,8 +19,8 @@ function renderEditorSchedule(weeklyScheduleOverride) {
 
     for (let i = 0; i < periodCount; i++) {
       const value = daySchedule[i] || '';
-      const options = keys
-        .map(key => `<option value="${esc(key)}"${value === key ? ' selected' : ''}>${esc(key)}</option>`)
+      const options = entries
+        .map(item => `<option value="${esc(item.key)}" title="${esc(item.label)}"${value === item.key ? ' selected' : ''}>${esc(item.label)}</option>`)
         .join('');
 
       periodHtml += `<select class="period-select" data-period="${i}"><option value="">-</option>${options}</select>`
@@ -180,17 +180,8 @@ function saveEditor() {
     showEditorTimeConflict(error.message);
     return
   }
-  const renameChanges=getTeacherSyncChanges();
-  const next = normalizeSettingsData(applyTeacherRenameChangesToData(collectEditorFormState(),renameChanges));
+  const next = normalizeSettingsData(collectEditorFormState());
   const baseline = editorBaselineData||normalizeSettingsData(applicationData);
-  const pendingRename=getPendingTeacherRenameSaveUpdate(next);
-  if (pendingRename) {
-    const finalNext=buildTeacherRenameSaveData(pendingRename);
-    pendingTeacherRenameSave=pendingRename;
-    pendingEditorSaveData=finalNext;
-    showEditorSaveConfirm(buildCombinedSaveDiff(baseline,finalNext,pendingRename));
-    return
-  }
   const diff = describeSettingsDiff(baseline,next);
   pendingEditorSaveData = next;
   showEditorSaveConfirm(diff)

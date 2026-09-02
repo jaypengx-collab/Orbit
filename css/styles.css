@@ -578,10 +578,10 @@ body.pro-style .pro-preset-btn {
   gap:6px;
 }
 .editor-sheet .period-select {
-  padding:6px 4px;
+  padding:6px 8px;
   font-size:12px;
-  min-width:54px;
-  max-width:76px;
+  min-width:64px;
+  max-width:132px;
   border-radius:10px;
 }
 .editor-sheet .bell-row {
@@ -736,23 +736,15 @@ body.pro-style .pro-preset-btn {
   border-radius:10px;
   font-size:13px;
 }
-.editor-sheet .teacher-key {
+.editor-sheet .teacher-avatar {
   width:24px;
   height:24px;
-  font-size:10px;
-  border-radius:5px;
-}
-.editor-sheet .teacher-card .tc-key {
-  flex-basis:46px;
-  width:46px;
-  max-width:46px;
-  padding-left:5px;
-  padding-right:5px;
+  font-size:12px;
 }
 .editor-sheet .teacher-card .tc-subject,.editor-sheet .teacher-card .tc-teacher {
   font-size:12px;
-  min-width:min(54px,22%);
-  flex:1 1 calc(50% - 48px);
+  min-width:min(84px,35%);
+  flex:1 1 calc(50% - 4px);
 }
 .editor-sheet .delete-btn {
   width:22px;
@@ -928,19 +920,20 @@ body.editor-open .editor-confirm-sheet {
   align-items:center;
   gap:8px;
 }
-.teacher-key {
+.teacher-avatar {
+  --avatar-hue:210;
   width:28px;
   height:28px;
-  border-radius:7px;
-  background:rgba(255,255,255,.06);
-  color:var(--accent);
-  font-size:11px;
+  border-radius:50%;
+  background:hsla(var(--avatar-hue),70%,55%,.18);
+  color:hsl(var(--avatar-hue),70%,60%);
+  font-size:13px;
   font-weight:800;
   display:flex;
   align-items:center;
   justify-content:center;
   flex-shrink:0;
-  border:1px solid rgba(10,132,255,.22);
+  border:1px solid hsla(var(--avatar-hue),70%,55%,.35);
 }
 
 .teacher-fields {
@@ -962,22 +955,13 @@ body.editor-open .editor-confirm-sheet {
 .break-row .bell-inputs {
   flex:1 1 100%;
 }
-.teacher-card .tc-key {
-  flex:0 0 52px;
-  width:52px;
-  max-width:52px;
-  min-width:0;
-  text-align:center;
-  padding-left:6px;
-  padding-right:6px;
-}
 .teacher-card .tc-subject {
-  flex:1 1 calc(50% - 54px);
-  min-width:min(76px,40%);
+  flex:1 1 calc(50% - 4px);
+  min-width:min(96px,40%);
 }
 .teacher-card .tc-teacher {
-  flex:1 1 calc(50% - 54px);
-  min-width:min(76px,40%);
+  flex:1 1 calc(50% - 4px);
+  min-width:min(96px,40%);
 }
 .teacher-card .delete-btn {
   flex:0 0 auto;
@@ -1074,16 +1058,17 @@ body.editor-open .editor-confirm-sheet {
 }
 .period-select {
   flex:1;
-  min-width:54px;
-  max-width:76px;
+  min-width:64px;
+  max-width:132px;
   background:rgba(255,255,255,.07);
   border:1px solid var(--bd);
   color:var(--txt);
-  padding:6px 4px;
+  padding:6px 8px;
   border-radius:10px;
   font-size:12px;
   font-family:inherit;
   text-align:center;
+  text-overflow:ellipsis;
   cursor:pointer;
   transition:border-color .2s;
 }
@@ -1919,7 +1904,7 @@ body {
   background:var(--bg);
   color:var(--txt);
   margin:0;
-  padding:calc(env(safe-area-inset-top) + 52px) max(12px,env(safe-area-inset-right)) calc(28px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));
+  padding:calc(env(safe-area-inset-top) + 52px) max(12px,env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));
   display:flex;
   flex-direction:column;
   align-items:center;
@@ -2454,9 +2439,9 @@ body.style-panel-open .editor-confirm-sheet {
   padding-bottom:3px;
 }
 #ocr-import-result .period-select {
-  flex:0 0 68px;
-  width:68px;
-  min-width:68px;
+  flex:0 0 110px;
+  width:110px;
+  min-width:110px;
   min-height:40px;
 }
 #ocr-import-result .settings-transfer-btn {
@@ -4033,38 +4018,6 @@ body.pro-style .time-card.v3-11-next-module .timer-label {
     width:16px;
     height:16px;
   }
-  .teacher-card {
-    display:grid;
-    grid-template-columns:auto minmax(44px,1fr) auto;
-    grid-template-areas:"badge key del""sub sub sub""tea tea tea";
-    gap:4px;
-    align-items:center;
-  }
-  .teacher-key {
-    grid-area:badge;
-  }
-  .teacher-card .tc-key {
-    grid-area:key;
-    width:100%;
-    max-width:none;
-    flex:unset;
-  }
-  .teacher-card .tc-subject {
-    grid-area:sub;
-    width:100%;
-    flex:unset;
-    min-width:0;
-  }
-  .teacher-card .tc-teacher {
-    grid-area:tea;
-    width:100%;
-    flex:unset;
-    min-width:0;
-  }
-  .teacher-card .delete-btn {
-    grid-area:del;
-    margin-left:0;
-  }
   .now-stack.is-status .title-now {
     font-size:clamp(40px,13vw,56px) !important;
   }
@@ -4824,21 +4777,8 @@ html body .dashboard > .label-row > .exam-countdown .exam-countdown-label {
   .editor-sheet .teacher-card, .editor-sheet .bell-row, .editor-sheet .schedule-day-row, .editor-sheet .countdown-event-row {
     padding:12px !important;
   }
-  .teacher-card .teacher-key {
-    width:auto !important;
-    max-width:calc(100% - 40px) !important;
-    min-height:24px !important;
-    padding-right:36px !important;
+  .teacher-card .teacher-avatar {
     margin:0 0 8px !important;
-    font-size:12px !important;
-    line-height:24px !important;
-    white-space:nowrap !important;
-    overflow:hidden !important;
-    text-overflow:ellipsis !important;
-    display:none !important;
-  }
-  .teacher-card .tc-teacher,.teacher-card .tc-location {
-    grid-column:auto !important;
   }
   .teacher-card .delete-btn {
     position:absolute !important;
@@ -4873,9 +4813,9 @@ html body .dashboard > .label-row > .exam-countdown .exam-countdown-label {
     scroll-snap-type:x proximity;
   }
   .schedule-periods .period-select {
-    flex:0 0 68px !important;
-    width:68px !important;
-    min-width:68px !important;
+    flex:0 0 108px !important;
+    width:108px !important;
+    min-width:108px !important;
     height:38px !important;
     min-height:38px !important;
     padding:0 8px !important;
@@ -4913,6 +4853,9 @@ html body .dashboard > .label-row > .exam-countdown .exam-countdown-label {
     margin-top:0 !important;
     gap:10px !important;
     width:calc(100% - 44px) !important;
+  }
+  .teacher-card .tc-subject {
+    grid-column:1 / -1 !important;
   }
   .teacher-card .teacher-fields .editor-input {
     display:block !important;

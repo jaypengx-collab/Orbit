@@ -77,7 +77,7 @@ Return valid JSON only, matching this exact schema:
 Interpret the timetable visually and use your best judgment to reconstruct its structure. Rules:
 - Read class period times from the image when available. Use 24-hour "HH:MM" strings, one entry per period in order, exactly as shown (either ["08:10","09:00"] or {"start":"08:10","end":"09:00"} is acceptable). Preserve the actual times; never invent, guess, or fall back to standard/default school times. If no class times are visible anywhere, return an empty bellTimes array.
 - Identify visible subjects, teachers, classrooms, breaks, and other timetable information.
-- teacherDB: one entry per distinct subject actually visible in the photo — do not invent subjects that aren't shown. Pick your own short, readable key for each subject (its Chinese name or a short abbreviation). Value is [full subject name, teacher name, classroom]. Use "" for teacher/location when that information is not readable.
+- teacherDB: one entry per distinct subject actually visible in the photo — do not invent subjects that aren't shown. Use the subject's Chinese name as its own key in this object; if two subjects share the same name, make the keys distinct (e.g. append the teacher's name). Value is [full subject name, teacher name, classroom]. Use "" for teacher/location when that information is not readable.
 - locationDB maps each subject key to its visible classroom/location; use "" when not visible.
 - weeklySchedule: keys "1" through "5" (Monday–Friday) are REQUIRED and must all be present, even as an empty array — never omit or truncate "5" (Friday) even if it is partially cut off in the photo. Add "6" (Saturday) and/or "0" (Sunday) ONLY if the photo actually shows a column for that day; otherwise omit them entirely. Keep each day's array aligned with the detected periods (one entry per bellTimes index). Use null when a slot is genuinely empty or cannot be identified; every non-null entry must be a key that exists in teacherDB.
 - If odd/even weeks contain alternatives in the same slot, combine them with "/" (e.g. "國文/公民") and do the same for the corresponding teacher names, using one shared key for that slot.
@@ -181,8 +181,12 @@ Interpret the timetable visually and use your best judgment to reconstruct its s
     }
 
     // Keep the AI parser aligned to the current schema: direct property access only.
+    // The AI's own keys are only used to cross-reference locationDB/weeklySchedule
+    // entries during this parse - the app never shows or edits a class's key, so the
+    // internal id generated here doesn't need to be human-readable.
     const teacherDB = {};
     const locationDB = {};
+    const keyMap = {};
     let courseCounter = 1;
     if (aiResult.teacherDB && typeof aiResult.teacherDB === 'object') {
       Object.entries(aiResult.teacherDB).forEach(([dbKey, val]) => {
@@ -208,21 +212,16 @@ Interpret the timetable visually and use your best judgment to reconstruct its s
         teacher = teacher.replace(/／/g, '/');
         location = location.replace(/／/g, '/');
 
-        const rawKey = String(dbKey || subject).trim().replace(/／/g, '/');
-        let key = rawKey.slice(0, 4) || `A${courseCounter++}`;
-        while (teacherDB[key]) {
-          const suffix = String(courseCounter++);
-          key = (rawKey.slice(0, Math.max(1, 4 - suffix.length)) + suffix).slice(0, 4);
-        }
-
+        const key = `oc${courseCounter++}`;
+        keyMap[String(dbKey || '').trim().replace(/／/g, '/')] = key;
         teacherDB[key] = [subject, teacher, location];
         locationDB[key] = location;
       });
     }
     if (aiResult.locationDB && typeof aiResult.locationDB === 'object') {
       Object.entries(aiResult.locationDB).forEach(([dbKey, value]) => {
-        const key = String(dbKey || '').trim().replace(/／/g, '/');
-        if (key && teacherDB[key]) locationDB[key] = String(value || '').trim();
+        const key = keyMap[String(dbKey || '').trim().replace(/／/g, '/')];
+        if (key) locationDB[key] = String(value || '').trim();
       });
     }
 
@@ -233,8 +232,8 @@ Interpret the timetable visually and use your best judgment to reconstruct its s
       if (!Array.isArray(dayArr)) return;
       weeklySchedule[dayKey] = dayArr.map(item => {
         if (!item) return '';
-        const key = (typeof item === 'string' ? item.trim() : String(item.key || '').trim()).replace(/／/g, '/');
-        return teacherDB[key] ? key : '';
+        const rawItemKey = (typeof item === 'string' ? item.trim() : String(item.key || '').trim()).replace(/／/g, '/');
+        return keyMap[rawItemKey] || '';
       });
     });
 
@@ -331,13 +330,16 @@ class ImportPreview {
     if (bellFold && !bellTimes.length) bellFold.remove();
 
     const classList = this.root.querySelector('[data-ocr-class-list]');
+    const subjectCounts = {};
+    classRecords.forEach(([, value]) => { subjectCounts[value[0]] = (subjectCounts[value[0]]||0)+1 });
     classRecords.forEach(([key, value]) => {
       const row = document.getElementById('ocr-class-row-template').content.cloneNode(true);
-      row.querySelector('.teacher-key').textContent = key;
-      row.querySelector('.tc-key').value = key;
-      row.querySelector('[data-field="class-subject"]').value = value[0] || key;
+      const card = row.querySelector('.ocr-import-class-card');
+      card.dataset.origKey = key;
+      row.querySelector('[data-field="class-subject"]').value = value[0] || '';
       row.querySelector('.tc-teacher').value = value[1] || '';
       row.querySelector('.tc-location').value = candidate.locationDB?.[key] || '';
+      updateTeacherCardAvatar(card);
       classList.appendChild(row);
     });
     const classFold = this.root.querySelector('[data-ocr-class-fold]');
@@ -360,7 +362,7 @@ class ImportPreview {
         select.dataset.assignmentPeriod = period;
         select.title = time.join('–');
         select.appendChild(new Option('-', ''));
-        classRecords.forEach(([key, value]) => select.appendChild(new Option(value[0] || key, key)));
+        classRecords.forEach(([key, value]) => select.appendChild(new Option(formatClassLabel(value[0], value[1], subjectCounts[value[0]]>1), key)));
         select.value = assignmentBySlot.get(`${day}:${period}`) || '';
         periods.appendChild(select);
       });
@@ -390,11 +392,14 @@ class ImportPreview {
 
     const refreshAssignmentOptions = () => {
       const cards = Array.from(this.root.querySelectorAll('.ocr-import-class-card'));
-      const options = cards.map(card => {
-        const key = (card.querySelector('.tc-key')?.value || '').trim();
-        const subject = (card.querySelector('[data-field="class-subject"]')?.value || '').trim();
-        return key && subject ? { key, label: subject } : null;
-      }).filter(Boolean);
+      const rows = cards.map(card => ({
+        key: card.dataset.origKey || '',
+        subject: (card.querySelector('[data-field="class-subject"]')?.value || '').trim(),
+        teacher: (card.querySelector('.tc-teacher')?.value || '').trim()
+      })).filter(row => row.key && row.subject);
+      const liveSubjectCounts = {};
+      rows.forEach(row => { liveSubjectCounts[row.subject] = (liveSubjectCounts[row.subject]||0)+1 });
+      const options = rows.map(row => ({ key: row.key, label: formatClassLabel(row.subject, row.teacher, liveSubjectCounts[row.subject]>1) }));
       this.root.querySelectorAll('[data-assignment-day]').forEach(select => {
         const current = select.value;
         select.replaceChildren(new Option('-', ''));
@@ -404,8 +409,7 @@ class ImportPreview {
     };
     this.root.querySelectorAll('.ocr-import-class-card input').forEach(input => input.addEventListener('input', () => {
       const card = input.closest('.ocr-import-class-card');
-      const badge = card?.querySelector('.teacher-key');
-      if (badge) badge.textContent = (card.querySelector('.tc-key')?.value || '').trim() || '?';
+      if (card) updateTeacherCardAvatar(card);
       refreshAssignmentOptions();
     }));
 
@@ -426,7 +430,7 @@ class ImportPreview {
       });
 
       this.root.querySelectorAll('.ocr-import-class-card').forEach(card => {
-        const key = (card.querySelector('.tc-key')?.value || '').trim();
+        const key = (card.dataset.origKey || '').trim();
         const subject = (card.querySelector('[data-field="class-subject"]')?.value || '').trim();
         if (!key || !subject) return;
         const teacher=(card.querySelector('.tc-teacher')?.value || '').trim();

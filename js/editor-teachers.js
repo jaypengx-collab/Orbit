@@ -11,17 +11,22 @@ function renderEditorTeachers() {
   refreshTeacherMoveButtons()
 }
 
+// Generates a stable internal id for a class. Never shown or edited by the
+// user - it only ever lives in dataset.origKey and the saved data's map keys.
+function generateTeacherKey() {
+  const existing=new Set([...document.querySelectorAll('#teacher-list .teacher-card')].map(card=>card.dataset.origKey));
+  let key;
+  do { key='c'+Math.random().toString(36).slice(2,8) } while (existing.has(key));
+  return key
+}
+
 // Creates one editable teacher row.
 function makeTeacherCard(key, subject, teacher, location) {
   const div = document.createElement('div');
   div.className = 'teacher-card';
   div.dataset.origKey = key;
-  // syncKey tracks whatever value has already been mirrored into the schedule
-  // dropdowns; origKey stays fixed to the last actually-saved key and is what
-  // the changelog is built from. Keeping these separate is what prevents an
-  // in-progress (not yet saved) rename from being mistaken for the baseline.
-  div.dataset.syncKey = key;
-  div.innerHTML = `<div class="teacher-key">${esc(key || '?')}</div><div class="teacher-fields"><input class="editor-input tc-key" placeholder="縮寫" value="${esc(key)}" maxlength="4"><input class="editor-input tc-subject" placeholder="科目" value="${esc(subject)}"><input class="editor-input tc-teacher" placeholder="教師" value="${esc(teacher)}"><input class="editor-input tc-location" placeholder="教室(選填)" value="${esc(location || '')}"></div><div class="teacher-order-actions"><span class="teacher-drag-handle" role="button" tabindex="0" title="拖曳排序" aria-label="拖曳排序">☰</span><label class="order-position-label">順序<input class="order-position" type="number" min="1" inputmode="numeric" aria-label="科目教師順序"></label><button type="button" class="teacher-assign" onclick="assignTeacherFromMenu(this)" aria-label="指定課節">排課</button><button type="button" class="delete-btn" onclick="deleteTeacherCard(this)" aria-label="刪除">×</button></div>`;
+  div.innerHTML = `<div class="teacher-avatar"></div><div class="teacher-fields"><input class="editor-input tc-subject" placeholder="科目" value="${esc(subject)}"><input class="editor-input tc-teacher" placeholder="教師" value="${esc(teacher)}"><input class="editor-input tc-location" placeholder="教室(選填)" value="${esc(location || '')}"></div><div class="teacher-order-actions"><span class="teacher-drag-handle" role="button" tabindex="0" title="拖曳排序" aria-label="拖曳排序">☰</span><label class="order-position-label">順序<input class="order-position" type="number" min="1" inputmode="numeric" aria-label="科目教師順序"></label><button type="button" class="teacher-assign" onclick="assignTeacherFromMenu(this)" aria-label="指定課節">排課</button><button type="button" class="delete-btn" onclick="deleteTeacherCard(this)" aria-label="刪除">×</button></div>`;
+  updateTeacherCardAvatar(div);
   const positionInput=div.querySelector('.order-position');
   positionInput.addEventListener('change',event=>moveEditorRowToPosition(div,event.target.value,'#teacher-list .teacher-card'));
   positionInput.addEventListener('keydown',event=>{
@@ -81,13 +86,34 @@ function makeTeacherCard(key, subject, teacher, location) {
   handle.addEventListener('pointerup',finishPointerDrag);
   handle.addEventListener('pointercancel',finishPointerDrag);
 
-  div.querySelector('.tc-key').addEventListener('input', function() {
-    if (this.value.length>4) this.value=this.value.slice(0,4);
-    div.querySelector('.teacher-key').textContent = this.value.trim() || '?';
+  div.querySelector('.tc-subject').addEventListener('input', function() {
+    updateTeacherCardAvatar(div);
     refreshPeriodSelectOptions()
   });
+  div.querySelector('.tc-teacher').addEventListener('input', refreshPeriodSelectOptions);
 
   return div
+}
+
+// Deterministic background color for a subject's avatar, so the same subject
+// always gets the same color across renders.
+const TEACHER_AVATAR_HUES=[6,28,48,145,168,200,225,265,290,330];
+function subjectAvatarHue(subject) {
+  const text=String(subject||'').trim();
+  if (!text) return TEACHER_AVATAR_HUES[0];
+  let hash=0;
+  for (let i=0;i<text.length;i++) hash=(hash*31+text.charCodeAt(i))>>>0;
+  return TEACHER_AVATAR_HUES[hash%TEACHER_AVATAR_HUES.length]
+}
+// Updates a teacher card's colored initial avatar from its current subject text.
+function updateTeacherCardAvatar(card) {
+  const avatar=card.querySelector('.teacher-avatar');
+  if (!avatar) return;
+  const subject=(card.querySelector('.tc-subject')?.value||'').trim();
+  const initial=subject?[...subject][0]:'?';
+  const hue=subjectAvatarHue(subject);
+  avatar.textContent=initial;
+  avatar.style.setProperty('--avatar-hue',String(hue));
 }
 let pendingAssignment=null;
 let assignmentDraft=null;
@@ -102,7 +128,7 @@ function closeAssignSheet() {
 function openAssignSheet(key) {
   const grid=document.getElementById('assign-grid'), subtitle=document.getElementById('assign-subtitle'), tabs=document.getElementById('assign-day-tabs');
   if (!grid) return;
-  subtitle.textContent=`選擇「${key}」要放置的星期與節次`;
+  subtitle.textContent=`選擇「${getEditorClassLabelFromDom(key)||key}」要放置的星期與節次`;
   grid.replaceChildren();
   assignmentDraft={key,original:new Map(),draft:new Map()};
   const labels={1:'週一',2:'週二',3:'週三',4:'週四',5:'週五',6:'週六',0:'週日'};
@@ -142,9 +168,10 @@ function renderAssignmentDay(day) {
     const periods=document.createElement('div'); periods.className='assign-periods';
     for(let period=0;period<count;period++){
       const slot=`${day}:${period}`, original=assignmentDraft.original.get(slot)||'', value=assignmentDraft.draft.get(slot)||'';
+      const valueLabel=value?(getEditorClassLabelFromDom(value)||value):'';
       const box=document.createElement('button'); box.type='button'; box.dataset.slot=slot;
       box.className='assign-box'+(value?' occupied':'')+(value===assignmentDraft.key?' assigned':'');
-      box.textContent=`${period+1} · ${value||'—'}`; box.title=value?`第 ${period+1} 節目前是：${value}`:`第 ${period+1} 節（空白）`;
+      box.textContent=`${period+1} · ${valueLabel||'—'}`; box.title=value?`第 ${period+1} 節目前是：${valueLabel}`:`第 ${period+1} 節（空白）`;
       box.onclick=()=>assignToSlot(assignmentDraft.key,day,period);
       periods.appendChild(box);
     }
@@ -158,7 +185,7 @@ function assignToSlot(key,day,period) {
   else {
     if (current && current!==key) {
       pendingAssignment={key,day,period};
-      setEditorConfirmContent('覆蓋這個時段？',`第 ${period+1} 節目前是「${current}」，確定改成「${key}」嗎？`,'','確定覆蓋',confirmAssignment,'返回');
+      setEditorConfirmContent('覆蓋這個時段？',`第 ${period+1} 節目前是「${getEditorClassLabelFromDom(current)||current}」，確定改成「${getEditorClassLabelFromDom(key)||key}」嗎？`,'','確定覆蓋',confirmAssignment,'返回');
       showEditorConfirmSheet();
       return;
     }
@@ -166,7 +193,7 @@ function assignToSlot(key,day,period) {
   }
   if (box) {
     const value=assignmentDraft.draft.get(slot)||'';
-    box.textContent=`${period+1} · ${value||'—'}`;
+    box.textContent=`${period+1} · ${value?(getEditorClassLabelFromDom(value)||value):'—'}`;
     box.classList.toggle('assigned',value===key);
     box.classList.toggle('occupied',!!value);
   }
@@ -190,7 +217,7 @@ function applyAssignments() {
 }
 function assignTeacherFromMenu(button) {
   const card=button.closest('.teacher-card');
-  const key=(card?.querySelector('.tc-key')?.value||'').trim();
+  const key=(card?.dataset.origKey||'').trim();
   if (!key) return;
   openAssignSheet(key);
 }
@@ -218,12 +245,12 @@ function refreshTeacherMoveButtons() {
 
 // Adds a blank teacher row to the editor.
 function addTeacherRow() {
-  document.getElementById('teacher-list').appendChild(makeTeacherCard('', '', ''));
+  document.getElementById('teacher-list').appendChild(makeTeacherCard(generateTeacherKey(), '', ''));
   refreshPeriodSelectOptions()
 }
 
 function getTeacherDeleteKey(card) {
-  return (card.querySelector('.tc-key')?.value||card.dataset.origKey||'').trim()
+  return (card?.dataset.origKey||'').trim()
 }
 function getTeacherDeleteImpacts(key) {
   const data=collectEditorFormState();
@@ -236,148 +263,12 @@ function getTeacherDeleteImpacts(key) {
   });
   return impacts
 }
-function getTeacherRenameChanges() {
-  const changes=[];
-  const usedNewKeys=new Set();
-  document.querySelectorAll('#teacher-list .teacher-card').forEach(card=> {
-    const oldKey=(card.dataset.origKey||'').trim();
-    const newKey=(card.querySelector('.tc-key')?.value||'').trim();
-    if (!oldKey||!newKey||oldKey===newKey||usedNewKeys.has(newKey)) return;
-    usedNewKeys.add(newKey);
-    changes.push({oldKey,newKey})
-  });
-  return changes
-}
-// Same shape as getTeacherRenameChanges, but measured against syncKey (the
-// key already mirrored into the schedule dropdowns) instead of origKey (the
-// last saved key). Used only to keep the schedule preview valid while the
-// user is still editing, never for the changelog text.
-function getTeacherSyncChanges() {
-  const changes=[];
-  const usedNewKeys=new Set();
-  document.querySelectorAll('#teacher-list .teacher-card').forEach(card=> {
-    const oldKey=(card.dataset.syncKey||'').trim();
-    const newKey=(card.querySelector('.tc-key')?.value||'').trim();
-    if (!oldKey||!newKey||oldKey===newKey||usedNewKeys.has(newKey)) return;
-    usedNewKeys.add(newKey);
-    changes.push({oldKey,newKey})
-  });
-  return changes
-}
-function getTeacherRenameImpacts(changes,data) {
-  const impacts=[];
-  const seen=new Set();
-  const displayData=cloneSettingsData(data);
-  const baseline=editorBaselineData||normalizeSettingsData(applicationData);
-  changes.forEach(change=> {
-    if (!displayData.teacherDB[change.oldKey]&&(baseline.teacherDB||{})[change.oldKey]) displayData.teacherDB[change.oldKey]=baseline.teacherDB[change.oldKey];
-    if (!displayData.locationDB[change.oldKey]&&(baseline.locationDB||{})[change.oldKey]) displayData.locationDB[change.oldKey]=baseline.locationDB[change.oldKey]
-  });
-  function addImpact(day,index,change) {
-    const id=`${day}-${index}-${change.oldKey}-${change.newKey}`;
-    if (seen.has(id)) return;
-    seen.add(id);
-    impacts.push(`${dayDiffLabel(day)}第 ${index+1} 節：${change.oldKey} -> ${change.newKey}`)
-  }
-  document.querySelectorAll('#schedule-grid .schedule-day-row').forEach(dayRow=> {
-    const day=parseInt(dayRow.dataset.day,10);
-    dayRow.querySelectorAll('.period-select').forEach((select,index)=> {
-      const change=changes.find(item=>item.oldKey===select.value);
-      if (change) addImpact(day,index,change)
-    })
-  });
-  Object.entries((baseline&&baseline.weeklySchedule)||{}).forEach(([day,row])=> {
-    (row||[]).forEach((key,index)=> {
-      const change=changes.find(item=>item.oldKey===key);
-      if (change) addImpact(parseInt(day,10),index,change)
-    })
-  });
-  return impacts
-}
-function applyTeacherRenameChangesToData(data,changes) {
-  changes.forEach(change=> {
-    Object.keys(data.weeklySchedule||{}).forEach(day=> {
-      data.weeklySchedule[day]=(data.weeklySchedule[day]||[]).map(key=>key===change.oldKey?change.newKey:key)
-    })
-  });
-  return data
-}
-function getPendingTeacherRenameUpdate() {
-  sortEditorPeriodsByTime();
-  const changes=getTeacherSyncChanges();
-  const next=normalizeSettingsData(applyTeacherRenameChangesToData(collectEditorFormState(),changes));
-  const impacts=getTeacherRenameImpacts(changes,next);
-  return impacts.length?{next,changes,impacts}:null
-}
-function getPendingTeacherRenameSaveUpdate(next) {
-  const changes=getTeacherRenameChanges();
-  if (!changes.length) return null;
-  const syncChanges=getTeacherSyncChanges();
-  const impacts=getTeacherRenameImpacts(changes,next);
-  return {next,changes,syncChanges,impacts}
-}
-function buildTeacherRenameSaveData(pendingRename) {
-  if (!pendingRename) return normalizeSettingsData(collectEditorFormState());
-  // The live schedule dropdowns may still hold an intermediate synced key
-  // (e.g. "B" from a rename that was previewed but never saved), not the
-  // true original key, so the actual data patch must key off syncChanges.
-  const patchChanges=(pendingRename.syncChanges&&pendingRename.syncChanges.length)?pendingRename.syncChanges:pendingRename.changes;
-  return applyTeacherRenameChangesToData(pendingRename.next,patchChanges)
-}
-function buildCombinedSaveDiff(baseline,next,pendingRename) {
-  const parts=[];
-  if (pendingRename&&pendingRename.impacts.length) {
-    parts.push(['課表改用新縮寫:'].concat(pendingRename.impacts.map(item=>`- ${item}`)).join('\n'))
-  }
-  const diff=describeSettingsDiff(baseline,next,pendingRename?pendingRename.changes:[]);
-  if (diff) parts.push(diff);
-  return parts.join('\n\n')
-}
-function applyTeacherRenameChangesToEditor(changes) {
-  document.querySelectorAll('#schedule-grid .schedule-day-row').forEach(dayRow=> {
-    dayRow.querySelectorAll('.period-select').forEach(select=> {
-      const change=changes.find(item=>item.oldKey===select.value);
-      if (change) select.value=change.newKey;
-    })
-  });
-
-  document.querySelectorAll('#teacher-list .teacher-card').forEach(card=> {
-    const keyInput=card.querySelector('.tc-key');
-    if (!keyInput) return;
-
-    const change=changes.find(item=>item.newKey===keyInput.value.trim());
-    if (change) {
-      card.dataset.syncKey=change.newKey;
-    }
-  });
-
-  refreshPeriodSelectOptions();
-}
-function applyTeacherRenameBackToSchedule() {
-  if (!pendingTeacherRenameSave) {
-    hideEditorDiscardConfirm();
-    return
-  }
-  applyTeacherRenameChangesToEditor(pendingTeacherRenameSave.changes);
-  pendingTeacherRenameSave=null;
-  hideEditorDiscardConfirm();
-  openEditorFold('editor-fold-schedule',true)
-}
-function showTeacherRenameBackConfirm() {
-  const pending=getPendingTeacherRenameUpdate();
-  if (!pending) return false;
-
-  pendingTeacherRenameSave=pending;
-  applyTeacherRenameBackToSchedule();
-
-  return true;
-}
 function applyTeacherCardDelete(btn) {
   const card=btn.closest('.teacher-card');
-  const keys=new Set([(card?.dataset.origKey||'').trim(),(card?.querySelector('.tc-key')?.value||'').trim()]);
+  const key=(card?.dataset.origKey||'').trim();
   card?.remove();
   document.querySelectorAll('#schedule-grid .period-select').forEach(select=>{
-    if (keys.has(select.value)) select.value='';
+    if (select.value===key) select.value='';
   });
   refreshPeriodSelectOptions()
 }
@@ -396,11 +287,12 @@ function confirmTeacherCardDelete() {
 function deleteTeacherCard(btn) {
   const card=btn.closest('.teacher-card');
   const key=getTeacherDeleteKey(card);
+  const label=key?(getEditorClassLabelFromDom(key)||key):'';
   const impacts=key?getTeacherDeleteImpacts(key):[];
   if (impacts.length) {
     pendingTeacherDelete={btn,key};
     setEditorConfirmContent(
-      `刪除「${key}」？`,
+      `刪除「${label}」？`,
       '這會移除這個課程，並清空所有使用它的課表格子。',
       impacts.join('\n'),
       '刪除',
