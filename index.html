@@ -663,6 +663,7 @@
 </div>
 <script>
 // App defaults and live simulator state.
+const ORBIT_INITIAL_MARKUP = document.documentElement.outerHTML;
 const REVERSE_WEEK_LOGIC_DEFAULT = false;
 const DEFAULT_STYLE_PRIMARY = '#0A84FF';
 const DEFAULT_STYLE_SECONDARY = '#5856D6';
@@ -4587,7 +4588,17 @@ ocrImageInput?.addEventListener('change',async event=>{
 
   function el(id){ return document.getElementById(id); }
   function getAppVersion(){
-    var source=document.documentElement.outerHTML.replace(
+    var source='';
+    try {
+      var request=new XMLHttpRequest();
+      var url=window.location.href.replace(/[?#].*$/,'');
+      request.open('GET',url,false);
+      request.send(null);
+      if (request.status===0||request.status>=200&&request.status<300) source=request.responseText;
+    } catch (error) {
+      source=ORBIT_INITIAL_MARKUP;
+    }
+    source=source.replace(
       /(<span id="app-version"[^>]*>)[\s\S]*?(<\/span>)/,
       '$1$2'
     );
