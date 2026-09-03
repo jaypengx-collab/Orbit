@@ -1412,38 +1412,6 @@ function requestTransferAction(action) {
 function cloneSettingsData(data) {
   return JSON.parse(JSON.stringify(data))
 }
-// Transfer backups use short keys and compressed Base64 to stay easy to copy.
-// (Legacy v1 format: JSON -> single-letter keys -> DEFLATE -> Base64, wrapped
-// in a long marker. Kept only so old backups can still be imported.)
-const TRANSFER_KEYS={teacherDB:'a',locationDB:'b',weeklySchedule:'c',bellTimes:'d',breakTimes:'e',countdownEvents:'f',reverseWeek:'h',proAccent:'i',proSecondary:'j',proTertiary:'k',styleSlots:'l',bellRowsDraft:'m',breakRowsDraft:'n',teacherCardsDraft:'o',geminiApiKey:'t',__orbit:'p',app:'q',schema:'r'};
-const TRANSFER_KEYS_REVERSE=Object.fromEntries(Object.entries(TRANSFER_KEYS).map(([key,value])=>[value,key]));
-const TRANSFER_START='===== ORBIT COLOR SETTINGS BACKUP BEGIN =====\n';
-const TRANSFER_END='\n===== ORBIT COLOR SETTINGS BACKUP END =====';
-function compactTransferValue(value,expand=false) {
-  if (Array.isArray(value)) return value.map(item=>compactTransferValue(item,expand));
-  if (!value||typeof value!=='object') return value;
-  return Object.fromEntries(Object.entries(value).map(([key,item])=> {
-    const mapped=expand?(TRANSFER_KEYS_REVERSE[key]||key):(TRANSFER_KEYS[key]||key);
-    return [mapped,compactTransferValue(item,expand)]
-  }))
-}
-function transferBytesToBase64(bytes) {
-  let binary='';
-  for (let i=0;i<bytes.length;i+=8192) binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
-  return btoa(binary)
-}
-function transferBase64ToBytes(value) {
-  const binary=atob(value);
-  return Uint8Array.from(binary,char=>char.charCodeAt(0))
-}
-async function decodeTransferDataV1(value) {
-  const encoded=value.slice(TRANSFER_START.length,-TRANSFER_END.length).trim();
-  if (typeof DecompressionStream!=='function') throw new Error('此裝置不支援壓縮匯入。');
-  if (!encoded||!/^[A-Za-z0-9+/=]+$/.test(encoded)) throw new Error('請貼上 Orbit Color 課表設定備份，或只貼上壓縮內容。');
-  const stream=new Blob([transferBase64ToBytes(encoded)]).stream().pipeThrough(new DecompressionStream('deflate'));
-  return compactTransferValue(JSON.parse(await new Response(stream).text()),true)
-}
-
 // ---- v2 transfer format ----
 // A much shorter, denser format than v1: redundant fields (locationDB, which
 // always mirrors teacherDB's 3rd column) are dropped, remaining structures
@@ -1538,16 +1506,9 @@ async function encodeTransferData(data) {
 }
 async function decodeTransferData(text) {
   const value=String(text||'').trim();
-  if (value.startsWith(TRANSFER_MAGIC_V2)) {
-    if (typeof DecompressionStream!=='function') throw new Error('此裝置不支援壓縮匯入。');
-    return decodeTransferDataV2(value)
-  }
-  const wrapped=value.startsWith(TRANSFER_START)&&value.endsWith(TRANSFER_END);
-  if (wrapped) {
-    if (typeof DecompressionStream!=='function') throw new Error('此裝置不支援壓縮匯入。');
-    return decodeTransferDataV1(value)
-  }
-  throw new Error('請貼上 Orbit Color 課表設定備份。')
+  if (!value.startsWith(TRANSFER_MAGIC_V2)) throw new Error('請貼上 Orbit Color 課表設定備份。');
+  if (typeof DecompressionStream!=='function') throw new Error('此裝置不支援壓縮匯入。');
+  return decodeTransferDataV2(value)
 }
 function normalizeSettingsData(raw,{requireMarker=false}={}) {
   if (!raw || typeof raw !== 'object') throw new Error('設定文字必須是 JSON 物件。');
