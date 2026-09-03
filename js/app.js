@@ -1421,9 +1421,9 @@ function cloneSettingsData(data) {
 // of Base64 - Base64 spends 4 characters per 3 bytes (~1.33 chars/byte),
 // while this alphabet spends under 1.23 bytes/char, so encoded text is
 // roughly a quarter shorter for the same compressed bytes. The wrapping
-// marker is a 4-character magic prefix instead of the old ~90-character
-// banner text.
-const TRANSFER_MAGIC_V2='OB2:';
+// marker is a short, human-readable bracketed tag instead of the old
+// ~90-character banner text, so a backup is still recognizable at a glance.
+const TRANSFER_MAGIC_V2='[ORBIT]';
 const BASE91_ALPHABET="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+,-./:;<=>?@[]^_`{|}~";
 const BASE91_DECODE_MAP=Object.fromEntries([...BASE91_ALPHABET].map((char,index)=>[char,index]));
 function base91Encode(bytes) {
