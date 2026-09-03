@@ -1095,9 +1095,16 @@ function update()  {
   }
 }
 
+// Set by clampManualListScroll whenever the user genuinely scrolls (as opposed to the
+// programmatic scrolls align() itself performs) while an alignment sequence below is
+// still mid-flight. Lets that sequence back off instead of snapping the list back under
+// the user's finger a few hundred ms later.
+let userScrolledDuringAlign = false;
+
 function keepActiveClassVisible(list,isDayFinished,scrollKey) {
   if (scrollKey===lastAutoScrollKey) return;
   lastAutoScrollKey=scrollKey;
+  userScrolledDuringAlign=false;
 
   const activeRow = list.querySelector('.is-now') || list.querySelector('.is-next');
 
@@ -1113,6 +1120,11 @@ function keepActiveClassVisible(list,isDayFinished,scrollKey) {
 
   requestAnimationFrame(() => {
     const align = () => {
+      // The active class genuinely changed (a new scrollKey), so the very first alignment
+      // always runs even if the user was already scrolling — but once that lands, respect
+      // any scroll the user makes of their own accord instead of re-snapping under them a
+      // couple of animation frames or a few hundred ms later.
+      if (userScrolledDuringAlign) return;
       // Use layout coordinates, not transformed client rects from the row
       // entrance animation. Recalculate after layout settles on mobile.
       const targetTop=Math.max(0,activeRow.offsetTop);
@@ -1164,6 +1176,7 @@ function getNaturalListMaxScroll(list) {
 // at least as far as auto-scroll's own target, so the two systems never fight each other.
 function clampManualListScroll() {
   if (allowProgrammaticListScroll)return;
+  userScrolledDuringAlign=true;
   const list=document.getElementById('schedule-list');
   if (!list)return;
   const aligned=parseFloat(list.dataset.autoAlignedTop||'');
@@ -1738,6 +1751,8 @@ function describeSettingsDiff(current,next,{isImport=false}={}) {
   });
   pushDiff(lines,'倒數活動',countdownItems);
   if (!!current.reverseWeek!==!!next.reverseWeek) lines.push(`單雙週對調：${current.reverseWeek?'開啟':'關閉'} -> ${next.reverseWeek?'開啟':'關閉'}`);
+  // Never print the key itself here — this text can end up on screen or pasted elsewhere.
+  if ((current.geminiApiKey||'')!==(next.geminiApiKey||'')) lines.push(next.geminiApiKey?'Gemini API 金鑰：更新為匯入的金鑰':'Gemini API 金鑰：清除');
   const currentProAccent=normalizeProAccent(current.proAccent);
   const nextProAccent=normalizeProAccent(next.proAccent);
   const describeColorChange=(label,before,after)=>isImport?`${label}（目前）：${before} -> ${label}（匯入）：${after}`:`${label}：${before} -> ${after}`;
@@ -1880,6 +1895,12 @@ function mergeImportedSettings(current,imported,preserveStyle=false) {
   merged.countdownEvents=[...events.values()];
   if (current.reverseWeek!==imported.reverseWeek) replacedActions.push(`取代單雙週設定：${imported.reverseWeek?'開啟':'關閉'}`);
   merged.reverseWeek=imported.reverseWeek;
+  // Only a non-empty imported key replaces the current one — an older backup or an AI
+  // import saved before a key existed shouldn't silently wipe the one already stored.
+  if (imported.geminiApiKey && imported.geminiApiKey!==current.geminiApiKey) {
+    merged.geminiApiKey=imported.geminiApiKey;
+    replacedActions.push('更新 Gemini API 金鑰');
+  }
   // AI imports keep this browser's visual preferences; regular backups retain
   // the imported palette and saved presets.
   if (preserveStyle) {
@@ -2324,6 +2345,11 @@ function clearTransferField() {
 }
 function openEditorFold(id,force=false) {
   document.querySelectorAll('#editor-sheet details.editor-fold').forEach(section=> {
+    // The transfer/OCR-import section is an always-visible tools panel, not a layer —
+    // it manages its own open/closed state (see initEditorAccordion) and must never be
+    // force-closed just because a different page layer became active, or an expanded
+    // import button the user is mid-way through using would vanish under them.
+    if (section.id==='editor-fold-transfer') return;
     const active=section.id===id;
     section.open=active;
     section.classList.toggle('active',active)
@@ -3408,6 +3434,16 @@ Interpret the timetable visually and use your best judgment to reconstruct its s
 - Return ONLY the raw JSON object — no markdown fences, no comments, no extra text.`;
   }
 
+  // This is plain structured extraction (read the photo, fill in a fixed schema) — it gets
+  // no benefit from the models' default "thinking" pass, which only adds latency. Gemini 2.5
+  // models take a thinkingBudget (0 disables it); Gemini 3 models replaced that with
+  // thinkingLevel and don't support turning thinking fully off, so "low" is the fastest they offer.
+  buildGenerationConfig(model) {
+    const base = { response_mime_type: 'application/json', temperature: 0.1, maxOutputTokens: 8192 };
+    base.thinkingConfig = /^gemini-2\./.test(model) ? { thinkingBudget: 0 } : { thinkingLevel: 'low' };
+    return base;
+  }
+
   async recognizeSchedule(canvas, apiKey, onProgress) {
     const report = (message) => { try { onProgress?.(message); } catch { /* ignore progress callback errors */ } };
     const trimmedKey = String(apiKey || '').trim();
@@ -3415,15 +3451,17 @@ Interpret the timetable visually and use your best judgment to reconstruct its s
 
     report('正在壓縮並編碼圖片…');
     const base64Data = canvas.toDataURL('image/jpeg', 0.9).replace(/^data:image\/jpeg;base64,/, '');
-    const requestBody = JSON.stringify({
-      contents: [{ parts: [{ text: this.buildPrompt() }, { inline_data: { mime_type: 'image/jpeg', data: base64Data } }] }],
-      generationConfig: { response_mime_type: 'application/json', temperature: 0.1, maxOutputTokens: 8192 }
-    });
+    const promptPart = { text: this.buildPrompt() };
+    const imagePart = { inline_data: { mime_type: 'image/jpeg', data: base64Data } };
 
     let lastError = null;
     for (const model of this.geminiModels) {
       report(`正在請求 AI 模型（${model}）分析課表…`);
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(trimmedKey)}`;
+      const requestBody = JSON.stringify({
+        contents: [{ parts: [promptPart, imagePart] }],
+        generationConfig: this.buildGenerationConfig(model)
+      });
       let response;
       try {
         response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: requestBody });
