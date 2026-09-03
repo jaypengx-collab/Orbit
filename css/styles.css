@@ -2303,16 +2303,6 @@ body.style-panel-open .editor-confirm-sheet {
 .countdown-event-row label {
   min-width:0;
 }
-.countdown-event-remove {
-  width:32px;
-  height:32px;
-  border:1px solid var(--bd);
-  border-radius:10px;
-  background:transparent;
-  color:var(--txt);
-  font-size:16px;
-  cursor:pointer;
-}
 .teacher-order-actions {
   display:flex;
   gap:4px;
@@ -2574,13 +2564,6 @@ body.pro-style .close-btn,body.pro-style .editor-primary-btn{
   color:#07101F !important;
   box-shadow:0 12px 26px rgba(110,168,255,.24) !important;
 }
-body.pro-style .test-panel {
-  background:rgba(17,23,37,.92) !important;
-  border-color:rgba(255,255,255,.14) !important;
-  box-shadow:0 20px 54px rgba(0,0,0,.38) !important;
-  backdrop-filter:blur(22px) saturate(150%);
-  -webkit-backdrop-filter:blur(22px) saturate(150%);
-}
 body.pro-style .dashboard .label-row,body.pro-style .dashboard .top-actions,body.pro-style .dashboard .top-actions-menu {
   overflow:visible !important;
 }
@@ -2643,10 +2626,12 @@ body.editor-open .dashboard .label-row,body.editor-open .dashboard .top-actions,
   -webkit-backdrop-filter:none !important;
   background:#1c1c1e !important;
 }
-
-body.pro-style .test-panel{
+body.pro-style .test-panel {
   background:#10121d !important;
   border-color:rgba(255,255,255,.18) !important;
+  box-shadow:0 20px 54px rgba(0,0,0,.38) !important;
+  backdrop-filter:blur(22px) saturate(150%);
+  -webkit-backdrop-filter:blur(22px) saturate(150%);
 }
 body.pro-style .test-panel-overlay {
   background:rgba(0,0,0,.58) !important;
@@ -2796,21 +2781,6 @@ body.pro-style .row-name .week-label.label-even {
 #test-refresh-btn:active {
   transform:scale(.95);
 }
-.exam-countdown {
-  touch-action:pan-y;
-  cursor:grab;
-  flex:0 0 auto;
-  min-height:42px;
-  padding:6px 8px 6px 14px;
-  border-radius:999px;
-  border:1px solid rgba(10,132,255,.2);
-  background:linear-gradient(135deg,rgba(10,132,255,.1),rgba(255,255,255,.03));
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:12px;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 4px 14px rgba(0,0,0,.14);
-}
 .exam-countdown-copy {
   display:flex;
   flex-direction:column;
@@ -2818,13 +2788,7 @@ body.pro-style .row-name .week-label.label-even {
   gap:1px;
   min-width:0;
 }
-.exam-countdown-label {
-  letter-spacing:.2px;
-}
-.exam-countdown-date {
-  opacity:.62;
-}
-.exam-countdown-value {
+exam-countdown-value {
   flex:0 0 auto;
   min-width:60px;
   padding:5px 10px;
@@ -2841,6 +2805,19 @@ body.pro-style .row-name .week-label.label-even {
   box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
 }
 .exam-countdown {
+  touch-action:pan-y;
+  cursor:grab;
+  flex:0 0 auto;
+  min-height:42px;
+  padding:6px 8px 6px 14px;
+  border-radius:999px;
+  border:1px solid rgba(10,132,255,.2);
+  background:linear-gradient(135deg,rgba(10,132,255,.1),rgba(255,255,255,.03));
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 4px 14px rgba(0,0,0,.14);
   position:relative;
 }
 .exam-countdown-dots {
@@ -3395,13 +3372,14 @@ body.pro-style .timer-badge {
   box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 8px 20px rgba(0,0,0,.22) !important;
 }
 .exam-countdown-label {
+  letter-spacing:.02em !important;
   white-space:nowrap;
   color:#fff !important;
   font-size:13px !important;
   font-weight:900 !important;
-  letter-spacing:.02em !important;
 }
 .exam-countdown-date {
+  opacity:.62;
   font-size:10px;
   font-weight:700;
   letter-spacing:.25px;
@@ -3935,17 +3913,17 @@ body.pro-style .time-card.v3-11-next-module .timer-container {
   box-sizing:border-box;
 }
 .countdown-event-remove {
-  border-color:rgba(255,69,58,.35);
   width:30px;
   height:30px;
-  display:grid;
-  place-items:center;
   border:1px solid rgba(255,69,58,.35);
   border-radius:9px;
   background:transparent;
   color:#ff453a;
   font-size:18px;
   cursor:pointer;
+  border-color:rgba(255,69,58,.35);
+  display:grid;
+  place-items:center;
 }
 .dashboard > .label-row > .label .label-odd,.dashboard > .label-row > .label .label-even {
   border-bottom:0 !important;
