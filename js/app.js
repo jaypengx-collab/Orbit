@@ -803,6 +803,16 @@ function updateExamCountdown() {
   const dateLabel=document.querySelector('.exam-countdown-date');
   if (label) label.textContent=event.name;
   if (dateLabel) dateLabel.textContent=formatCountdownEventDate(event);
+  const dots=document.getElementById('exam-countdown-dots');
+  if (dots) {
+    if (events.length<2) {
+      dots.hidden=true;
+      dots.innerHTML='';
+    } else {
+      dots.hidden=false;
+      dots.innerHTML=events.map((_,index)=>`<span class="exam-countdown-dot${index===activeCountdownIndex?' active':''}"></span>`).join('');
+    }
+  }
   const toDate=value=> { const [year,month,day]=value.split('-').map(Number); return new Date(year,month-1,day) };
   const examStart = toDate(event.startDate);
   const examEnd = toDate(event.endDate);

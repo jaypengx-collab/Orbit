@@ -2639,6 +2639,48 @@ body.style-panel-open .editor-confirm-sheet {
 }
 #test-time-slider {
   width:100%;
+  -webkit-appearance:none;
+  appearance:none;
+  height:6px;
+  border-radius:999px;
+  background:var(--bd);
+  margin:6px 0 2px;
+  cursor:pointer;
+}
+#test-time-slider::-webkit-slider-thumb {
+  -webkit-appearance:none;
+  appearance:none;
+  width:20px;
+  height:20px;
+  border-radius:50%;
+  background:#fff;
+  border:3px solid var(--accent);
+  box-shadow:0 2px 8px rgba(0,0,0,.35);
+  cursor:pointer;
+  margin-top:0;
+}
+#test-time-slider::-moz-range-thumb {
+  width:20px;
+  height:20px;
+  border-radius:50%;
+  background:#fff;
+  border:3px solid var(--accent);
+  box-shadow:0 2px 8px rgba(0,0,0,.35);
+  cursor:pointer;
+}
+#test-time-slider::-moz-range-track {
+  height:6px;
+  border-radius:999px;
+  background:var(--bd);
+}
+#test-time-slider::-moz-range-progress {
+  height:6px;
+  border-radius:999px;
+  background:var(--accent);
+}
+#test-time-slider:focus-visible {
+  outline:none;
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 30%,transparent);
 }
 body.pro-style .dashboard > * {
   position:relative;
@@ -3025,6 +3067,35 @@ body.pro-style .row-name .week-label.label-even {
   text-align:center;
   letter-spacing:-.25px;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
+}
+.exam-countdown {
+  position:relative;
+}
+.exam-countdown-dots {
+  position:absolute;
+  left:50%;
+  bottom:2px;
+  transform:translateX(-50%);
+  display:flex;
+  align-items:center;
+  gap:3px;
+  pointer-events:none;
+  z-index:1;
+}
+.exam-countdown-dots[hidden] {
+  display:none;
+}
+.exam-countdown-dot {
+  width:4px;
+  height:4px;
+  border-radius:50%;
+  background:rgba(255,255,255,.28);
+  transition:background .2s,width .2s;
+}
+.exam-countdown-dot.active {
+  width:10px;
+  border-radius:3px;
+  background:var(--accent);
 }
 
 
@@ -5013,6 +5084,18 @@ html body .dashboard > .label-row > .exam-countdown .exam-countdown-date {
     overflow-y:hidden !important;
     padding:2px 2px 7px !important;
     scroll-snap-type:x proximity;
+    -webkit-overflow-scrolling:touch;
+    mask-image:linear-gradient(90deg,#000 calc(100% - 26px),transparent);
+    -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 26px),transparent);
+    scrollbar-width:thin;
+    scrollbar-color:var(--bd) transparent;
+  }
+  .style-preset-grid::-webkit-scrollbar {
+    height:4px;
+  }
+  .style-preset-grid::-webkit-scrollbar-thumb {
+    background:var(--bd);
+    border-radius:4px;
   }
   .style-preset-chip {
     display:flex !important;
