@@ -157,6 +157,12 @@ body.editor-open .top-actions {
 .row:active {
   transform:scale(.98);
 }
+@media (hover:hover) {
+  .row:hover {
+    transform:translateY(-1px);
+    border-color:color-mix(in srgb,var(--accent) 22%,transparent);
+  }
+}
 .row.is-now {
   background:rgba(50,215,75,.08);
   border-color:rgba(50,215,75,.3);
@@ -279,19 +285,22 @@ body.editor-open .top-actions {
   left:0;
   width:100%;
   height:100%;
-  background:rgba(0,0,0,.7);
+  background:radial-gradient(120% 90% at 50% 0%,rgba(8,18,26,.55),rgba(3,8,12,.86));
   opacity:0;
   visibility:hidden;
   transition:.3s;
   z-index:100;
-  backdrop-filter:blur(8px);
+  backdrop-filter:blur(10px);
 }
 .modal-overlay.show {
   opacity:1;
   visibility:visible;
 }
 body.modal-open > .dashboard,body.modal-open > .nav-bar,body.modal-open > #schedule-list {
-  visibility:hidden;
+  filter:blur(6px) saturate(85%);
+  opacity:.5;
+  transform:scale(.98);
+  transition:filter .35s ease,opacity .35s ease,transform .35s ease;
   pointer-events:none;
 }
 .stat-card {
@@ -1833,6 +1842,7 @@ body.pro-style .style-panel,body.pro-style .editor-inner,body.pro-style .editor-
   border-radius:14px;
   padding:3px;
   margin-bottom:7px;
+  transition:filter .35s ease,opacity .35s ease,transform .35s ease;
 }
 .period-badge {
   background:rgba(255,255,255,.05);
@@ -2119,6 +2129,7 @@ body.orbit-suppress-list-animation .animate-list {
 }
 #schedule-list {
   overscroll-behavior-y:contain;
+  transition:filter .35s ease,opacity .35s ease,transform .35s ease;
 }
 .test-panel .editor-header {
   position:static;
@@ -2976,29 +2987,36 @@ body.pro-style .row-name .week-label.label-even {
   cursor:grab;
   flex:0 0 auto;
   min-height:42px;
-  padding:7px 10px 7px 12px;
-  border-radius:14px;
-  border:1px solid rgba(10,132,255,.18);
-  background:linear-gradient(135deg,rgba(10,132,255,.07),rgba(255,255,255,.035));
+  padding:6px 8px 6px 14px;
+  border-radius:999px;
+  border:1px solid rgba(10,132,255,.2);
+  background:linear-gradient(135deg,rgba(10,132,255,.1),rgba(255,255,255,.03));
   display:flex;
   align-items:center;
   justify-content:space-between;
-  gap:10px;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.035);
+  gap:12px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 4px 14px rgba(0,0,0,.14);
 }
 .exam-countdown-copy {
   display:flex;
-  align-items:baseline;
-  gap:7px;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:1px;
   min-width:0;
+}
+.exam-countdown-label {
+  letter-spacing:.2px;
+}
+.exam-countdown-date {
+  opacity:.62;
 }
 .exam-countdown-value {
   flex:0 0 auto;
-  min-width:62px;
-  padding:4px 8px;
-  border-radius:9px;
-  background:rgba(10,132,255,.11);
-  border:1px solid rgba(10,132,255,.17);
+  min-width:60px;
+  padding:5px 10px;
+  border-radius:999px;
+  background:rgba(10,132,255,.16);
+  border:1px solid rgba(10,132,255,.22);
   color:var(--accent);
   font-family:ui-monospace,SFMono-Regular,monospace;
   font-size:16px;
@@ -3006,6 +3024,7 @@ body.pro-style .row-name .week-label.label-even {
   font-weight:850;
   text-align:center;
   letter-spacing:-.25px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
 }
 
 
@@ -3709,9 +3728,10 @@ body.pro-style .timer-badge {
 }
 .exam-countdown,body.pro-style .exam-countdown{
   min-height:52px !important;
-  padding:9px 11px 9px 14px !important;
+  padding:9px 12px 9px 15px !important;
+  gap:12px !important;
   border:1px solid color-mix(in srgb,var(--orbit-line) 78%,#ffffff 4%) !important;
-  border-radius:12px !important;
+  border-radius:16px !important;
   background:linear-gradient(135deg,color-mix(in srgb,var(--pro-accent) 18%,var(--orbit-panel)),color-mix(in srgb,var(--pro-secondary) 16%,var(--orbit-panel))) !important;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 8px 20px rgba(0,0,0,.22) !important;
 }
@@ -3855,6 +3875,7 @@ body.pro-style .time-card.v3-11-next-module .timer-badge {
   max-height:clamp(262px,39dvh,308px) !important;
   overflow:hidden !important;
   gap:6px !important;
+  transition:filter .35s ease,opacity .35s ease,transform .35s ease;
 }
 .dashboard .now-stack {
   padding:9px 10px !important;
@@ -4100,12 +4121,16 @@ body.pro-style .row.is-next {
   background:#14232B !important;
   background-image:none !important;
   border-color:color-mix(in srgb,var(--pro-accent) 38%,rgba(255,255,255,.12)) !important;
+  border-left:3px solid var(--pro-accent) !important;
+  padding-left:11px !important;
 }
 body.pro-style .row.is-now {
   box-shadow:0 14px 34px rgba(55,214,122,.10),inset 0 1px 0 rgba(255,255,255,.10) !important;
   background:#14232B !important;
   background-image:none !important;
   border-color:color-mix(in srgb,var(--pro-secondary) 38%,rgba(255,255,255,.12)) !important;
+  border-left:3px solid var(--pro-secondary) !important;
+  padding-left:11px !important;
 }
 body.pro-style {
   --pro-accent:#0A84FF;
@@ -4143,7 +4168,10 @@ body.pro-style {
   --status-tag-next-fg:#fff;
   --status-tag-now-bg:var(--pro-secondary);
   --status-tag-now-fg:#fff;
-  background:#0B1117 !important;
+  background:
+    radial-gradient(120% 60% at 18% -8%,color-mix(in srgb,var(--pro-accent) 16%,transparent),transparent 60%),
+    radial-gradient(90% 55% at 100% 8%,color-mix(in srgb,var(--pro-secondary) 12%,transparent),transparent 65%),
+    #0B1117 !important;
 }
 body.pro-style::before {
   content:"";
