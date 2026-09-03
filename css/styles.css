@@ -3968,9 +3968,9 @@ body.pro-style .row.is-now .period-badge {
   gap:8px !important;
   border:1px solid color-mix(in srgb,var(--orbit-line) 82%,#fff 6%) !important;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.07) !important;
-  width:min(228px,calc(100% - 150px)) !important;
-  min-height:36px !important;
-  padding:3px 9px !important;
+  width:min(258px,calc(100% - 130px)) !important;
+  min-height:44px !important;
+  padding:5px 10px !important;
   border-left:3px solid var(--pro-accent) !important;
   border-right:1px solid color-mix(in srgb,var(--pro-secondary) 35%,var(--orbit-line)) !important;
   border-top:0 !important;
@@ -4049,23 +4049,20 @@ body.pro-style .time-card.v3-11-next-module .timer-label {
     top:7px !important;
     max-width:calc(100% - 92px) !important;
   }
-  .dashboard > .exam-countdown .exam-countdown-date {
-    display:none;
-  }
-  
-  .dashboard > .label-row > .exam-countdown .exam-countdown-date {
-    display:none !important;
-  }
   .dashboard > .label-row > .exam-countdown .exam-countdown-label {
     font-size:9px !important;
+  }
+  .dashboard > .label-row > .exam-countdown .exam-countdown-date {
+    font-size:8px !important;
   }
   .dashboard > .label-row {
     gap:4px !important;
     padding-right:40px !important;
   }
   .dashboard > .label-row > .exam-countdown {
-    padding-inline:6px !important;
-    width:min(208px,calc(100% - 142px)) !important;
+    padding-inline:8px !important;
+    width:min(238px,calc(100% - 122px)) !important;
+    min-height:42px !important;
   }
 }
 body.pro-style .row.is-next {
@@ -4306,6 +4303,16 @@ html body .dashboard > .label-row > .exam-countdown .exam-countdown-label {
   min-width:0 !important;
   max-width:100% !important;
   font-size:12px !important;
+  white-space:normal !important;
+  overflow:visible !important;
+  overflow-wrap:anywhere !important;
+  text-overflow:clip !important;
+  line-height:1.2 !important;
+}
+html body .dashboard > .label-row > .exam-countdown .exam-countdown-date {
+  display:block !important;
+  min-width:0 !important;
+  max-width:100% !important;
   white-space:normal !important;
   overflow:visible !important;
   overflow-wrap:anywhere !important;
@@ -4557,17 +4564,17 @@ html body .dashboard > .label-row > .exam-countdown .exam-countdown-label {
 .assign-day-tabs {
   display:grid;
   grid-template-columns:repeat(7,minmax(0,1fr));
-  gap:5px;
+  gap:6px;
   margin:12px 0 8px;
 }
 .assign-day-tab {
-  min-height:42px;
+  min-height:48px;
   padding:0 3px;
   border:1px solid var(--bd);
   border-radius:10px;
   background:rgba(255,255,255,.055);
   color:var(--sub);
-  font:800 13px/1 inherit;
+  font:800 14px/1 inherit;
   cursor:pointer;
 }
 .assign-day-tab.active {
@@ -5214,7 +5221,8 @@ html body .dashboard > .label-row > .exam-countdown .exam-countdown-label {
     gap:4px;
   }
   .assign-day-tab {
-    font-size:11px;
+    min-height:44px;
+    font-size:12px;
   }
   .dashboard .time-card.v3-11-next-module .next-meta {
     max-width:42% !important;
