@@ -377,10 +377,6 @@
   <div class="editor-header">
     <div class="editor-title">
       時間模擬
-      <span class="app-version" id="app-version">版本載入中…</span>
-      <button type="button" id="test-refresh-btn" onclick="forceAppRefresh()" aria-label="更新版本">
-        更新
-      </button>
       <span class="test-status-pill" id="sim-indicator" style="display:none">
         模擬中
         <span id="sim-status">
@@ -389,6 +385,12 @@
     </div>
     <button type="button" class="editor-close" onclick="closeTestPanel()" aria-label="關閉">
       ×
+    </button>
+  </div>
+  <div class="test-panel-meta-row">
+    <span class="app-version" id="app-version">版本載入中…</span>
+    <button type="button" id="test-refresh-btn" onclick="forceAppRefresh()" aria-label="更新版本">
+      更新
     </button>
   </div>
   <div class="editor-fold">

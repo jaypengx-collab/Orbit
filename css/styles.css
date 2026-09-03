@@ -3016,8 +3016,14 @@ body.pro-style .row-name .week-label.label-even {
   background:rgba(255,255,255,.3);
   border-radius:999px;
 }
+.test-panel-meta-row {
+  display:flex;
+  align-items:center;
+  gap:7px;
+  margin:-6px 0 10px;
+}
 .app-version {
-  font-size:9px;
+  font-size:10px;
   font-weight:700;
   letter-spacing:.08em;
   color:var(--sub);
