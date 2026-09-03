@@ -358,6 +358,7 @@ let lastListKey = "";
 let autoAdvancedAfterFinishedDay = null;
 let lastAutoScrollKey = "";
 let allowProgrammaticListScroll = false;
+let clampScrollFrame = 0;
 // Converts an HH:MM time string into minutes after midnight.
 function parseTime(t)  {
   const[
@@ -1174,17 +1175,28 @@ function getNaturalListMaxScroll(list) {
 // Prevents manual scrolling from being restricted below what the auto-scroll system already
 // allows. Single source of truth for the scroll ceiling: the user is always allowed to scroll
 // at least as far as auto-scroll's own target, so the two systems never fight each other.
+//
+// Touch devices fire many 'scroll' events per frame during momentum/rubber-band deceleration
+// at the bottom edge. Correcting scrollTop synchronously on every one of those events fights
+// the browser's own elastic-bounce animation frame-by-frame, which is what reads as flicker.
+// Coalescing to a single correction per animation frame (and tolerating a couple of px of
+// native overscroll) keeps the same ceiling without contesting the bounce.
 function clampManualListScroll() {
   if (allowProgrammaticListScroll)return;
   userScrolledDuringAlign=true;
-  const list=document.getElementById('schedule-list');
-  if (!list)return;
-  const aligned=parseFloat(list.dataset.autoAlignedTop||'');
-  const max=Math.max(getNaturalListMaxScroll(list),Number.isFinite(aligned)?aligned:0);
+  if (clampScrollFrame) return;
+  clampScrollFrame=requestAnimationFrame(()=>{
+    clampScrollFrame=0;
+    const list=document.getElementById('schedule-list');
+    if (!list)return;
+    const aligned=parseFloat(list.dataset.autoAlignedTop||'');
+    const max=Math.max(getNaturalListMaxScroll(list),Number.isFinite(aligned)?aligned:0);
+    const overshoot=list.scrollTop-max;
 
-  if (list.scrollTop>max) {
-    list.scrollTop=max
-  }
+    if (overshoot>2) {
+      list.scrollTop=max
+    }
+  })
 }
 
 // Closes the class detail modal.
@@ -3275,6 +3287,7 @@ function renderList(week,curIdx,nxtIdx,curDay,isDayFinished) {
     const row=document.createElement('div');
     row.className=`row ${isNow?'is-now':''} ${isNext?'is-next':''}`.trim();
     row.style.setProperty('--class-color',getClassColor(c.key));
+    row.style.setProperty('--row-i',String(i));
     row.tabIndex=0;
     row.role='button';
     row.addEventListener('click',()=>openModal(c));
@@ -4287,9 +4300,15 @@ update();
     var hasParser = typeof parseTime === 'function';
     var finishedSchoolDay = !!(hasParser && lastClass && mins >= parseTime(lastClass.e));
     var outsideClassRange = !!(hasParser && firstClass && lastClass && (mins < parseTime(firstClass.s) || mins >= parseTime(lastClass.e)));
+    // True once nothing on today's schedule still starts after now, even mid-way through the
+    // last class or its trailing break — not just once the whole day is over. Without this, the
+    // dashboard kept showing an empty "next class" panel throughout the entire last period.
+    var hasUpcomingClass = today.some(function(c){ return hasParser && parseTime(c.s) > mins; });
+    var noUpcomingClass = !!(today.length && !hasUpcomingClass && !finishedSchoolDay && !outsideClassRange);
     dashboard.classList.toggle('v3-15-day-finished', finishedSchoolDay);
     dashboard.classList.toggle('v3-16-outside-class-range', outsideClassRange);
     dashboard.classList.toggle('orbit-no-school-day', !today.length);
+    dashboard.classList.toggle('orbit-no-upcoming-class', noUpcomingClass);
   }
   function syncTestingBody(){
     if (document.body) document.body.classList.toggle('testing', !!(window.MANUALLY_TEST || window.IS_SIMULATING));
