@@ -50,7 +50,7 @@ cd Orbit
 python -m http.server 8843
 ```
 
-再開瀏覽器連到 `http://localhost:8843/`。用本機伺服器而不是直接雙擊 `index.html`，是因為部分瀏覽器對 `file://` 協定下的 `localStorage` 與資源載入行為比較保守，用伺服器開比較不會踩雷。Windows 使用者可以直接雙擊專案裡的 `run-local.bat`，效果一樣（背後就是這條 Python 指令）。
+再開瀏覽器連到 `http://localhost:8843/`。用本機伺服器而不是直接雙擊 `index.html`，是因為部分瀏覽器對 `file://` 協定下的 `localStorage` 與資源載入行為比較保守，用伺服器開比較不會踩雷。
 
 不管哪種方式，`css/` 和 `js/` 資料夾都必須跟 `index.html` 放在同一層，畫面才會有樣式、程式才會執行。
 
