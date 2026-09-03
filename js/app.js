@@ -796,6 +796,7 @@ function bindSheetDragToDismiss(panelId, closeFn) {
 }
 bindSheetDragToDismiss('debug-panel', closeTestPanel);
 bindSheetDragToDismiss('style-panel', closeStylePanel);
+bindSheetDragToDismiss('sheet', closeModal);
 function decorateSpecialTimeName(name) {
   return name ? name.trim() : '';
 }
