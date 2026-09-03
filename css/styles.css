@@ -2073,6 +2073,36 @@ html body.pro-style .dashboard > .label-row > .label .label-odd,html body.pro-st
 body.orbit-booting .dashboard {
   visibility:hidden;
 }
+.dashboard-boot-loader {
+  display:none;
+}
+body.orbit-booting .dashboard-boot-loader {
+  visibility:visible;
+  display:flex;
+  position:absolute;
+  inset:0;
+  align-items:center;
+  justify-content:center;
+  background:linear-gradient(145deg,#2c2c2e,#1c1c1e);
+  border-radius:var(--v31-radius-xl);
+  z-index:5;
+}
+.dashboard-boot-spinner {
+  width:26px;
+  height:26px;
+  border-radius:50%;
+  border:3px solid rgba(255,255,255,.18);
+  border-top-color:rgba(255,255,255,.78);
+  animation:orbit-boot-spin .8s linear infinite;
+}
+@keyframes orbit-boot-spin {
+  to { transform:rotate(360deg); }
+}
+@media (prefers-reduced-motion:reduce) {
+  .dashboard-boot-spinner {
+    animation:none;
+  }
+}
 body.orbit-suppress-list-animation .animate-list {
   animation:none !important;
 }
@@ -5232,30 +5262,25 @@ html body .dashboard > .label-row > .exam-countdown .exam-countdown-date {
   }
 }
 
-/* Keeps the countdown label and date on a single line each, truncating with
-   an ellipsis instead of wrapping — a column flex item with align-items:flex-start
-   and a percentage max-width shrinks to a near-zero content box, which forced
-   the label to break mid-word once the date grew from a single date to a range. */
+/* Event name and date range each render on their own full-width row so long
+   text wraps instead of being cut off with an ellipsis. A column flex item
+   with align-items:flex-start and a percentage max-width shrinks to a
+   near-zero content box, which used to force the label to break mid-word —
+   align-items:stretch plus an explicit width:100% below avoids that. */
 html body .dashboard > .label-row > .exam-countdown .exam-countdown-copy,
 html body.pro-style .dashboard > .label-row > .exam-countdown .exam-countdown-copy {
+  display:flex !important;
+  flex-direction:column !important;
   align-items:stretch !important;
 }
 html body .dashboard > .label-row > .exam-countdown .exam-countdown-label,
-html body .dashboard > .label-row > .exam-countdown .exam-countdown-date {
-  display:block !important;
-  width:100% !important;
-  white-space:nowrap !important;
-  overflow:hidden !important;
-  text-overflow:ellipsis !important;
-  overflow-wrap:normal !important;
-}
-/* Below 480px, pro-style switches the copy block to a row (label and date side
-   by side) instead of stacked — those two now need to share that row and
-   shrink independently instead of one overflowing past the box. */
+html body .dashboard > .label-row > .exam-countdown .exam-countdown-date,
 html body.pro-style .dashboard > .label-row > .exam-countdown .exam-countdown-label,
 html body.pro-style .dashboard > .label-row > .exam-countdown .exam-countdown-date {
-  display:inline-block !important;
-  width:auto !important;
-  flex:1 1 auto !important;
-  min-width:0 !important;
+  display:block !important;
+  width:100% !important;
+  white-space:normal !important;
+  overflow:visible !important;
+  overflow-wrap:anywhere !important;
+  text-overflow:clip !important;
 }
