@@ -1413,6 +1413,8 @@ function cloneSettingsData(data) {
   return JSON.parse(JSON.stringify(data))
 }
 // Transfer backups use short keys and compressed Base64 to stay easy to copy.
+// (Legacy v1 format: JSON -> single-letter keys -> DEFLATE -> Base64, wrapped
+// in a long marker. Kept only so old backups can still be imported.)
 const TRANSFER_KEYS={teacherDB:'a',locationDB:'b',weeklySchedule:'c',bellTimes:'d',breakTimes:'e',countdownEvents:'f',reverseWeek:'h',proAccent:'i',proSecondary:'j',proTertiary:'k',styleSlots:'l',bellRowsDraft:'m',breakRowsDraft:'n',teacherCardsDraft:'o',geminiApiKey:'t',__orbit:'p',app:'q',schema:'r'};
 const TRANSFER_KEYS_REVERSE=Object.fromEntries(Object.entries(TRANSFER_KEYS).map(([key,value])=>[value,key]));
 const TRANSFER_START='===== ORBIT COLOR SETTINGS BACKUP BEGIN =====\n';
@@ -1434,25 +1436,118 @@ function transferBase64ToBytes(value) {
   const binary=atob(value);
   return Uint8Array.from(binary,char=>char.charCodeAt(0))
 }
-async function encodeTransferData(data) {
-  const raw=JSON.stringify(compactTransferValue(data));
-  if (typeof CompressionStream==='function') {
-    const stream=new Blob([raw]).stream().pipeThrough(new CompressionStream('deflate'));
-    const bytes=new Uint8Array(await new Response(stream).arrayBuffer());
-    const encoded=transferBytesToBase64(bytes);
-    return TRANSFER_START+encoded+TRANSFER_END
-  }
-  throw new Error('此裝置不支援壓縮匯出。')
-}
-async function decodeTransferData(text) {
-  const value=String(text||'').trim();
-  const wrapped=value.startsWith(TRANSFER_START)&&value.endsWith(TRANSFER_END);
-  if (!wrapped) throw new Error('請貼上 Orbit Color 課表設定備份。');
+async function decodeTransferDataV1(value) {
   const encoded=value.slice(TRANSFER_START.length,-TRANSFER_END.length).trim();
   if (typeof DecompressionStream!=='function') throw new Error('此裝置不支援壓縮匯入。');
   if (!encoded||!/^[A-Za-z0-9+/=]+$/.test(encoded)) throw new Error('請貼上 Orbit Color 課表設定備份，或只貼上壓縮內容。');
   const stream=new Blob([transferBase64ToBytes(encoded)]).stream().pipeThrough(new DecompressionStream('deflate'));
   return compactTransferValue(JSON.parse(await new Response(stream).text()),true)
+}
+
+// ---- v2 transfer format ----
+// A much shorter, denser format than v1: redundant fields (locationDB, which
+// always mirrors teacherDB's 3rd column) are dropped, remaining structures
+// are flattened into positional arrays (removing per-item key names), the
+// payload is compressed with raw DEFLATE (no zlib header/checksum), and the
+// compressed bytes are encoded with a 91-symbol printable alphabet instead
+// of Base64 - Base64 spends 4 characters per 3 bytes (~1.33 chars/byte),
+// while this alphabet spends under 1.23 bytes/char, so encoded text is
+// roughly a quarter shorter for the same compressed bytes. The wrapping
+// marker is a 4-character magic prefix instead of the old ~90-character
+// banner text.
+const TRANSFER_MAGIC_V2='OB2:';
+const BASE91_ALPHABET="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+,-./:;<=>?@[]^_`{|}~";
+const BASE91_DECODE_MAP=Object.fromEntries([...BASE91_ALPHABET].map((char,index)=>[char,index]));
+function base91Encode(bytes) {
+  let b=0,n=0,out='';
+  for (let i=0;i<bytes.length;i++) {
+    b|=bytes[i]<<n;
+    n+=8;
+    if (n>13) {
+      let v=b&8191;
+      if (v>88) { b>>=13; n-=13; }
+      else { v=b&16383; b>>=14; n-=14; }
+      out+=BASE91_ALPHABET[v%91]+BASE91_ALPHABET[Math.floor(v/91)]
+    }
+  }
+  if (n>0) {
+    out+=BASE91_ALPHABET[b%91];
+    if (n>7||b>90) out+=BASE91_ALPHABET[Math.floor(b/91)]
+  }
+  return out
+}
+function base91Decode(str) {
+  const bytes=[];
+  let b=0,n=0,v=-1;
+  for (let i=0;i<str.length;i++) {
+    const c=BASE91_DECODE_MAP[str[i]];
+    if (c===undefined) continue;
+    if (v<0) { v=c; continue }
+    v+=c*91;
+    b|=v<<n;
+    n+=(v&8191)>88?13:14;
+    while (n>=8) { bytes.push(b&255); b>>=8; n-=8 }
+    v=-1
+  }
+  if (v>=0) bytes.push((b|(v<<n))&255);
+  return Uint8Array.from(bytes)
+}
+function encodeTransferPayloadV2(data) {
+  const teacherEntries=Object.entries(data.teacherDB||{}).map(([key,value])=>[key,value[0]||'',value[1]||'',value[2]||'']);
+  const weeklyDays=[0,1,2,3,4,5,6].map(day=>(data.weeklySchedule||{})[day]||[]);
+  const breakEntries=(data.breakTimes||[]).map(item=>[item.name||'',item.start||'',item.end||'']);
+  const countdownEntries=(data.countdownEvents||[]).map(item=>[item.name||'',item.startDate||'',item.endDate||'']);
+  const styleSlotEntries=(data.styleSlots||[]).map(slot=>[slot.name||'',slot.primary||'',slot.secondary||'']);
+  return [data.teacherOrder||[],teacherEntries,weeklyDays,data.bellTimes||[],breakEntries,countdownEntries,data.reverseWeek?1:0,data.proAccent,data.proSecondary,data.proTertiary,styleSlotEntries,data.geminiApiKey||'']
+}
+function decodeTransferPayloadV2(array) {
+  const [teacherOrder,teacherEntries,weeklyDays,bellTimes,breakEntries,countdownEntries,reverseWeekFlag,proAccent,proSecondary,proTertiary,styleSlotEntries,geminiApiKey]=array;
+  const teacherDB={},locationDB={};
+  (teacherEntries||[]).forEach(([key,subject,teacher,location])=> {
+    teacherDB[key]=[subject,teacher,location];
+    locationDB[key]=location
+  });
+  const weeklySchedule={};
+  [0,1,2,3,4,5,6].forEach(day=> { weeklySchedule[day]=(weeklyDays||[])[day]||[] });
+  const breakTimes=(breakEntries||[]).map(([name,start,end])=>({name,start,end}));
+  const countdownEvents=(countdownEntries||[]).map(([name,startDate,endDate])=>({name,startDate,endDate}));
+  const styleSlots=(styleSlotEntries||[]).map(([name,primary,secondary])=>({name,primary,secondary}));
+  return {
+    teacherDB,teacherOrder:teacherOrder||[],locationDB,weeklySchedule,bellTimes:bellTimes||[],breakTimes,countdownEvents,
+    reverseWeek:!!reverseWeekFlag,proAccent,proSecondary,proTertiary,styleSlots,geminiApiKey,
+    __orbit:{app:ORBIT_APP_ID,schema:ORBIT_STORAGE_SCHEMA}
+  }
+}
+async function encodeTransferDataV2(data) {
+  const raw=JSON.stringify(encodeTransferPayloadV2(data));
+  const stream=new Blob([raw]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+  const bytes=new Uint8Array(await new Response(stream).arrayBuffer());
+  return TRANSFER_MAGIC_V2+base91Encode(bytes)
+}
+async function decodeTransferDataV2(value) {
+  const encoded=value.slice(TRANSFER_MAGIC_V2.length).trim();
+  if (!encoded) throw new Error('請貼上 Orbit Color 課表設定備份。');
+  const stream=new Blob([base91Decode(encoded)]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  const array=JSON.parse(await new Response(stream).text());
+  if (!Array.isArray(array)) throw new Error('請貼上 Orbit Color 課表設定備份。');
+  return decodeTransferPayloadV2(array)
+}
+async function encodeTransferData(data) {
+  if (typeof CompressionStream!=='function') throw new Error('此裝置不支援壓縮匯出。');
+  return encodeTransferDataV2(data)
+}
+async function decodeTransferData(text) {
+  const value=String(text||'').trim();
+  if (value.startsWith(TRANSFER_MAGIC_V2)) {
+    if (typeof DecompressionStream!=='function') throw new Error('此裝置不支援壓縮匯入。');
+    return decodeTransferDataV2(value)
+  }
+  const wrapped=value.startsWith(TRANSFER_START)&&value.endsWith(TRANSFER_END);
+  if (wrapped) {
+    if (typeof DecompressionStream!=='function') throw new Error('此裝置不支援壓縮匯入。');
+    return decodeTransferDataV1(value)
+  }
+  throw new Error('請貼上 Orbit Color 課表設定備份。')
 }
 function normalizeSettingsData(raw,{requireMarker=false}={}) {
   if (!raw || typeof raw !== 'object') throw new Error('設定文字必須是 JSON 物件。');
