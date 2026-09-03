@@ -1421,9 +1421,11 @@ function cloneSettingsData(data) {
 // of Base64 - Base64 spends 4 characters per 3 bytes (~1.33 chars/byte),
 // while this alphabet spends under 1.23 bytes/char, so encoded text is
 // roughly a quarter shorter for the same compressed bytes. The wrapping
-// marker is a short, human-readable bracketed tag instead of the old
-// ~90-character banner text, so a backup is still recognizable at a glance.
+// marker is a short, human-readable pair of bracketed start/end tags
+// instead of the old ~90-character banner text, so a backup's boundaries
+// are still obvious to a user scanning or pasting the text.
 const TRANSFER_MAGIC_V2='[ORBIT]';
+const TRANSFER_MAGIC_V2_END='[/ORBIT]';
 const BASE91_ALPHABET="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+,-./:;<=>?@[]^_`{|}~";
 const BASE91_DECODE_MAP=Object.fromEntries([...BASE91_ALPHABET].map((char,index)=>[char,index]));
 function base91Encode(bytes) {
@@ -1490,10 +1492,10 @@ async function encodeTransferDataV2(data) {
   const raw=JSON.stringify(encodeTransferPayloadV2(data));
   const stream=new Blob([raw]).stream().pipeThrough(new CompressionStream('deflate-raw'));
   const bytes=new Uint8Array(await new Response(stream).arrayBuffer());
-  return TRANSFER_MAGIC_V2+base91Encode(bytes)
+  return TRANSFER_MAGIC_V2+base91Encode(bytes)+TRANSFER_MAGIC_V2_END
 }
 async function decodeTransferDataV2(value) {
-  const encoded=value.slice(TRANSFER_MAGIC_V2.length).trim();
+  const encoded=value.slice(TRANSFER_MAGIC_V2.length,-TRANSFER_MAGIC_V2_END.length).trim();
   if (!encoded) throw new Error('請貼上 Orbit Color 課表設定備份。');
   const stream=new Blob([base91Decode(encoded)]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
   const array=JSON.parse(await new Response(stream).text());
@@ -1506,7 +1508,7 @@ async function encodeTransferData(data) {
 }
 async function decodeTransferData(text) {
   const value=String(text||'').trim();
-  if (!value.startsWith(TRANSFER_MAGIC_V2)) throw new Error('請貼上 Orbit Color 課表設定備份。');
+  if (!value.startsWith(TRANSFER_MAGIC_V2)||!value.endsWith(TRANSFER_MAGIC_V2_END)) throw new Error('請貼上 Orbit Color 課表設定備份。');
   if (typeof DecompressionStream!=='function') throw new Error('此裝置不支援壓縮匯入。');
   return decodeTransferDataV2(value)
 }
