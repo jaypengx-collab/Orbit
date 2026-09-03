@@ -1,24 +1,6 @@
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 * {
   -webkit-tap-highlight-color:transparent;
   box-sizing:border-box;
@@ -116,7 +98,6 @@ body.editor-open .top-actions {
 }
 
 
-
 .break-progress-wrap.is-class .break-progress-bar {
   background:var(--ok);
 }
@@ -133,8 +114,6 @@ body.editor-open .top-actions {
   font-weight:600;
   opacity:.8;
 }
-
-
 
 
 .nav-item.active {
@@ -3000,23 +2979,6 @@ body.pro-style .exam-countdown {
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 body.pro-style .now-stack,body.pro-style #schedule-list {
   overflow-x:hidden !important;
 }
@@ -3041,160 +3003,6 @@ body.pro-style .exam-countdown-value {
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-body:not(.pro-style)::before {
-  content:"";
-  position:fixed;
-  inset:0;
-  pointer-events:none;
-  background:linear-gradient(110deg,rgba(255,255,255,.055),transparent 32%),repeating-linear-gradient(90deg,rgba(255,255,255,.018) 0 1px,transparent 1px 76px);
-  mask-image:linear-gradient(180deg,#000,transparent 82%);
-  z-index:-1;
-}
-body:not(.pro-style) .dashboard {
-  background:linear-gradient(145deg,rgba(255,255,255,.15),rgba(255,255,255,.065) 56%,rgba(10,132,255,.09)) !important;
-  border:1px solid rgba(255,255,255,.16) !important;
-  box-shadow:0 22px 56px rgba(0,0,0,.34),0 0 42px rgba(10,132,255,.12),inset 0 1px 0 rgba(255,255,255,.2) !important;
-  backdrop-filter:blur(24px) saturate(145%);
-  -webkit-backdrop-filter:blur(24px) saturate(145%);
-  overflow:visible !important;
-  isolation:isolate;
-}
-body:not(.pro-style) .dashboard::after {
-  content:"";
-  position:absolute;
-  inset:0;
-  border-radius:inherit;
-  pointer-events:none;
-  z-index:0;
-  background:linear-gradient(125deg,rgba(255,255,255,.11),transparent 36%),radial-gradient(circle at 92% 110%,rgba(88,86,214,.13),transparent 34%);
-}
-body:not(.pro-style) .dashboard > * {
-  position:relative;
-  z-index:1;
-}
-body:not(.pro-style) .dashboard .label-row {
-  z-index:10 !important;
-  isolation:isolate;
-  pointer-events:auto !important;
-}
-body:not(.pro-style) .dashboard .top-actions,body:not(.pro-style) .dashboard #btn-menu.top-action-btn,body:not(.pro-style) .dashboard .top-actions-menu {
-  isolation:isolate;
-  pointer-events:auto !important;
-}
-body:not(.pro-style) .now-stack,body:not(.pro-style) .time-card,body:not(.pro-style) .next-box {
-  background:rgba(7,16,31,.38) !important;
-  border-color:rgba(255,255,255,.12) !important;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 8px 24px rgba(0,0,0,.12) !important;
-  backdrop-filter:blur(14px) saturate(135%);
-  -webkit-backdrop-filter:blur(14px) saturate(135%);
-}
-body:not(.pro-style) .title-now {
-  text-shadow:0 8px 24px rgba(0,0,0,.28);
-}
-body:not(.pro-style) .dashboard-class-label {
-  background:rgba(10,132,255,.15) !important;
-  border-color:rgba(100,181,255,.24) !important;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.1);
-}
-body:not(.pro-style) .timer-badge {
-  background:linear-gradient(135deg,rgba(10,132,255,.28),rgba(88,86,214,.22)) !important;
-  border-color:rgba(100,181,255,.28) !important;
-  box-shadow:0 10px 26px rgba(10,132,255,.16),inset 0 1px 0 rgba(255,255,255,.16) !important;
-}
-body:not(.pro-style) .nav-bar {
-  background:rgba(255,255,255,.075) !important;
-  border:1px solid rgba(255,255,255,.13) !important;
-  box-shadow:0 14px 34px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.13) !important;
-  backdrop-filter:blur(18px) saturate(145%);
-  -webkit-backdrop-filter:blur(18px) saturate(145%);
-}
-body:not(.pro-style) .nav-item.active {
-  background:linear-gradient(135deg,#64B5FF,#7C78E8) !important;
-  color:#06101E !important;
-  box-shadow:0 8px 22px rgba(10,132,255,.24),inset 0 1px 0 rgba(255,255,255,.38) !important;
-}
-body:not(.pro-style) .row {
-  background:linear-gradient(135deg,rgba(255,255,255,.105),rgba(255,255,255,.045)) !important;
-  border-color:rgba(255,255,255,.1) !important;
-  box-shadow:0 10px 25px rgba(0,0,0,.16),inset 0 1px 0 rgba(255,255,255,.08) !important;
-  backdrop-filter:blur(16px) saturate(135%);
-  -webkit-backdrop-filter:blur(16px) saturate(135%);
-}
-body:not(.pro-style) .row.is-next {
-  background:linear-gradient(135deg,rgba(10,132,255,.2),rgba(88,86,214,.12)) !important;
-  border-color:rgba(100,181,255,.3) !important;
-  box-shadow:0 12px 30px rgba(10,132,255,.12),inset 0 1px 0 rgba(255,255,255,.1) !important;
-}
-body:not(.pro-style) .row.is-next .period-badge {
-  background:linear-gradient(135deg,#0A84FF,#7C78E8) !important;
-  color:#fff !important;
-  border-color:transparent !important;
-  box-shadow:0 6px 16px rgba(10,132,255,.2);
-}
-body:not(.pro-style) .break-progress-bar {
-  background:linear-gradient(90deg,#0A84FF,#64B5FF) !important;
-}
-body:not(.pro-style) .top-action-btn.active {
-  background:linear-gradient(135deg,#64B5FF,#7C78E8) !important;
-  color:#06101E !important;
-  box-shadow:0 8px 20px rgba(10,132,255,.25),inset 0 1px 0 rgba(255,255,255,.34) !important;
-}
-body:not(.pro-style) .dashboard .top-actions {
-  position:relative !important;
-  z-index:20 !important;
-  pointer-events:auto !important;
-}
-body:not(.pro-style) .dashboard .top-actions.open .top-actions-menu {
-  opacity:1 !important;
-  visibility:visible !important;
-  pointer-events:auto !important;
-  transform:translateY(0) scale(1) !important;
-}
-body:not(.pro-style) .dashboard #btn-menu.top-action-btn {
-  position:relative !important;
-  width:36px !important;
-  height:36px !important;
-  min-width:36px !important;
-  min-height:36px !important;
-  border-radius:13px !important;
-  background:linear-gradient(145deg,#3A9BFF,#5368D8) !important;
-  border:1px solid rgba(255,255,255,.3) !important;
-  box-shadow:0 9px 22px rgba(10,132,255,.3),inset 0 1px 0 rgba(255,255,255,.38) !important;
-  transition:none !important;
-  z-index:22 !important;
-  pointer-events:auto !important;
-}
-body:not(.pro-style) .dashboard .top-actions-menu {
-  opacity:0 !important;
-  visibility:hidden !important;
-  pointer-events:none !important;
-  transform:translateY(-8px) scale(.94) !important;
-  z-index:21 !important;
-  top:42px !important;
-}
-
-
-
-
-
-@media (prefers-reduced-motion:no-preference) {
-  body:not(.pro-style) .dashboard {
-    animation:none !important;
-    opacity:1 !important;
-  }
-}
 .dashboard #btn-menu.top-action-btn {
   box-shadow:0 8px 20px rgba(10,132,255,.26),0 2px 8px rgba(0,0,0,.18) !important;
   font-size:12px !important;
@@ -3222,11 +3030,6 @@ body.editor-open .dashboard {
 body.editor-open .editor-sheet {
   z-index:1000000 !important;
 }
-body:not(.pro-style) {
-  background:radial-gradient(circle at 8% -12%,rgba(10,132,255,.22),transparent 34%),radial-gradient(circle at 94% 18%,rgba(88,86,214,.16),transparent 30%),linear-gradient(165deg,#05070C 0%,#0B1220 56%,#070A12 100%);
-  --day-today-border:rgba(50,215,75,.6);
-  --day-tomorrow-border:rgba(255,214,10,.65);
-}
 .nav-item.is-today {
   border:1px solid rgba(50,215,75,.6);
   color:var(--txt);
@@ -3243,9 +3046,6 @@ body.pro-style .nav-item.is-today,body.pro-style .nav-item.is-tomorrow {
 body.pro-style .row.is-now .period-badge,body.pro-style .status-dot.status-active {
   background:var(--pro-tertiary) !important;
 }
-
-
-
 
 
 .style-panel {
@@ -3498,11 +3298,6 @@ body.pro-style .nav-item.is-tomorrow:not(.active) {
   background:var(--orbit-coral) !important;
   color:#28100c !important;
 }
-
-
-
-
-
 
 
 .style-library-label {
