@@ -496,12 +496,10 @@ function applyProAccent(data=applicationData) {
   document.body.style.setProperty('--pro-secondary-text',getReadableTextColor(secondary));
   document.body.style.setProperty('--pro-accent-readable',getReadableSurfaceColor(accent));
   document.body.style.setProperty('--pro-secondary-readable',getReadableSurfaceColor(secondary));
-  document.body.classList.remove('pro-surface-flat','pro-surface-transparent','pro-surface-glass')
 }
 // Style-panel changes are previewed first, then committed through the save pipeline.
 // Switches to the Orbit Color visual skin.
 function setStyleMode() {
-  document.body.classList.remove('light-mode','pro-style','pro-surface-flat','pro-surface-transparent','pro-surface-glass');
   document.body.classList.add('pro-style');
   applyProAccent();
   renderStylePanel();
