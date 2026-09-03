@@ -489,12 +489,15 @@ async function closeEditor(force) {
   const sheet = document.getElementById('editor-sheet');
 
   if (typeof isOcrProcessing !== 'undefined' && isOcrProcessing) {
-    const toast = document.getElementById('save-toast');
-    if (toast) {
-      toast.textContent = 'AI 辨識中，請稍候再關閉。';
-      toast.classList.add('show');
-      setTimeout(() => toast.classList.remove('show'), 2000);
-    }
+    setEditorConfirmContent(
+      'AI 辨識中',
+      'Gemini 正在辨識課表圖片，請稍候辨識完成後再關閉，否則辨識結果將會遺失。',
+      '',
+      '知道了',
+      hideEditorDiscardConfirm,
+      null
+    );
+    showEditorConfirmSheet();
     return
   }
 

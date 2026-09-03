@@ -131,7 +131,7 @@ Interpret the timetable visually and use your best judgment to reconstruct its s
       lastError = new Error(`AI 辨識請求失敗（${response.status}）：${message}`);
       const retryableStatus = response.status === 404 || response.status === 429 || response.status === 503 || response.status >= 500;
       if (!retryableStatus) throw lastError;
-      report(`模型（${model}）暫時無法使用，準備改用下一個模型…`);
+      report(`模型（${model}）暫時無法使用（${response.status}：${message}），準備改用下一個模型…`);
     }
 
     throw lastError || new Error('AI 辨識請求失敗：沒有可用的模型。');
