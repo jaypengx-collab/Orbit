@@ -737,6 +737,65 @@ function syncTestToolbar()  {
   btn.classList.toggle('manual-test-on',!!window.MANUALLY_TEST);
   btn.classList.toggle('sim-running',!!window.IS_SIMULATING)
 }
+// Wires the grab handle on a bottom sheet (test/style panel) to an actual
+// swipe-down-to-dismiss gesture, matching the affordance the handle implies.
+// closeFn is called on a successful dismiss so guards like the style panel's
+// unsaved-changes confirm still run; if it declines to close (panel keeps
+// the 'show' class), the sheet snaps back open instead of staying hidden.
+function bindSheetDragToDismiss(panelId, closeFn) {
+  const panel = document.getElementById(panelId);
+  const handle = panel && panel.querySelector('.test-panel-handle');
+  if (!panel || !handle) return;
+  let dragging = false;
+  let startY = 0;
+  const threshold = 90;
+  const settle = (open) => {
+    panel.style.transition = open
+      ? 'transform .35s cubic-bezier(.16,1,.3,1)'
+      : 'transform .22s cubic-bezier(.4,0,1,1)';
+    panel.style.transform = open ? 'translateY(0)' : `translateY(${panel.offsetHeight + 40}px)`;
+    setTimeout(() => {
+      panel.style.transition = '';
+      panel.style.transform = '';
+    }, open ? 360 : 230);
+  };
+  const move = (event) => {
+    if (!dragging) return;
+    const deltaY = Math.max(0, event.clientY - startY);
+    panel.style.transform = `translateY(${deltaY}px)`;
+  };
+  const finish = (event) => {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove('is-dragging');
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', finish);
+    window.removeEventListener('pointercancel', finish);
+    if (handle.hasPointerCapture?.(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+    const deltaY = Math.max(0, event.clientY - startY);
+    if (deltaY <= threshold) { settle(true); return; }
+    panel.style.transition = 'transform .22s cubic-bezier(.4,0,1,1)';
+    panel.style.transform = `translateY(${panel.offsetHeight + 40}px)`;
+    setTimeout(() => {
+      closeFn();
+      requestAnimationFrame(() => settle(panel.classList.contains('show')));
+    }, 220);
+  };
+  handle.addEventListener('pointerdown', (event) => {
+    if (event.button !== undefined && event.button !== 0) return;
+    event.preventDefault();
+    dragging = true;
+    startY = event.clientY;
+    panel.style.transition = 'none';
+    handle.classList.add('is-dragging');
+    handle.setPointerCapture?.(event.pointerId);
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+  });
+}
+bindSheetDragToDismiss('debug-panel', closeTestPanel);
+bindSheetDragToDismiss('style-panel', closeStylePanel);
 function decorateSpecialTimeName(name) {
   return name ? name.trim() : '';
 }
