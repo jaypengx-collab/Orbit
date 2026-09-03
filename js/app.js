@@ -812,7 +812,9 @@ function setToolHubState(open) {
   if (!actions||!btn) return;
   actions.classList.toggle('open',!!open);
   btn.setAttribute('aria-expanded',open?'true':'false');
-  btn.textContent=open?'×':'◈';
+  const label=open?'關閉工具':'開啟工具';
+  btn.setAttribute('aria-label',label);
+  btn.setAttribute('title',label);
 }
 function toggleActionMenu() {
   const actions=document.querySelector('.top-actions');
@@ -2106,7 +2108,13 @@ function addCountdownEventRow(event={name:'',startDate:'',endDate:''},index) {
   const row=document.createElement('div');
   row.className='countdown-event-row';
   row.innerHTML='<div class="countdown-event-header"><span class="countdown-event-title">倒數活動</span><div class="countdown-event-actions"><span class="countdown-drag-handle" role="button" tabindex="0" title="拖曳排序" aria-label="拖曳排序">☰</span><label class="order-position-label">順序<input class="order-position" type="number" min="1" inputmode="numeric" aria-label="倒數活動順序"></label><button type="button" class="countdown-event-remove" aria-label="移除倒數">×</button></div></div><div class="countdown-event-fields"><label>活動名稱<input class="editor-input countdown-event-name" maxlength="80" placeholder="例如：116 學測"></label><label class="countdown-event-daterange-label">日期<div class="countdown-date-range"><input class="editor-input countdown-event-start" type="date" aria-label="開始日期"><span class="time-sep">→</span><input class="editor-input countdown-event-end" type="date" aria-label="結束日期"></div></label></div>';
-  row.querySelector('.countdown-event-name').value=event.name;
+  const nameInput=row.querySelector('.countdown-event-name');
+  const titleLabel=row.querySelector('.countdown-event-title');
+  nameInput.value=event.name;
+  if (event.name) titleLabel.textContent=event.name;
+  nameInput.addEventListener('input',()=> {
+    titleLabel.textContent=nameInput.value.trim()||'倒數活動';
+  });
   const startInput=row.querySelector('.countdown-event-start');
   const endInput=row.querySelector('.countdown-event-end');
   startInput.value=event.startDate||event.date||'';

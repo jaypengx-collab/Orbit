@@ -4359,6 +4359,11 @@ body.pro-style .time-card.v3-11-next-module .timer-container {
   font-size:12px;
   font-weight:800;
   color:var(--orbit-cyan);
+  flex:1 1 auto;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
 }
 .countdown-event-fields label {
   display:block;
