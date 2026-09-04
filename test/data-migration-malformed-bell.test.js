@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { loadApp } from './helpers/loadApp.js';
+import { state } from '../src/state.js';
 
 describe('loadData() with a malformed bell time', () => {
-  it('rejects the whole payload and falls back to defaults, rather than a partially-salvaged schedule', () => {
+  it('rejects the whole payload and falls back to defaults, rather than a partially-salvaged schedule', async () => {
     localStorage.setItem(
       'classFocusData',
       JSON.stringify({
@@ -12,8 +13,7 @@ describe('loadData() with a malformed bell time', () => {
         bellTimes: [['not-a-time', '08:50']]
       })
     );
-    expect(() => loadApp()).not.toThrow();
-    const data = window.__orbitTest.getApplicationData();
-    expect(data.bellTimes[0][0]).toBe('08:00'); // the built-in default's first period
+    await loadApp();
+    expect(state.applicationData.bellTimes[0][0]).toBe('08:00'); // the built-in default's first period
   });
 });

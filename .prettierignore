@@ -1,0 +1,7 @@
+node_modules/
+dist/
+# Pre-existing markup/styles kept in their original formatting - a full
+# reformat is a large, unreviewable diff with no functional benefit, and
+# risks subtly changing whitespace text nodes the JS reads/writes.
+index.html
+css/styles.css

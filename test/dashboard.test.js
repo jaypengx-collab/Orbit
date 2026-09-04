@@ -2,10 +2,18 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { loadApp } from './helpers/loadApp.js';
 import { seedLocalStorage } from './helpers/fixtureData.js';
 
+// Deliberately *not* a static top-level import of src/state.js: static
+// imports resolve before beforeAll() runs, which would evaluate state.js's
+// eager `applicationData: loadData()` before seedLocalStorage() below has
+// written anything - state must come from a dynamic import performed after
+// seeding (loadApp() already imports src/main.js -> ... -> state.js by
+// then, so this just returns that same, correctly-initialized module).
+let state;
+
 // Monday, ISO week 2 of 2024 (even -> '雙' week with reverseWeek: false).
 // Pinning the real system date is required because getWeekType() calls
 // `new Date()` directly - Test Mode only overrides day-of-week and
-// time-of-day (see js/app.js update(), which does `now.setHours(...)`
+// time-of-day (see src/dashboard.js's update(), which does `now.setHours(...)`
 // on top of a fresh `new Date()`), never the calendar date itself.
 const FIXED_MONDAY = new Date('2024-01-08T08:00:00');
 
@@ -20,12 +28,13 @@ function text(id) {
   return document.getElementById(id).innerText;
 }
 
-describe('dashboard update() against the real, unmodified app.js', () => {
-  beforeAll(() => {
+describe('dashboard update() against the real app', () => {
+  beforeAll(async () => {
     vi.useFakeTimers();
     vi.setSystemTime(FIXED_MONDAY);
     seedLocalStorage();
-    loadApp();
+    await loadApp();
+    ({ state } = await import('../src/state.js'));
   });
 
   afterAll(() => {
@@ -60,7 +69,7 @@ describe('dashboard update() against the real, unmodified app.js', () => {
     expect(text('now-name')).toBe('放學時間');
     // Wednesday (day 3) is the next day with any classes in the fixture;
     // Tuesday (day 2) has none.
-    expect(window.__orbitTest.getViewDay()).toBe(3);
+    expect(state.viewDay).toBe(3);
   });
 
   it('shows "尚未開始" before the first period starts', () => {

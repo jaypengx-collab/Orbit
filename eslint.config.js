@@ -7,10 +7,11 @@ export default [
     ignores: ['dist/**', 'node_modules/**']
   },
   {
-    files: ['js/**/*.js', 'src/**/*.js'],
+    files: ['src/**/*.js'],
+    ignores: ['src/**/*.test.js'],
     languageOptions: {
       ecmaVersion: 2022,
-      sourceType: 'script',
+      sourceType: 'module',
       globals: {
         ...globals.browser
       }

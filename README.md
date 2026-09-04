@@ -38,21 +38,30 @@ Orbit AI 是一個跑在瀏覽器裡的課表儀表板。它不只是把課表�
 
 ## 安裝與啟動
 
-Orbit AI 沒有任何建置流程——沒有 `npm install`，沒有打包步驟，`index.html`、`css/styles.css`、`js/app.js` 這三個檔案本身就是完整的應用程式。
+Orbit AI 是純前端專案，執行期完全沒有伺服器、沒有資料庫——但開發期用 [Vite](https://vitejs.dev/) 當建置工具：把 `src/` 底下十幾個 ES module 打包、壓縮成瀏覽器可以直接載入的靜態檔案，並提供本機開發伺服器與測試跑器。
 
-**線上使用**：直接開 [jaypengx-collab.github.io/Orbit](https://jaypengx-collab.github.io/Orbit/)，什麼都不用裝。這個網址由 GitHub Pages 提供，`main` 分支一有更新，`.github/workflows/static.yml` 就會自動重新部署整個 repository。
+**線上使用**：直接開 [jaypengx-collab.github.io/Orbit](https://jaypengx-collab.github.io/Orbit/)，什麼都不用裝。這個網址由 GitHub Pages 提供；`main` 分支一有更新，`.github/workflows/static.yml` 就會安裝依賴、跑過整個測試套件、建置一份正式版，測試沒過就不會部署。
 
-**本機執行**：
+**本機開發**：
 
 ```bash
 git clone https://github.com/jaypengx-collab/Orbit.git
 cd Orbit
-python -m http.server 8843
+npm install
+npm run dev
 ```
 
-再開瀏覽器連到 `http://localhost:8843/`。用本機伺服器而不是直接雙擊 `index.html`，是因為部分瀏覽器對 `file://` 協定下的 `localStorage` 與資源載入行為比較保守，用伺服器開比較不會踩雷。
+再開瀏覽器連到終端機顯示的網址（預設 `http://localhost:5173/`）。`npm run dev` 開的是 Vite 的開發伺服器，存檔就會即時更新畫面。
 
-不管哪種方式，`css/` 和 `js/` 資料夾都必須跟 `index.html` 放在同一層，畫面才會有樣式、程式才會執行。
+**其他常用指令**：
+
+```bash
+npm test           # 跑 Vitest 測試套件
+npm run build       # 建置正式版到 dist/
+npm run preview     # 本機預覽 dist/ 建置結果
+npm run lint         # ESLint 檢查 src/
+npm run format       # Prettier 格式化 src/、test/ 等（不含 index.html／css/styles.css，見下）
+```
 
 ---
 
@@ -90,7 +99,7 @@ python -m http.server 8843
 
 ## 時間模擬
 
-因為主畫面永遠是照「現在」在算，要測試「第三節下課前一分鐘會長怎樣」這種情境，總不能真的等到那個時間。時間模擬面板讓你直接指定任意星期、任意時間，整個畫面（包含進度條、倒數、下一堂預告、特殊時段判斷）就會照那個假設的時間重新算一次並顯示出來，離開模擬模式後才會恢復用真實時間。這也是這個專案在沒有自動化測試的情況下，用來手動驗證課表邏輯是否正確的主要方法。
+因為主畫面永遠是照「現在」在算，要測試「第三節下課前一分鐘會長怎樣」這種情境，總不能真的等到那個時間。時間模擬面板讓你直接指定任意星期、任意時間，整個畫面（包含進度條、倒數、下一堂預告、特殊時段判斷）就會照那個假設的時間重新算一次並顯示出來，離開模擬模式後才會恢復用真實時間。這也是這個專案手動驗證課表邏輯的主要方法；`npm test` 跑的自動化測試套件則是用同一組模擬旗標（`window.MANUALLY_TEST`／`TEST_DAY`／`TEST_TIME_SEC`）在瀏覽器模擬環境（jsdom）裡自動跑過一輪邊界時間點，兩者互補——時間模擬面板適合互動式手動檢查，測試套件負責擋住回歸。
 
 ---
 
@@ -136,26 +145,31 @@ Gemini API Key 刻意存在另一把獨立的鍵（`orbitAiGeminiApiKey`），�
 
 ## 程式怎麼組織的
 
-專案只有三個會被瀏覽器讀取的檔案：`index.html`（畫面標記）、`css/styles.css`（樣式）、`js/app.js`（所有邏輯，約四千五百行）。這不是偷懶,是刻意的——早期版本把邏輯拆成十幾個 `<script>` 各自對應一個功能，每次載入都要發十幾個 HTTP 請求，啟動時甚至還會用同步請求把每個檔案重新抓一次來算版本雜湊，首次打開明顯卡頓；後來合併成一個檔案、版本雜湊計算也改成非同步，啟動速度才真正解決。
-
-`js/app.js` 裡沒有模組系統，所有函式跟變數共用同一個全域作用域，靠檔案內部的先後順序保證誰用得到誰。原本各自獨立的檔案現在變成用註解標出的區塊，順序保留原本的相依關係：
+瀏覽器實際讀到的仍然只有靜態檔案：`index.html`（畫面標記）、`css/styles.css`（樣式）、以及建置後的一支 JS 檔。差別是來源碼不再是一個四千五百行的檔案——`js/app.js` 已經拆成 `src/` 底下十幾個真正的 ES module，用 `import`/`export` 明確表達彼此的相依關係，由 Vite 在建置時打包、壓縮：
 
 ```text
-data.js            資料的讀寫、驗證、正規化，localStorage 存取
-schedule.js        把設定資料組成「執行中課表」，星期／週次計算
-appearance.js      主題色與深淺色模式
-dashboard.js        主畫面即時更新的核心，含 update() 狀態機
-editor-backup.js    備份匯出／匯入、v2 傳輸格式的編碼解碼
-editor-core.js      課表編輯器主流程、未儲存變更偵測
-editor-teachers.js  教師／課程清單編輯
-editor-schedule.js  每週排課介面
-dashboard-render.js 主畫面實際的 DOM 渲染
-gemini-ocr.js       圖片前處理與 Gemini API 呼叫
-bootstrap.js        啟動流程：讀資料、建課表、開每秒一次的計時器
-testsim-runtime.js  時間模擬狀態機
+src/data.js            資料的讀寫、驗證、正規化，localStorage 存取
+src/schedule.js        把設定資料組成「執行中課表」，星期／週次計算
+src/appearance.js      主題色與深淺色模式
+src/dashboard.js       主畫面即時更新的核心，含 update() 狀態機
+src/editor-backup.js   備份匯出／匯入、v2 傳輸格式的編碼解碼
+src/editor-core.js     課表編輯器主流程、未儲存變更偵測
+src/editor-teachers.js 教師／課程清單編輯
+src/editor-schedule.js 每週排課介面
+src/dashboard-render.js 主畫面實際的 DOM 渲染
+src/gemini-ocr.js      圖片前處理與 Gemini API 呼叫
+src/bootstrap.js       啟動流程：讀資料、建課表、開每秒一次的計時器
+src/testsim-runtime.js 時間模擬狀態機
+src/state.js           跨模組共用的可變狀態（見下）
+src/main.js            進入點，依序 import 以上每個模組
 ```
 
-這個順序不是隨便排的：`bootstrap.js` 一定要在其他功能模組都定義完之後才能執行（它會呼叫前面定義的函式），而它自己又要排在 `testsim-runtime.js` 之前，因為時間模擬需要覆蓋掉 bootstrap 啟動的那個計時器。
+每個檔名跟職責都直接延續自舊版單檔案裡原本用註解標出的區塊，只是現在的相依關係是編譯器會檢查的 `import`/`export`，不再是「檔案內先後順序」這種隱性約定。
+
+有兩個地方是模組化時特別處理過的，改程式碼前值得知道：
+
+- **`src/state.js` 是共用的可變狀態容器**。舊版裡有將近二十個變數（`viewDay`、`pendingEditorImportData`、`applicationData`…）會被好幾個不同區塊直接寫入——這在同一個全域作用域裡沒問題，但 ES module 的 `import` 绑定是唯讀的，沒辦法讓另一個模組直接賦值。所以這些變數集中放在 `state.js` 匯出的單一物件裡，各模組 `import { state } from './state.js'` 之後用 `state.viewDay = ...` 這種屬性寫入方式修改，而不是各自擁有自己的一份。新增需要跨模組共用、且會被多處寫入的狀態，照這個模式加進 `state.js`，不要另外宣告一個模組層級的 `let`。
+- **`window.update()` 是刻意保留的動態呼叫**。`testsim-runtime.js` 會在執行期把 `window.update` 換成一個包了時間模擬邏輯的包裝函式（外層再呼叫原本 `dashboard.js` 定義的 `update()`）。因為 ES module 的 `import` 在編譯時就固定綁定來源，其他模組如果直接 `import { update } from './dashboard.js'` 再呼叫，就會呼叫到還沒被換掉的舊版本，時間模擬的行為會整個失效。所以除了 `dashboard.js` 自己之外，任何地方要觸發重新渲染都呼叫 `window.update()`，不要 `import` 這個名字。同樣道理也適用於 `window.openTestPanel`（`testsim-runtime.js` 用 `window[name] = ...` 動態換過一次）。
 
 ---
 
@@ -187,13 +201,14 @@ testsim-runtime.js  時間模擬狀態機
 
 ## 修改這個專案時的注意事項
 
-這個專案的取捨很單純：**零依賴、複製資料夾就能跑**是刻意選擇的架構，不是還沒來得及導入工具鏈。改動程式碼時，這幾件事值得先知道：
+執行期沒有框架、沒有後端，這點沒變；開發期用 Vite + Vitest + ESLint/Prettier，改動程式碼時這幾件事值得先知道：
 
-- 不要為了方便而加回 `npm`／打包工具／前端框架，也不要把 `js/app.js` 拆回多個 `<script>` 標籤——這正是先前解決過的效能問題，拆回去等於把卡頓帶回來。
-- 新功能該放進語意最接近的既有區塊（見上方〈程式怎麼組織的〉的對照表），並注意區塊順序——後面的區塊可以用前面定義好的東西，反過來不行。
-- 任何要寫進 `localStorage` 的新資料欄位，都應該比照現有 `data.js` 區塊裡 `normalize*` / `validate*` / `sanitize*` 系列函式的寫法：先驗證再存，並考慮舊資料讀進來時不要爆炸。
-- 沒有自動化測試套件，改到課表計算或倒數邏輯之後，用時間模擬面板實際切換幾個邊界時間點（節與節交界、午休前後、當天最後一節下課後）確認行為符合預期，是目前唯一可靠的驗證方式。
+- 不要加前端框架（React/Vue 之類）——Vite 在這裡純粹是打包器、開發伺服器、測試跑器，不是拿來換掉目前的原生 DOM 操作寫法。
+- 新功能該放進語意最接近的既有模組（見上方〈程式怎麼組織的〉的對照表）；跨模組共用的可變狀態走 `state.js`，不要另外開一個模組層級的 `let`（原因見上一節）。
+- 任何要寫進 `localStorage` 的新資料欄位，都應該比照現有 `src/data.js` 裡 `normalize*` / `validate*` / `sanitize*` 系列函式的寫法：先驗證再存，並考慮舊資料讀進來時不要爆炸。
+- 改到課表計算或倒數邏輯之後，先跑 `npm test`；沒被自動化測試覆蓋到的情境（多數編輯器 UI 流程、樣式面板、AI 匯入流程），用時間模擬面板實際切換幾個邊界時間點（節與節交界、午休前後、當天最後一節下課後）手動確認。
 - 改樣式時記得同時檢查深色模式跟手機寬度下的呈現，這個專案在響應式細節上投入不少心力，新樣式不該只在桌機淺色模式下好看。
+- 改完後跑 `npm run build`，確認 Vite 真的能把新的 `import`/`export` 打包起來、`dist/` 是一份完整能跑的網站，不只是本機開發模式下沒出錯。
 
 ---
 
@@ -203,13 +218,13 @@ testsim-runtime.js  時間模擬狀態機
 - 沒有帳號系統，也就沒有多人協作或跨裝置即時同步。
 - AI 辨識的準確度取決於照片清晰度與課表版型，不是每次都能完美讀出所有欄位，匯入前務必看過預覽再確認。
 - AI 功能需要網路連線與自備的 API Key，離開這兩個條件就無法使用（但其他功能完全不受影響）。
-- 沒有自動化測試，正確性主要靠時間模擬手動驗證。
+- 自動化測試涵蓋課表計算、資料驗證與備份格式，但編輯器 UI 流程、樣式面板、AI 匯入流程目前仍主要靠時間模擬手動驗證。
 
 ---
 
 ## 目前狀態
 
-課表顯示、每週排課、單雙週切換、鐘聲時間、特殊時段、事件倒數、外觀自訂、時間模擬、備份匯出入、AI 圖片辨識，這些功能目前都是完整可用、彼此獨立運作的——課表相關功能完全不依賴網路或 AI，AI 只是眾多輸入課表資料的方式之一。專案仍在持續做程式碼精簡（近期的改動方向包括移除死碼、合併重複的 CSS 規則、把備份格式壓得更小），之後可能會補上輕量的自動化測試，或是在不強迫使用者註冊帳號的前提下，研究看看有沒有值得做的雲端同步方式。
+課表顯示、每週排課、單雙週切換、鐘聲時間、特殊時段、事件倒數、外觀自訂、時間模擬、備份匯出入、AI 圖片辨識，這些功能目前都是完整可用、彼此獨立運作的——課表相關功能完全不依賴網路或 AI，AI 只是眾多輸入課表資料的方式之一。原本單一檔案的 `js/app.js` 已經拆成 `src/` 底下的 ES module，並補上了針對課表計算、資料驗證、備份格式的自動化測試套件；之後可能會繼續往編輯器 UI 流程補測試，或是在不強迫使用者註冊帳號的前提下，研究看看有沒有值得做的雲端同步方式。
 
 ---
 

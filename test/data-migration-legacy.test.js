@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { loadApp } from './helpers/loadApp.js';
+import { state } from '../src/state.js';
 
 describe('loadData() with a legacy payload missing newer optional fields', () => {
-  it('fills in styleSlots/countdownEvents and preserves the rest unchanged', () => {
+  it('fills in styleSlots/countdownEvents and preserves the rest unchanged', async () => {
     localStorage.setItem(
       'classFocusData',
       JSON.stringify({
@@ -13,8 +14,8 @@ describe('loadData() with a legacy payload missing newer optional fields', () =>
         reverseWeek: true
       })
     );
-    expect(() => loadApp()).not.toThrow();
-    const data = window.__orbitTest.getApplicationData();
+    await loadApp();
+    const data = state.applicationData;
     expect(data.teacherDB.A).toEqual(['數學', '王老師', '']);
     expect(data.reverseWeek).toBe(true);
     expect(data.weeklySchedule['1']).toEqual(['A']);

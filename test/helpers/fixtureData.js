@@ -1,4 +1,4 @@
-// A small, hand-built schedule used to drive js/app.js's real update() loop
+// A small, hand-built schedule used to drive the real app's update() loop
 // deterministically. Mirrors the exact classFocusData shape documented in
 // README.md's "資料存在哪裡、存了什麼" table.
 export function buildFixtureData() {
