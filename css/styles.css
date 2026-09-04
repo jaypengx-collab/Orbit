@@ -198,7 +198,7 @@ body.orbit-booting .dashboard-boot-loader{visibility:visible;display:flex;positi
 }
 .top-action-btn:active{transform:scale(.9);box-shadow:0 2px 8px rgba(0,0,0,.3)}
 #btn-menu.top-action-btn{width:var(--v31-hub-size);height:var(--v31-hub-size);border-radius:18px;background:linear-gradient(145deg,color-mix(in srgb,var(--pro-accent) 82%,transparent),color-mix(in srgb,var(--pro-accent) 55%,transparent) 70%);color:var(--pro-accent-text);font-size:20px;box-shadow:0 12px 30px color-mix(in srgb,var(--pro-accent) 40%,transparent),0 4px 12px rgba(0,0,0,.28);font-weight:900;line-height:1;backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%)}
-.top-actions.open #btn-menu.top-action-btn{transform:rotate(45deg) scale(.96);background:linear-gradient(145deg,rgba(255,69,58,.86),rgba(255,159,10,.62) 70%);box-shadow:0 12px 30px rgba(255,69,58,.3),0 4px 12px rgba(0,0,0,.28)}
+.top-actions.open #btn-menu.top-action-btn{transform:rotate(45deg) scale(.96);color:var(--pro-secondary-text);background:linear-gradient(145deg,color-mix(in srgb,var(--pro-secondary) 85%,transparent),color-mix(in srgb,var(--pro-secondary) 58%,transparent) 70%);box-shadow:0 12px 30px color-mix(in srgb,var(--pro-secondary) 38%,transparent),0 4px 12px rgba(0,0,0,.28)}
 .top-actions-menu{
   position:absolute;top:calc(var(--v31-hub-size) + 8px);right:0;flex-direction:column;display:flex;gap:7px;padding:7px;
   border-radius:20px;opacity:0;visibility:hidden;pointer-events:none;
@@ -417,7 +417,7 @@ body.modal-open > .dashboard,body.modal-open > .nav-bar,body.modal-open > #sched
 
 .modal-sheet{
   position:fixed;left:max(12px,env(safe-area-inset-left));right:max(12px,env(safe-area-inset-right));bottom:max(12px,env(safe-area-inset-bottom));top:auto;
-  width:auto;max-width:none;height:min(415px,calc(100dvh - 24px));max-height:min(415px,calc(100dvh - 24px));margin:0 auto;
+  width:auto;max-width:none;height:min(375px,calc(100dvh - 24px));max-height:min(375px,calc(100dvh - 24px));margin:0 auto;
   backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
   -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
   padding:9px 20px 20px;
