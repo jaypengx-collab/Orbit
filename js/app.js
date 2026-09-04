@@ -4440,9 +4440,19 @@ update();
     window.update();
   };
   window.forceAppRefresh = function(){
-    var url = new URL(window.location.href);
-    url.searchParams.set('refresh', String(Date.now()));
-    window.location.replace(url.toString());
+    function reloadNow(){
+      var url = new URL(window.location.href);
+      url.searchParams.set('refresh', String(Date.now()));
+      window.location.replace(url.toString());
+    }
+    // Prime the HTTP cache with network-fresh copies of the app shell's own
+    // assets first, so the reload below is a true full reload (picks up a
+    // new deploy even when its version query string didn't change) instead
+    // of a plain refresh that can still be served straight from disk cache.
+    var refetches = [window.location.href.replace(/[?#].*$/,'')].concat(VERSIONED_ASSETS).map(function(url){
+      return fetch(url, { cache:'reload' }).catch(function(){});
+    });
+    Promise.all(refetches).then(reloadNow, reloadNow);
   };
 
   function bindPlayButton(){
