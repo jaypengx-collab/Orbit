@@ -882,7 +882,7 @@ function updateExamCountdown() {
   const isSingleDay = event.startDate===event.endDate;
 
   if (diffStart > 0) {
-    el.textContent = `${diffStart} 天`;
+    el.innerHTML = `${diffStart}<span class="exam-countdown-unit">天</span>`;
     card.setAttribute('aria-label', `${event.name}倒數 ${diffStart} 天`);
   } else if (isSingleDay && diffStart === 0) {
     el.textContent = '今天';
