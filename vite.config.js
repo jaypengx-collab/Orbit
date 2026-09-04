@@ -23,5 +23,12 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true
+  },
+  test: {
+    environment: 'jsdom',
+    // Each test file gets its own jsdom global environment so app.js's
+    // top-level const/let declarations only ever run through eval once
+    // per realm - required by test/helpers/loadApp.js.
+    isolate: true
   }
 });
