@@ -305,9 +305,10 @@ body.editor-open .top-actions{opacity:0;visibility:hidden;pointer-events:none;tr
    its now-empty "next class" column (nested inside .time-card since JS moves
    .next-box there at boot) so it doesn't sit there half blank. */
 .dashboard.orbit-no-upcoming-class .time-card.v3-11-next-module .next-box{display:none}
-.dashboard.orbit-no-upcoming-class .time-card.v3-11-next-module{grid-template-areas:"progress" "timer";grid-template-columns:minmax(0,1fr)}
-.dashboard.orbit-no-upcoming-class .time-card.v3-11-next-module .timer-container{width:auto;min-width:0;padding-left:6px}
-.dashboard.orbit-no-upcoming-class .time-card.v3-11-next-module #timer-val.timer-badge{min-width:0;width:100%}
+.dashboard.orbit-no-upcoming-class .time-card.v3-11-next-module{grid-template-areas:"progress" "timer";grid-template-columns:minmax(0,1fr);row-gap:10px}
+.dashboard.orbit-no-upcoming-class .time-card.v3-11-next-module .timer-container{width:100%;min-width:0;padding:4px 0}
+.dashboard.orbit-no-upcoming-class .time-card.v3-11-next-module #timer-val.timer-badge{min-width:0;width:auto;min-height:60px;height:60px;padding:0 34px;font-size:clamp(32px,10vw,44px)}
+.dashboard.orbit-no-upcoming-class .time-card.v3-11-next-module .timer-label{font-size:14px}
 
 /* ============================================================================
    Day nav bar
