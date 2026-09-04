@@ -1,4 +1,7 @@
 // ---- src/dashboard.js ----
+// The live "what's happening right now" dashboard: update()'s per-second
+// orchestration (calls schedule-calc.js for the math, then renders), plus
+// the toolbar/modal/countdown-card UI around it.
 import { state } from './state.js';
 import { closeStylePanel } from './appearance.js';
 import { fitNowTitleText, getClassColor, renderList } from './dashboard-render.js';

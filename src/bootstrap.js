@@ -1,4 +1,7 @@
 // ---- src/bootstrap.js ----
+// Boot sequence: load settings, build the schedule, start the per-second
+// clock. Runs once every other module has finished defining its functions -
+// see main.js for why import order matters here.
 import { setStyleMode } from './appearance.js';
 import { syncTestToolbar } from './dashboard.js';
 import { mainClockTick, syncTestPlayPauseUi } from './dashboard-render.js';

@@ -1,4 +1,6 @@
 // ---- src/schedule.js ----
+// Turns settings data (from data.js) into the day-by-day runtime schedule,
+// plus the pure day/week-parity time helpers most other modules rely on.
 import { state } from './state.js';
 
 // ---- js/schedule.js ----

@@ -1,4 +1,6 @@
 // ---- src/editor-backup.js ----
+// Backup export/import: the v2 transfer format's encode/decode, settings
+// validation for imported data, and the editor's dirty-state tracking.
 import { state } from './state.js';
 import {
   applyProAccent,

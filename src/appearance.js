@@ -1,4 +1,5 @@
 // ---- src/appearance.js ----
+// Theme colors, light/dark mode, and the style panel's preview/save flow.
 import { state } from './state.js';
 import { closeTestPanel, setOverlayVisible } from './dashboard.js';
 import { fitNowTitleText } from './dashboard-render.js';

@@ -1,4 +1,7 @@
 // ---- src/data.js ----
+// Reads/writes/validates/normalizes localStorage data. No DOM, no other
+// src/ module may be assumed ready yet when this one's top-level code runs
+// (see state.js's comment on the circular-import TDZ this ran into).
 import {
   normalizeProAccent,
   normalizeProSecondary,

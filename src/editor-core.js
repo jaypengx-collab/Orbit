@@ -1,4 +1,7 @@
 // ---- src/editor-core.js ----
+// The schedule editor's main open/close/save flow and its confirmation
+// sheets (unsaved-changes, delete-row); the other editor-*.js modules own
+// one specific sub-form each and are driven from here.
 import { state } from './state.js';
 import { openStylePanel } from './appearance.js';
 import { closeTestPanel, getCountdownEvents } from './dashboard.js';

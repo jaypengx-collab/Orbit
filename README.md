@@ -150,6 +150,7 @@ Gemini API Key 刻意存在另一把獨立的鍵（`orbitAiGeminiApiKey`），�
 ```text
 src/data.js            資料的讀寫、驗證、正規化，localStorage 存取
 src/schedule.js        把設定資料組成「執行中課表」，星期／週次計算
+src/schedule-calc.js   純計算：現在該顯示哪堂課／哪個時段（見下）
 src/appearance.js      主題色與深淺色模式
 src/dashboard.js       主畫面即時更新的核心，含 update() 狀態機
 src/editor-backup.js   備份匯出／匯入、v2 傳輸格式的編碼解碼
@@ -161,15 +162,18 @@ src/gemini-ocr.js      圖片前處理與 Gemini API 呼叫
 src/bootstrap.js       啟動流程：讀資料、建課表、開每秒一次的計時器
 src/testsim-runtime.js 時間模擬狀態機
 src/state.js           跨模組共用的可變狀態（見下）
+src/strings.js         畫面文字對照表（見下）
 src/main.js            進入點，依序 import 以上每個模組
 ```
 
-每個檔名跟職責都直接延續自舊版單檔案裡原本用註解標出的區塊，只是現在的相依關係是編譯器會檢查的 `import`/`export`，不再是「檔案內先後順序」這種隱性約定。
+每個檔名跟職責都直接延續自舊版單檔案裡原本用註解標出的區塊，只是現在的相依關係是編譯器會檢查的 `import`/`export`，不再是「檔案內先後順序」這種隱性約定。每個檔案開頭也都有一行註解說明它負責什麼。
 
-有兩個地方是模組化時特別處理過的，改程式碼前值得知道：
+有幾個地方是模組化時特別處理過的，改程式碼前值得知道：
 
-- **`src/state.js` 是共用的可變狀態容器**。舊版裡有將近二十個變數（`viewDay`、`pendingEditorImportData`、`applicationData`…）會被好幾個不同區塊直接寫入——這在同一個全域作用域裡沒問題，但 ES module 的 `import` 绑定是唯讀的，沒辦法讓另一個模組直接賦值。所以這些變數集中放在 `state.js` 匯出的單一物件裡，各模組 `import { state } from './state.js'` 之後用 `state.viewDay = ...` 這種屬性寫入方式修改，而不是各自擁有自己的一份。新增需要跨模組共用、且會被多處寫入的狀態，照這個模式加進 `state.js`，不要另外宣告一個模組層級的 `let`。
+- **`src/state.js` 是共用的可變狀態容器**。舊版裡有將近二十個變數（`viewDay`、`pendingEditorImportData`、`applicationData`…）會被好幾個不同區塊直接寫入——這在同一個全域作用域裡沒問題，但 ES module 的 `import` 綁定是唯讀的，沒辦法讓另一個模組直接賦值。所以這些變數集中放在 `state.js` 匯出的單一物件裡，各模組 `import { state } from './state.js'` 之後用 `state.viewDay = ...` 這種屬性寫入方式修改，而不是各自擁有自己的一份。新增需要跨模組共用、且會被多處寫入的狀態，照這個模式加進 `state.js`，不要另外宣告一個模組層級的 `let`。
 - **`window.update()` 是刻意保留的動態呼叫**。`testsim-runtime.js` 會在執行期把 `window.update` 換成一個包了時間模擬邏輯的包裝函式（外層再呼叫原本 `dashboard.js` 定義的 `update()`）。因為 ES module 的 `import` 在編譯時就固定綁定來源，其他模組如果直接 `import { update } from './dashboard.js'` 再呼叫，就會呼叫到還沒被換掉的舊版本，時間模擬的行為會整個失效。所以除了 `dashboard.js` 自己之外，任何地方要觸發重新渲染都呼叫 `window.update()`，不要 `import` 這個名字。同樣道理也適用於 `window.openTestPanel`（`testsim-runtime.js` 用 `window[name] = ...` 動態換過一次）。
+- **`update()` 拆成純計算與畫面渲染兩層**。`src/schedule-calc.js` 的 `computeDashboardViewModel()` 只吃 `now`／`curDay`／`week`／課表資料，吐出一個描述畫面該長怎樣的物件，不碰 DOM；`dashboard.js` 的 `update()` 呼叫它，再交給 `renderDashboard()` 把結果寫進畫面（而且會跟上一輪的結果比對，沒變的欄位不重寫，見下方「畫面每秒都在算什麼」）。改課表計算邏輯時，改的通常是 `schedule-calc.js`，而且可以直接針對這個純函式寫測試，不需要整個 app 開起來。
+- **`src/strings.js` 是畫面文字的對照表**，目前只有一種語言（`zh-TW`），把 `dashboard.js`／`schedule-calc.js` 用到的靜態文字集中在這裡，透過 `t('some.key')` 取用，而不是散落在程式碼裡的字面字串。這不是要馬上做多語系，而是先把「文字」跟「邏輯」分開——現有程式碼裡大部分文字還沒搬過來，新增畫面文字時，比照這個慣例把它加進 `strings.js` 而不是寫死在函式裡，之後要擴充語言就只是多寫一個語言物件，不必再翻遍程式碼找字串。
 
 ---
 
@@ -184,6 +188,8 @@ src/main.js            進入點，依序 import 以上每個模組
 ```
 
 因為每一輪都是重新算、不是在舊狀態上小修小補，所以「這堂課下課了」「換了一天」這類跨越邊界的情況不需要特別寫例外邏輯——時間一過某個節點，這輪算出來的結果自然就不一樣了。
+
+「重新算」跟「重新寫進畫面」是兩件事：計算永遠整輪重算（上面說的那套邏輯），但寫進 DOM 的那一步會跟上一輪的結果比對，只有真的變動的欄位才會實際寫入——倒數數字、進度條寬度這兩個本來就每秒都在變的除外，其餘像是課程名稱、教師、教室在同一堂課裡通常一連幾十分鐘都不會變，沒必要每秒都重寫一次觸發瀏覽器重新計算樣式。
 
 ---
 

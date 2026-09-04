@@ -1,4 +1,9 @@
 // ---- src/testsim-runtime.js ----
+// Time-simulation state machine (Test Mode): the manual/auto-advancing
+// simulated clock, its persistence, and the runtime patches it applies to
+// dashboard.js's update()/openTestPanel/toggleTestPanel - see the
+// window.update() comment in the README for why those are patched rather
+// than replaced.
 import { state } from './state.js';
 import { closeTestPanel, syncTestToolbar } from './dashboard.js';
 import { syncTestPlayPauseUi } from './dashboard-render.js';

@@ -1,4 +1,6 @@
 // ---- src/dashboard-render.js ----
+// DOM rendering for the schedule list (not the live "now" card - that's
+// dashboard.js) and viewport-driven layout fitting (title sizing, accordion).
 import { state } from './state.js';
 import { normalizeProAccent } from './appearance.js';
 import { keepActiveClassVisible, openModal } from './dashboard.js';

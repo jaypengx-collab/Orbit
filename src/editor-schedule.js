@@ -1,4 +1,5 @@
 // ---- src/editor-schedule.js ----
+// The weekly schedule grid and bell-time editor forms.
 import { state } from './state.js';
 import { validateTimeIntervals } from './data.js';
 import {

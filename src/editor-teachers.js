@@ -1,4 +1,5 @@
 // ---- src/editor-teachers.js ----
+// The teacher/subject list editor and the day-by-day period assignment UI.
 import { state } from './state.js';
 import { collectEditorFormState, dayDiffLabel, formatClassRef } from './editor-backup.js';
 import {

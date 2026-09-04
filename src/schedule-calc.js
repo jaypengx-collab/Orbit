@@ -6,6 +6,7 @@
 // real branching logic worth getting right - can be unit tested and
 // reasoned about without booting the whole app.
 import { parseTime, processSplitName } from './schedule.js';
+import { t } from './strings.js';
 
 // Pads a number to two digits for clock display (kept local: schedule.js's
 // pad2 is exported for the editor's bell-number labels, this is the same
@@ -84,7 +85,7 @@ export function computeDashboardViewModel({ now, curDay, week, todaySchedule, br
       statusText = decorateSpecialTimeName(activeBreak.name);
       dotState = 'wait';
       timerVisible = true;
-      timerLabel = '上課';
+      timerLabel = t('dashboard.duringClass');
       const breakStart = parseTime(activeBreak.start) * 60;
       const breakEnd = parseTime(activeBreak.end) * 60;
       timerValue = formatCountdown(breakEnd - secs);
@@ -102,7 +103,7 @@ export function computeDashboardViewModel({ now, curDay, week, todaySchedule, br
       activeClassKey = today[curIdx].key || '';
       dotState = 'active';
       timerVisible = true;
-      timerLabel = '下課';
+      timerLabel = t('dashboard.betweenClasses');
       const endSec = parseTime(today[curIdx].e) * 60;
       const startSec = parseTime(today[curIdx].s) * 60;
       timerValue = formatCountdown(endSec - secs);
@@ -114,18 +115,18 @@ export function computeDashboardViewModel({ now, curDay, week, todaySchedule, br
       const firstStart = parseTime('08:00');
       const lastEnd = lastClass ? parseTime(lastClass.e) : parseTime('16:45');
       if (mins < firstStart) {
-        statusText = '尚未開始';
+        statusText = t('dashboard.notStarted');
         timerVisible = false;
         progressVisible = false;
       } else if (mins >= lastEnd) {
-        statusText = '放學時間';
+        statusText = t('dashboard.schoolOver');
         dotState = 'none';
         timerVisible = false;
         progressVisible = false;
       } else {
         timerVisible = true;
-        timerLabel = '上課';
-        statusText = '下課';
+        timerLabel = t('dashboard.duringClass');
+        statusText = t('dashboard.betweenClasses');
         if (nxtIdx !== -1) {
           const nextStart = parseTime(today[nxtIdx].s) * 60;
           timerValue = formatCountdown(nextStart - secs);
@@ -145,12 +146,12 @@ export function computeDashboardViewModel({ now, curDay, week, todaySchedule, br
       nextMeta = [today[nxtIdx].s, info.t, today[nxtIdx].loc].filter(Boolean).join(' · ');
       upcomingClassKey = today[nxtIdx].key || '';
     } else {
-      nextText = curDay === 5 ? '週末愉快' : '再見';
+      nextText = curDay === 5 ? t('dashboard.seeYouWeekend') : t('dashboard.seeYouTomorrow');
       nextMeta = '';
     }
   } else {
-    statusText = '今日無課';
-    nextText = '週一見';
+    statusText = t('dashboard.noSchoolToday');
+    nextText = t('dashboard.seeYouMonday');
     dotState = 'none';
     timerVisible = false;
     progressVisible = false;

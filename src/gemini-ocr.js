@@ -1,4 +1,6 @@
 // ---- src/gemini-ocr.js ----
+// Photo -> canvas preprocessing and the Gemini API call/response parsing
+// for the optional AI schedule-photo import.
 import { state } from './state.js';
 import { normalizeCountdownEvents } from './data.js';
 import {
