@@ -147,24 +147,24 @@ Gemini API Key 刻意存在另一把獨立的鍵（`orbitAiGeminiApiKey`），�
 
 ## 程式怎麼組織的
 
-專案只有三個會被瀏覽器讀取的檔案：`index.html`（畫面標記）、`css/styles.css`（樣式，約 860 行）、`js/app.js`（所有邏輯，約 4,500 行）。這不是偷懶，是刻意的——早期版本把邏輯拆成十幾個 `<script>` 各自對應一個功能，每次載入都要發十幾個 HTTP 請求，啟動時甚至還會用同步請求把每個檔案重新抓一次來算版本雜湊，首次打開明顯卡頓；後來合併成一個檔案、版本雜湊計算也改成非同步，啟動速度才真正解決。
+專案只有三個會被瀏覽器讀取的檔案：`index.html`（畫面標記）、`css/styles.css`（樣式，約 860 行）、`js/app.js`（所有邏輯，約 5,300 行）。這不是偷懶，是刻意的——早期版本把邏輯拆成十幾個 `<script>` 各自對應一個功能，每次載入都要發十幾個 HTTP 請求，啟動時甚至還會用同步請求把每個檔案重新抓一次來算版本雜湊，首次打開明顯卡頓；後來合併成一個檔案、版本雜湊計算也改成非同步，啟動速度才真正解決。
 
 `js/app.js` 裡沒有模組系統，所有函式跟變數共用同一個全域作用域，靠檔案內部的先後順序保證誰用得到誰。原本各自獨立的檔案現在變成用註解標出的區塊，順序保留原本的相依關係：
 
 | 區塊（原始檔名） | 大致行號 | 內容 |
 | --- | --- | --- |
-| `data.js` | 1–287 | 資料的讀寫、驗證、正規化，`localStorage` 存取（`loadData`/`saveData`），所有 `DEFAULT_*` 預設值 |
-| `schedule.js` | 288–412 | 把設定資料組成「執行中課表」`runtimeSchedule`，星期／ISO 週次計算，星期導覽列渲染 |
-| `appearance.js` | 413–695 | 主題色（`--pro-accent`/`--pro-secondary`）計算與套用、樣式面板、樣式庫儲存槽 |
-| `dashboard.js` | 696–1218 | 主畫面即時更新的核心，`update()` 狀態機、倒數卡片、詳細資訊 modal |
-| `editor-backup.js` | 1219–1975 | 備份匯出／匯入、v2 傳輸格式（DEFLATE + Base91）的編碼解碼、設定差異比對 |
-| `editor-core.js` | 1976–2536 | 課表編輯器主流程、fold 展開收合、未儲存變更偵測、拖曳排序共用邏輯 |
-| `editor-teachers.js` | 2537–2800 | 教師／課程清單編輯、排課抽屜（assign sheet） |
-| `editor-schedule.js` | 2801–3007 | 每週排課網格、節次時間、特殊時段的增刪與排序 |
-| `dashboard-render.js` | 3008–3258 | 主畫面實際的 DOM 渲染（`renderList`）、標題自動縮字（`fitNowTitleText`）、**每秒觸發一次的 `mainClockTick`** |
-| `gemini-ocr.js` | 3259–3893 | 圖片前處理、Gemini API 呼叫、AI 結果正規化與匯入預覽 |
-| `bootstrap.js` | 3894–3908 | 啟動流程：讀資料、建課表、套用主題、開每秒一次的計時器、渲染第一幀 |
-| `testsim-runtime.js` | 3909–4513 | 時間模擬狀態機（IIFE），monkey-patch `update`/`toggleTestPanel` 加入模擬邏輯 |
+| `data.js` | 1–302 | 資料的讀寫、驗證、正規化，`localStorage` 存取（`loadData`/`saveData`），所有 `DEFAULT_*` 預設值 |
+| `schedule.js` | 303–414 | 把設定資料組成「執行中課表」`runtimeSchedule`，星期／ISO 週次計算，星期導覽列渲染 |
+| `appearance.js` | 415–781 | 主題色（`--pro-accent`/`--pro-secondary`）計算與套用、樣式面板、樣式庫儲存槽 |
+| `dashboard.js` | 782–1342 | 主畫面即時更新的核心，`update()` 狀態機、倒數卡片、詳細資訊 modal |
+| `editor-backup.js` | 1343–2398 | 備份匯出／匯入、v2 傳輸格式（DEFLATE + Base91）的編碼解碼、設定差異比對 |
+| `editor-core.js` | 2399–3024 | 課表編輯器主流程、fold 展開收合、未儲存變更偵測、拖曳排序共用邏輯 |
+| `editor-teachers.js` | 3025–3349 | 教師／課程清單編輯、排課抽屜（assign sheet） |
+| `editor-schedule.js` | 3350–3569 | 每週排課網格、節次時間、特殊時段的增刪與排序 |
+| `dashboard-render.js` | 3570–3844 | 主畫面實際的 DOM 渲染（`renderList`）、標題自動縮字（`fitNowTitleText`）、**每秒觸發一次的 `mainClockTick`** |
+| `gemini-ocr.js` | 3845–4609 | 圖片前處理、Gemini API 呼叫、AI 結果正規化與匯入預覽 |
+| `bootstrap.js` | 4610–4623 | 啟動流程：讀資料、建課表、套用主題、開每秒一次的計時器、渲染第一幀 |
+| `testsim-runtime.js` | 4624–5301 | 時間模擬狀態機（IIFE），monkey-patch `update`/`toggleTestPanel` 加入模擬邏輯 |
 
 這個順序不是隨便排的：`bootstrap.js` 一定要在其他功能模組都定義完之後才能執行（它會呼叫前面定義的函式），而它自己又要排在 `testsim-runtime.js` 之前，因為時間模擬需要覆蓋掉 bootstrap 啟動的那個計時器。
 
@@ -397,16 +397,16 @@ Orbit AI 沒有分離的淺色主題——`html{color-scheme:dark}` 是寫死的
 
 | 函式 | 行號 | 說明 |
 | --- | --- | --- |
-| `isValidTime(value)` | 123 | 檢查字串是否為合法的 `HH:MM`（0–23 時、0–59 分） |
-| `isValidTimeRange(start, end)` | 128 | 確認 `start`/`end` 皆合法時間，且 `end` 嚴格晚於 `start` |
-| `validateTimeIntervals(bellTimes, breakTimes)` | 136 | 合併節次與特殊時段成排序後的區間清單，找出任何重疊就丟出中文錯誤訊息並指名衝突的兩個標籤 |
-| `normalizeCountdownEvent(value)` | 149 | 把單筆原始物件轉成 `{name,startDate,endDate}`；支援舊版單一 `date` 欄位；起訖顛倒時自動互換；無效則回傳 `null` |
-| `formatCountdownEventDate(event)` | 161 | 把倒數事件日期格式化成 `YYYY.MM.DD` 或區間 `YYYY.MM.DD–MM.DD` |
-| `normalizeCountdownEvents(value)` | 168 | 對陣列逐筆跑 `normalizeCountdownEvent`，最多保留 12 筆；輸入型別根本不是陣列時才退回預設值 |
-| `getDefaultData()` | 176 | 用所有 `DEFAULT_*` 常數＋`getStoredGeminiApiKey()` 組出一份全新的預設 `applicationData` |
-| `sanitizeBreakTimes(bellTimes, breakTimes=[])` | 194 | 過濾出合法、且跟節次／彼此不衝突的特殊時段；再補回仍然合適的 `DEFAULT_BREAK_TIMES` 項目 |
-| `loadData()` | 225 | 讀取 `localStorage['classFocusData']`，驗證必要欄位與型別，回傳完整正規化後的資料物件；解析或格式失敗一律回退到 `getDefaultData()` |
-| `saveData(d)` | 269 | 把 `d` 連同內部 `__orbit` schema 標記寫回 `localStorage['classFocusData']`，寫入失敗靜默吞掉 |
+| `isValidTime(value)` | 77 | 檢查字串是否為合法的 `HH:MM`（0–23 時、0–59 分） |
+| `isValidTimeRange(start, end)` | 82 | 確認 `start`/`end` 皆合法時間，且 `end` 嚴格晚於 `start` |
+| `validateTimeIntervals(bellTimes, breakTimes)` | 90 | 合併節次與特殊時段成排序後的區間清單，找出任何重疊就丟出中文錯誤訊息並指名衝突的兩個標籤 |
+| `normalizeCountdownEvent(value)` | 111 | 把單筆原始物件轉成 `{name,startDate,endDate}`；支援舊版單一 `date` 欄位；起訖顛倒時自動互換；無效則回傳 `null` |
+| `formatCountdownEventDate(event)` | 129 | 把倒數事件日期格式化成 `YYYY.MM.DD` 或區間 `YYYY.MM.DD–MM.DD` |
+| `normalizeCountdownEvents(value)` | 138 | 對陣列逐筆跑 `normalizeCountdownEvent`，最多保留 12 筆；輸入型別根本不是陣列時才退回預設值 |
+| `getDefaultData()` | 150 | 用所有 `DEFAULT_*` 常數＋`getStoredGeminiApiKey()` 組出一份全新的預設 `applicationData` |
+| `sanitizeBreakTimes(bellTimes, breakTimes=[])` | 168 | 過濾出合法、且跟節次／彼此不衝突的特殊時段；再補回仍然合適的 `DEFAULT_BREAK_TIMES` 項目 |
+| `loadData()` | 199 | 讀取 `localStorage['classFocusData']`，驗證必要欄位與型別，回傳完整正規化後的資料物件；解析或格式失敗一律回退到 `getDefaultData()` |
+| `saveData(d)` | 292 | 把 `d` 連同內部 `__orbit` schema 標記寫回 `localStorage['classFocusData']`，寫入失敗靜默吞掉 |
 
 **重要全域常數：** `ORBIT_INITIAL_MARKUP`（頁面初始 HTML 快照，供 `testsim-runtime.js` 算版本雜湊用）、`REVERSE_WEEK_LOGIC_DEFAULT`、`DEFAULT_STYLE_PRIMARY`/`DEFAULT_STYLE_SECONDARY`、`window.MANUALLY_TEST`/`TEST_DAY`/`TEST_TIME_SEC`/`IS_SIMULATING`（模擬模式旗標）、`DEFAULT_TEACHER_DB`/`DEFAULT_LOCATION_DB`/`DEFAULT_WEEKLY_SCHEDULE`/`DEFAULT_BELL_TIMES`/`DEFAULT_BREAK_TIMES`/`DEFAULT_COUNTDOWN_EVENT(S)`（出廠預設課表）、`ORBIT_APP_ID`/`ORBIT_STORAGE_SCHEMA`（資料格式標記）、`dayNames`（「日一二三四五六」）。
 
@@ -414,44 +414,44 @@ Orbit AI 沒有分離的淺色主題——`html{color-scheme:dark}` 是寫死的
 
 | 函式 | 行號 | 說明 |
 | --- | --- | --- |
-| `buildSchedule()` | 291 | 從 `applicationData` 重建全域 `runtimeSchedule`（0–6 天），並呼叫 `renderNavBar()` |
-| `renderNavBar()` | 325 | 渲染 `.nav-bar` 的星期分頁按鈕（`onclick="handleNav(d)"`），週一到週五固定顯示，週六日只在有課時才顯示 |
-| `parseTime(t)` | 360 | `"HH:MM"` 轉成從午夜起算的分鐘數 |
-| `pad2(n)` | 368 | 數字左補零到兩位數 |
-| `getISOWeekNumber(date)` | 372 | 計算 ISO-8601 週數 |
-| `getWeekType()` | 380 | 回傳「單」或「雙」，若 `applicationData.reverseWeek` 則反轉 |
-| `getWeekLabelHtml(w)` | 387 | 把週次字串包成 `<span class="week-label ...">` 徽章 |
-| `getNextSchoolDay(day)` | 391 | 從 `day` 往後找下一個有課的星期，找不到則退回週一～週四或週一 |
-| `processSplitName(c, week)` | 400 | 針對用 `/` 分隔的單雙週課，依 `week` 回傳對應那一半的科目/教師/週次標籤 |
+| `buildSchedule()` | 306 | 從 `applicationData` 重建全域 `runtimeSchedule`（0–6 天），並呼叫 `renderNavBar()` |
+| `renderNavBar()` | 330 | 渲染 `.nav-bar` 的星期分頁按鈕（`onclick="handleNav(d)"`），週一到週五固定顯示，週六日只在有課時才顯示 |
+| `parseTime(t)` | 362 | `"HH:MM"` 轉成從午夜起算的分鐘數 |
+| `pad2(n)` | 367 | 數字左補零到兩位數 |
+| `getISOWeekNumber(date)` | 371 | 計算 ISO-8601 週數 |
+| `getWeekType()` | 379 | 回傳「單」或「雙」，若 `applicationData.reverseWeek` 則反轉 |
+| `getWeekLabelHtml(w)` | 386 | 把週次字串包成 `<span class="week-label ...">` 徽章 |
+| `getNextSchoolDay(day)` | 390 | 從 `day` 往後找下一個有課的星期，找不到則退回週一～週四或週一 |
+| `processSplitName(c, week)` | 399 | 針對用 `/` 分隔的單雙週課，依 `week` 回傳對應那一半的科目/教師/週次標籤 |
 
-**全域狀態：** `runtimeSchedule`（依星期組好的課表，每天一個課程區塊陣列）、`viewDay`（目前顯示的星期分頁）、`todayDay`（載入當下的「今天」快照）、`lastListKey`（避免重複渲染的備忘鍵）、`autoAdvancedAfterFinishedDay`、`lastAutoScrollKey`。
+**全域狀態：** `runtimeSchedule`（依星期組好的課表，每天一個課程區塊陣列）、`viewDay`（目前顯示的星期分頁）、`lastListKey`（避免重複渲染的備忘鍵）、`autoAdvancedAfterFinishedDay`、`lastAutoScrollKey`。
 
 #### `appearance.js`（主題與樣式面板）
 
 | 函式 | 行號 | 說明 |
 | --- | --- | --- |
 | `normalizeProAccent(value)` / `normalizeProSecondary(value)` / `normalizeProTertiary(value)` | 413–421 | 驗證並轉大寫 `#RRGGBB`，無效則退回對應預設色 |
-| `getReadableTextColor(value)` | 425 | 計算 WCAG 相對亮度，回傳 `#10171A` 或 `#FFFFFF` 中對比度較好的一個 |
-| `getReadableSurfaceColor(value)` | 433 | 若顏色本身在近黑底色上對比度足夠就直接回傳，否則回傳淺色備援 `#F4FBFF` |
-| `normalizeStyleSlots(value)` | 441 | 把輸入正規化成固定 5 個樣式儲存槽 `{name,primary,secondary}` |
-| `deriveProSupportColors(primary)` | 453 | 把主色轉成 HSL，推導次色（色相 +28°）與第三色（+190°），手算 HSL→RGB |
-| `applyProAccent(data=applicationData)` | 486 | 把主色/次色（含可讀性變體）以 CSS 自訂屬性寫到 `document.body` 上 |
-| `setStyleMode()` | 498 | 加上 `pro-style` body class、套用主色、渲染樣式面板、重新排版 |
-| `refreshStyleModeLayout()` | 504 | 兩層 `requestAnimationFrame`：重置捲動對齊鍵、呼叫 `update()`、`fitNowTitleText(true)` |
-| `renderStylePanel()` | 516 | 從 `applicationData` 重置 `stylePanelDraft`，填入色彩輸入框，清除 dirty 旗標，渲染樣式槽 |
-| `getStyleDraftFromControls()` | 526 | 讀取目前色彩輸入框的值，合併成草稿物件 |
-| `previewStyleSettings()` | 531 | 從輸入框更新草稿、視覺套用、標記面板為 dirty |
-| `setStylePanelMode(mode)` | 536 | 在「編輯器內容」與「預覽狀態」兩種顯示模式間切換 |
+| `getReadableTextColor(value)` | 434 | 計算 WCAG 相對亮度，回傳 `#10171A` 或 `#FFFFFF` 中對比度較好的一個 |
+| `getReadableSurfaceColor(value)` | 446 | 若顏色本身在近黑底色上對比度足夠就直接回傳，否則回傳淺色備援 `#F4FBFF` |
+| `normalizeStyleSlots(value)` | 459 | 把輸入正規化成固定 5 個樣式儲存槽 `{name,primary,secondary}` |
+| `deriveProSupportColors(primary)` | 472 | 把主色轉成 HSL，推導次色（色相 +28°）與第三色（+190°），手算 HSL→RGB |
+| `applyProAccent(data=applicationData)` | 530 | 把主色/次色（含可讀性變體）以 CSS 自訂屬性寫到 `document.body` 上 |
+| `setStyleMode()` | 542 | 加上 `pro-style` body class、套用主色、渲染樣式面板、重新排版 |
+| `refreshStyleModeLayout()` | 548 | 兩層 `requestAnimationFrame`：重置捲動對齊鍵、呼叫 `update()`、`fitNowTitleText(true)` |
+| `renderStylePanel()` | 560 | 從 `applicationData` 重置 `stylePanelDraft`，填入色彩輸入框，清除 dirty 旗標，渲染樣式槽 |
+| `getStyleDraftFromControls()` | 573 | 讀取目前色彩輸入框的值，合併成草稿物件 |
+| `previewStyleSettings()` | 583 | 從輸入框更新草稿、視覺套用、標記面板為 dirty |
+| `setStylePanelMode(mode)` | 588 | 在「編輯器內容」與「預覽狀態」兩種顯示模式間切換 |
 | `enterStylePreview()` / `exitStylePreview()` | 545–551 | 進入／離開樣式預覽模式 |
-| `applyStyleVisual(style)` | 554 | 加上 `pro-style` class、套用指定色彩、呼叫 `update()` |
-| `confirmStyleSettings()` | 561 | 組出含草稿色彩的完整設定複本存進 `pendingStyleSaveData`，呼叫 `applyPendingStyleSave()` |
-| `applyPendingStyleSave()` | 574 | 透過 `applyEditorSettingsData` 提交（存檔＋重建＋toast），重設樣式模式，關閉面板 |
-| `renderStyleSlots()` | 586 | 渲染 5 個樣式槽按鈕到 `#style-slot-grid`（`onclick="loadStyleSlot"`/`"saveStyleSlot"`） |
+| `applyStyleVisual(style)` | 606 | 加上 `pro-style` class、套用指定色彩、呼叫 `update()` |
+| `confirmStyleSettings()` | 613 | 組出含草稿色彩的完整設定複本存進 `pendingStyleSaveData`，呼叫 `applyPendingStyleSave()` |
+| `applyPendingStyleSave()` | 626 | 透過 `applyEditorSettingsData` 提交（存檔＋重建＋toast），重設樣式模式，關閉面板 |
+| `renderStyleSlots()` | 638 | 渲染 5 個樣式槽按鈕到 `#style-slot-grid`（`onclick="loadStyleSlot"`/`"saveStyleSlot"`） |
 | `saveStyleSlot(index)` / `saveStyleSlotDraft(index)` / `applyPendingStyleSlotSave()` | 592–610 | 把目前草稿色彩存進指定樣式槽；若該槽已有內容先跳出覆蓋確認 |
 | `loadStyleSlot(index)` / `applyPendingStyleSlot()` | 616–623 | 若槽位已命名則跳出確認，確認後把該槽色彩填回輸入框並預覽 |
 | `toggleStylePanel()` / `openStylePanel(resetDraft=true)` / `closeStylePanel()` | 632–656 | 樣式面板開關；關閉前若有未套用的預覽先跳出確認 |
 | `showStyleDiscardConfirm()` / `discardStyleChangesAndClose()` | 664–668 | 詢問是否捨棄未套用的樣式預覽；確認後還原並關閉 |
-| `applyStylePreset(name)` | 674 | 套用 `PRO_PALETTE_PRESETS` 裡指定的預設配色並預覽 |
+| `applyStylePreset(name)` | 760 | 套用 `PRO_PALETTE_PRESETS` 裡指定的預設配色並預覽 |
 
 **全域常數／狀態：** `PRO_PALETTE_PRESETS`（default/rose/ocean/midnight/graphite 五組配色）、`stylePanelDraft`、`testPanelOpen`、`pendingAfterEditorDiscard`、`pendingEditorImportData`、`pendingEditorSaveData`、`editorBaselineData`、`pendingBellDelete`、`pendingTeacherDelete`、`pendingStyleSaveData`、`pendingStyleSlotIndex`、`pendingStyleSlotSaveIndex`。
 
@@ -460,52 +460,52 @@ Orbit AI 沒有分離的淺色主題——`html{color-scheme:dark}` 是寫死的
 | 函式 | 行號 | 說明 |
 | --- | --- | --- |
 | `toggleTestPanel()` / `closeTestPanel()` / `openTestPanel()` | 698–720 | 時間模擬面板開關；編輯器開著且 dirty 時先提示 |
-| `syncTestToolbar()` | 726 | 依全域模擬旗標切換 `#btn-test` 的 `active`/`manual-test-on`/`sim-running` class |
-| `bindSheetDragToDismiss(panelId, closeFn)` | 738 | 幫底部彈出面板的把手接上「往下拖曳關閉」手勢；掛在 `debug-panel`、`style-panel`、`sheet` 上 |
-| `decorateSpecialTimeName(name)` | 793 | 修剪特殊時段名稱字串 |
-| `handleNav(d)` | 797 | 設定 `viewDay=d` 並呼叫 `update()` |
+| `syncTestToolbar()` | 813 | 依全域模擬旗標切換 `#btn-test` 的 `active`/`manual-test-on`/`sim-running` class |
+| `bindSheetDragToDismiss(panelId, closeFn)` | 825 | 幫底部彈出面板的把手接上「往下拖曳關閉」手勢；掛在 `debug-panel`、`style-panel`、`sheet` 上 |
+| `decorateSpecialTimeName(name)` | 886 | 修剪特殊時段名稱字串 |
+| `handleNav(d)` | 890 | 設定 `viewDay=d` 並呼叫 `update()` |
 | `setToolHubState(open)` / `toggleActionMenu()` | 802–812 | 開關右上角工具選單，處理 ARIA 屬性 |
 | （文件層級 `click`／`keydown` 監聽） | 817–832 | 點選單外關閉選單；Escape 依優先順序關閉目前開著的面板；點 edit/test/style 按鈕後自動收合選單 |
-| `getCountdownEvents(data=applicationData)` | 839 | 回傳 `normalizeCountdownEvents(data.countdownEvents)` |
-| `showCountdownEvent(index)` | 842 | 設定 `activeCountdownIndex`（取餘數循環）並刷新倒數卡片 |
-| `updateExamCountdown()` | 847 | 渲染倒數卡片的名稱／日期／分頁點／數值（`N天`／`今天`／`進行中`／`已結束`），沒有事件時隱藏卡片 |
+| `getCountdownEvents(data=applicationData)` | 937 | 回傳 `normalizeCountdownEvents(data.countdownEvents)` |
+| `showCountdownEvent(index)` | 940 | 設定 `activeCountdownIndex`（取餘數循環）並刷新倒數卡片 |
+| `updateExamCountdown()` | 945 | 渲染倒數卡片的名稱／日期／分頁點／數值（`N天`／`今天`／`進行中`／`已結束`），沒有事件時隱藏卡片 |
 | （倒數卡片指標事件） | 898–909 | 倒數卡片上的水平滑動手勢，觸發 `showCountdownEvent` |
-| `update()` | 913 | **每輪 tick 的主渲染函式**——完整流程見〈[畫面每秒都在算什麼](#畫面每秒都在算什麼tick-loop)〉 |
-| `keepActiveClassVisible(list, isDayFinished, scrollKey)` | 1098 | 自動捲動讓「現在／下一節」那列進入可視範圍，每個 `scrollKey` 只執行一次，使用者正在手動捲動時不搶焦點 |
-| `getNaturalListMaxScroll(list)` | 1132 | 回傳 `scrollHeight - clientHeight`（不小於 0） |
-| `setElementVisible(id, visible)` | 1137 | 切換 `#id` 的 `show` class |
-| `setOverlayVisible(overlayId, panelId, visible, bodyClass)` | 1142 | 同時切換遮罩與面板的顯示狀態、`aria-hidden`、可選的 body class |
-| `closeModal()` | 1148 | 關閉課程詳細資訊彈窗，把焦點還給 `modalPreviousFocus` |
-| `setSplitWeekClass(id, subject, teacher)` | 1153 | 填入單雙週資訊元素的科目文字與較小的教師文字 |
-| `openModal(c)` | 1163 | 開啟課程詳細資訊彈窗：顯示教室卡片、列出這門課一週內所有出現的節次、顯示單雙週資訊（若適用）、填入標題／教師／節數 |
+| `update()` | 1022 | **每輪 tick 的主渲染函式**——完整流程見〈[畫面每秒都在算什麼](#畫面每秒都在算什麼tick-loop)〉 |
+| `keepActiveClassVisible(list, isDayFinished, scrollKey)` | 1227 | 自動捲動讓「現在／下一節」那列進入可視範圍，每個 `scrollKey` 只執行一次，使用者正在手動捲動時不搶焦點 |
+| `getNaturalListMaxScroll(list)` | 1263 | 回傳 `scrollHeight - clientHeight`（不小於 0） |
+| `setElementVisible(id, visible)` | 1268 | 切換 `#id` 的 `show` class |
+| `setOverlayVisible(overlayId, panelId, visible, bodyClass)` | 1273 | 同時切換遮罩與面板的顯示狀態、`aria-hidden`、可選的 body class |
+| `closeModal()` | 1279 | 關閉課程詳細資訊彈窗，把焦點還給 `modalPreviousFocus` |
+| `setSplitWeekClass(id, subject, teacher)` | 1285 | 填入單雙週資訊元素的科目文字與較小的教師文字 |
+| `openModal(c)` | 1295 | 開啟課程詳細資訊彈窗：顯示教室卡片、列出這門課一週內所有出現的節次、顯示單雙週資訊（若適用）、填入標題／教師／節數 |
 
 #### `editor-backup.js`（備份、匯出匯入、v2 傳輸格式）
 
 | 函式 | 行號 | 說明 |
 | --- | --- | --- |
-| `collectEditorFormState()` | 1221 | 讀取編輯器裡每個 DOM 控制項（教師卡片、排課網格、節次列、特殊時段列、單雙週開關、倒數事件列），組成原始設定物件 |
-| `editorFormSnapshotString()` | 1283 | 把編輯器目前 DOM 狀態序列化成 JSON 字串，供 dirty-check 比對 |
-| `isEditorDirty()` | 1319 | 編輯器開啟中，且目前快照跟 `editorBaselineSnapshot` 不同則為 true |
+| `collectEditorFormState()` | 1345 | 讀取編輯器裡每個 DOM 控制項（教師卡片、排課網格、節次列、特殊時段列、單雙週開關、倒數事件列），組成原始設定物件 |
+| `editorFormSnapshotString()` | 1413 | 把編輯器目前 DOM 狀態序列化成 JSON 字串，供 dirty-check 比對 |
+| `isEditorDirty()` | 1455 | 編輯器開啟中，且目前快照跟 `editorBaselineSnapshot` 不同則為 true |
 | `runTransferAction(action)` / `requestTransferAction(action)` | 1328–1372 | 執行匯出（含覆蓋警告）或匯入預覽；若編輯器 dirty，先詢問「先存再轉移／不存直接轉移／取消」 |
-| `cloneSettingsData(data)` | 1372 | 用 `JSON.parse(JSON.stringify(...))` 深拷貝 |
+| `cloneSettingsData(data)` | 1518 | 用 `JSON.parse(JSON.stringify(...))` 深拷貝 |
 | `base91Encode(bytes)` / `base91Decode(str)` | 1391–1409 | 用自訂 91 符號字母表做 Base91 編解碼 |
 | `encodeTransferPayloadV2(data)` / `decodeTransferPayloadV2(array)` | 1425–1433 | 把設定物件攤平成精簡的定位陣列（v2 匯出格式），或反向還原 |
 | `encodeTransferDataV2(data)` / `decodeTransferDataV2(value)` | 1451–1457 | JSON 化 → `CompressionStream('deflate-raw')` 壓縮 → Base91 編碼 → 包上 `[ORBIT]…[/ORBIT]` 標記；或反向解碼 |
 | `encodeTransferData(data)` / `decodeTransferData(text)` | 1465–1469 | 匯出／匯入的對外入口，檢查瀏覽器是否支援壓縮串流 API，不支援則丟錯 |
-| `normalizeSettingsData(raw, {requireMarker=false})` | 1475 | **設定資料的完整驗證/正規化函式**（存檔與匯入路徑共用）：檢查必要欄位型別、`weeklySchedule` 是否對應到真實存在的 `teacherDB` 項目、驗證時間區間，回傳乾淨物件 |
-| `settingsDataForExport()` | 1549 | 排序節次後，回傳蓋上 `__orbit` 標記的正規化目前表單狀態 |
-| `setTransferStatus(message, isError=false)` | 1556 | 寫入 `#settings-transfer-status` 的文字與顏色 |
-| `copyTransferText(text)` | 1562 | 用 Clipboard API 複製，失敗則退回隱藏 `<textarea>` + `execCommand('copy')` |
-| `exportEditorSettings(data=settingsDataForExport())` | 1582 | 把 `data` 編碼進匯出文字框、複製、回報狀態 |
+| `normalizeSettingsData(raw, {requireMarker=false})` | 1709 | **設定資料的完整驗證/正規化函式**（存檔與匯入路徑共用）：檢查必要欄位型別、`weeklySchedule` 是否對應到真實存在的 `teacherDB` 項目、驗證時間區間，回傳乾淨物件 |
+| `settingsDataForExport()` | 1820 | 排序節次後，回傳蓋上 `__orbit` 標記的正規化目前表單狀態 |
+| `setTransferStatus(message, isError=false)` | 1830 | 寫入 `#settings-transfer-status` 的文字與顏色 |
+| `copyTransferText(text)` | 1836 | 用 Clipboard API 複製，失敗則退回隱藏 `<textarea>` + `execCommand('copy')` |
+| `exportEditorSettings(data=settingsDataForExport())` | 1855 | 把 `data` 編碼進匯出文字框、複製、回報狀態 |
 | `formatDiffValue(value)` / `formatClassRef(key, data)` / `pushDiff(lines, title, items)` / `dayDiffLabel(day)` | 1594–1610 | 差異比對文字產生的小工具函式 |
-| `describeSettingsDiff(current, next, {isImport=false})` | 1614 | 產生完整的人類可讀差異文字（教師、地點、節次時間、特殊時段、排課、倒數事件、單雙週對調、Gemini 金鑰有無、色彩、樣式槽），最多截到 70 行 |
-| `previewImportEditorSettings()` | 1739 | 解碼貼上的傳輸文字（特別處理字面值 `"reset"`：清空 `localStorage` 並重新整理頁面），算出與目前設定的差異，有實質變動才開啟匯入確認 |
-| `mergeImportedSettings(current, imported, preserveStyle=false)` | 1762 | 把匯入資料併入目前設定（依 key 或依科目/教師名稱比對課程、重新映射排課格、合併特殊時段與倒數事件並解決衝突，優先採用匯入內容） |
+| `describeSettingsDiff(current, next, {isImport=false})` | 1887 | 產生完整的人類可讀差異文字（教師、地點、節次時間、特殊時段、排課、倒數事件、單雙週對調、Gemini 金鑰有無、色彩、樣式槽），最多截到 70 行 |
+| `previewImportEditorSettings()` | 2063 | 解碼貼上的傳輸文字（特別處理字面值 `"reset"`：清空 `localStorage` 並重新整理頁面），算出與目前設定的差異，有實質變動才開啟匯入確認 |
+| `mergeImportedSettings(current, imported, preserveStyle=false)` | 2088 | 把匯入資料併入目前設定（依 key 或依科目/教師名稱比對課程、重新映射排課格、合併特殊時段與倒數事件並解決衝突，優先採用匯入內容） |
 | `showEditorImportModeConfirm(current, next, preserveStyle=false)` / `beginEditorImport(...)` / `showEditorImportConfirm(...)` | 1861–1904 | 提供「合併匯入」vs「直接匯入」的確認流程 |
-| `applyEditorSettingsData(next, {closeAfter=false, statusMessage=''})` | 1905 | **設定的中央提交管線**：寫入 `applicationData`、儲存 Gemini 金鑰、正規化色彩/樣式槽、`saveData()`、`applyProAccent()`、`buildSchedule()`、重新渲染所有編輯器子區塊、重設 baseline、清除 `lastListKey`、呼叫 `update()`、顯示存檔 toast |
-| `applyPendingImportSettings()` | 1932 | 透過上面的管線套用 `pendingEditorImportData`，清空傳輸文字框與 OCR 匯入 UI |
-| `resetOCRImporterUI()` | 1947 | 清空 AI 圖片匯入的檔案選擇、預覽圖、檔名、狀態文字、結果面板 |
-| `applyPendingSaveEditor()` | 1963 | 透過提交管線套用 `pendingEditorSaveData`，並重新執行任何排隊中的匯出/匯入動作 |
+| `applyEditorSettingsData(next, {closeAfter=false, statusMessage=''})` | 2318 | **設定的中央提交管線**：寫入 `applicationData`、儲存 Gemini 金鑰、正規化色彩/樣式槽、`saveData()`、`applyProAccent()`、`buildSchedule()`、重新渲染所有編輯器子區塊、重設 baseline、清除 `lastListKey`、呼叫 `update()`、顯示存檔 toast |
+| `applyPendingImportSettings()` | 2346 | 透過上面的管線套用 `pendingEditorImportData`，清空傳輸文字框與 OCR 匯入 UI |
+| `resetOCRImporterUI()` | 2361 | 清空 AI 圖片匯入的檔案選擇、預覽圖、檔名、狀態文字、結果面板 |
+| `applyPendingSaveEditor()` | 2386 | 透過提交管線套用 `pendingEditorSaveData`，並重新執行任何排隊中的匯出/匯入動作 |
 
 **全域常數：** `TRANSFER_MAGIC_V2='[ORBIT]'`、`TRANSFER_MAGIC_V2_END='[/ORBIT]'`、`BASE91_ALPHABET`（91 字元可列印符號集）、`BASE91_DECODE_MAP`。
 
@@ -513,48 +513,48 @@ Orbit AI 沒有分離的淺色主題——`html{color-scheme:dark}` 是寫死的
 
 | 函式 | 行號 | 說明 |
 | --- | --- | --- |
-| `formatClassLabel(subject, teacher, needsTeacher)` | 1980 | 產生簡短標籤：單純科目，或科目歧義/空白時的「科目（教師）」 |
+| `formatClassLabel(subject, teacher, needsTeacher)` | 2403 | 產生簡短標籤：單純科目，或科目歧義/空白時的「科目（教師）」 |
 | `getEditorTeacherEntriesFromDom()` / `getEditorClassLabelFromDom(key)` | 1989–2008 | 從畫面上即時讀取 `.teacher-card` 輸入值 |
-| `getEditorBellPeriodCount()` | 2013 | 目前渲染出的 `.bell-row` 數量 |
-| `editorTimeToMinutes(value)` | 2019 | `HH:MM` 轉分鐘，無效值回傳 `9999`（排序時排到最後） |
-| `sortEditorPeriodsByTime()` | 2025 | 依開始時間重新排序 `.bell-row`，並連動搬移每天對應的 `.period-select` 下拉選單 |
-| `refreshPeriodSelectOptions()` | 2056 | 從目前教師清單重建所有排課用 `<select class="period-select">` 的選項 |
-| `esc(s)` | 2066 | HTML escape（`&`、`"`、`<`、`>`） |
-| `openEditor()` | 2076 | 開啟編輯器：關閉其他面板、渲染所有子區塊、排序 fold、把控制項移進對應層、開啟課表 fold、儲存 baseline 快照 |
-| `orderEditorFolds()` | 2106 | 把編輯器的 `<details>` fold 重新排到固定順序（存檔按鈕之前） |
+| `getEditorBellPeriodCount()` | 2443 | 目前渲染出的 `.bell-row` 數量 |
+| `editorTimeToMinutes(value)` | 2448 | `HH:MM` 轉分鐘，無效值回傳 `9999`（排序時排到最後） |
+| `sortEditorPeriodsByTime()` | 2454 | 依開始時間重新排序 `.bell-row`，並連動搬移每天對應的 `.period-select` 下拉選單 |
+| `refreshPeriodSelectOptions()` | 2487 | 從目前教師清單重建所有排課用 `<select class="period-select">` 的選項 |
+| `esc(s)` | 2508 | HTML escape（`&`、`"`、`<`、`>`） |
+| `openEditor()` | 2518 | 開啟編輯器：關閉其他面板、渲染所有子區塊、排序 fold、把控制項移進對應層、開啟課表 fold、儲存 baseline 快照 |
+| `orderEditorFolds()` | 2548 | 把編輯器的 `<details>` fold 重新排到固定順序（存檔按鈕之前） |
 | `renderCountdownEvent()` / `addCountdownEventRow(event, index)` / `refreshCountdownMoveButtons()` | 2122–2167 | 重建倒數事件編輯列表；每列附拖曳把手與順序輸入框，最多 12 筆 |
 | `getEditorScrollContainer(handle)` / `autoScrollEditorWhileDragging(handle, clientY)` | 2175–2186 | 找到拖曳把手最近的可捲動祖先容器；指標接近邊緣時自動捲動 |
-| `bindEditorDragReorder(row, handleSelector, siblingsSelector, onMove)` | 2202 | **通用的指標拖曳排序邏輯**：隨指標移動在 DOM 手足間搬移 `row`，過程中自動捲動並呼叫 `onMove` |
-| `bindCountdownDrag(row)` | 2258 | 對倒數事件列套用上面的通用拖曳邏輯 |
-| `moveEditorControlsIntoLayers()` | 2261 | 重組編輯器 DOM 成「分層」模式：把單雙週開關內嵌進課表 fold，標記匯入匯出 fold 為常駐工具 |
-| `ensureEditorBackButtons()` | 2282 | 在每個 fold（除了課表／傳輸／選項）內容最上方插入「返回課表」按鈕 |
-| `clearTransferField()` | 2294 | 清空並失焦傳輸文字框，清除狀態文字 |
-| `openEditorFold(id, force=false)` | 2302 | 開啟指定 fold、關閉其他（傳輸 fold 除外，永遠開著） |
+| `bindEditorDragReorder(row, handleSelector, siblingsSelector, onMove)` | 2660 | **通用的指標拖曳排序邏輯**：隨指標移動在 DOM 手足間搬移 `row`，過程中自動捲動並呼叫 `onMove` |
+| `bindCountdownDrag(row)` | 2718 | 對倒數事件列套用上面的通用拖曳邏輯 |
+| `moveEditorControlsIntoLayers()` | 2725 | 重組編輯器 DOM 成「分層」模式：把單雙週開關內嵌進課表 fold，標記匯入匯出 fold 為常駐工具 |
+| `ensureEditorBackButtons()` | 2746 | 在每個 fold（除了課表／傳輸／選項）內容最上方插入「返回課表」按鈕 |
+| `clearTransferField()` | 2764 | 清空並失焦傳輸文字框，清除狀態文字 |
+| `openEditorFold(id, force=false)` | 2772 | 開啟指定 fold、關閉其他（傳輸 fold 除外，永遠開著） |
 | `setEditorConfirmContent(...)` / `showEditorConfirmSheet()` | 2316–2355 | 填入並接線共用確認對話框的標題／訊息／差異文字／按鈕 |
-| `getEditorUnsavedDiff()` | 2360 | 回傳 baseline 與目前表單狀態之間的差異描述 |
-| `showEditorDiscardConfirm()` | 2368 | 顯示捨棄變更確認框（有未套用的匯入資料時訊息不同） |
+| `getEditorUnsavedDiff()` | 2842 | 回傳 baseline 與目前表單狀態之間的差異描述 |
+| `showEditorDiscardConfirm()` | 2853 | 顯示捨棄變更確認框（有未套用的匯入資料時訊息不同） |
 | `showEditorSaveConfirm(diffText)` / `hideEditorDiscardConfirm()` | 2394–2406 | 顯示存檔確認框；清除所有排隊中的待確認動作並隱藏對話框 |
-| `discardEditorChangesAndClose()` | 2423 | 關閉編輯器；若因捨棄而排隊等待開啟的面板（test/style）則接著開啟 |
+| `discardEditorChangesAndClose()` | 2908 | 關閉編輯器；若因捨棄而排隊等待開啟的面板（test/style）則接著開啟 |
 | `getUnconsumedImportWarningText()` / `hasDuplicateTransferData()` / `hasUnconsumedImportData()` / `notifyDiscardedImportData()` | 2435–2471 | 判斷是否有貼上但尚未匯入的文字、AI 辨識預覽等未消費的匯入資料，並顯示對應警告 |
-| `closeEditor(force)` | 2484 | 關閉編輯器：AI 辨識進行中則阻擋；dirty 或有未消費匯入資料時提示確認（除非 `force`） |
+| `closeEditor(force)` | 2973 | 關閉編輯器：AI 辨識進行中則阻擋；dirty 或有未消費匯入資料時提示確認（除非 `force`） |
 | `syncEditorToggles()` / `toggleReverse()` | 2525–2531 | 依 `applicationData.reverseWeek` 設定開關樣式；表單內切換開關（存檔時才真正生效） |
 
 #### `editor-teachers.js`（教師／課程清單）
 
 | 函式 | 行號 | 說明 |
 | --- | --- | --- |
-| `renderEditorTeachers()` | 2539 | 從 `applicationData.teacherOrder`/`teacherDB`/`locationDB` 重建 `#teacher-list` |
-| `generateTeacherKey()` | 2553 | 產生隨機未使用的 `c` + 6 碼 base36 內部 id（使用者看不到） |
-| `makeTeacherCard(key, subject, teacher, location)` | 2561 | 建立一張可編輯教師卡片（科目/教師/教室輸入、頭像、拖曳把手、順序輸入、指派/刪除按鈕） |
-| `subjectAvatarHue(subject)` | 2593 | 科目字串雜湊到 10 個固定色相之一（`TEACHER_AVATAR_HUES`） |
-| `updateTeacherCardAvatar(card)` | 2601 | 依目前科目文字設定卡片頭像的首字與 `--avatar-hue` |
+| `renderEditorTeachers()` | 3027 | 從 `applicationData.teacherOrder`/`teacherDB`/`locationDB` 重建 `#teacher-list` |
+| `generateTeacherKey()` | 3043 | 產生隨機未使用的 `c` + 6 碼 base36 內部 id（使用者看不到） |
+| `makeTeacherCard(key, subject, teacher, location)` | 3055 | 建立一張可編輯教師卡片（科目/教師/教室輸入、頭像、拖曳把手、順序輸入、指派/刪除按鈕） |
+| `subjectAvatarHue(subject)` | 3089 | 科目字串雜湊到 10 個固定色相之一（`TEACHER_AVATAR_HUES`） |
+| `updateTeacherCardAvatar(card)` | 3097 | 依目前科目文字設定卡片頭像的首字與 `--avatar-hue` |
 | `closeAssignSheet()` / `openAssignSheet(key)` | 2613–2620 | 關閉／開啟「排這門課到哪些節次」的抽屜；開啟時建立整份日/節草稿狀態 |
-| `renderAssignmentDay(day)` | 2648 | 依草稿狀態渲染某一天的節次指派網格 |
+| `renderAssignmentDay(day)` | 3154 | 依草稿狀態渲染某一天的節次指派網格 |
 | `assignToSlot(key, day, period)` / `confirmAssignment()` | 2672–2693 | 切換／設定草稿裡的某個節次；若已被別科佔用先跳出覆蓋確認 |
-| `applyAssignments()` | 2701 | 把草稿寫回真正的 `.period-select` 下拉選單（觸發 `change` 事件），關閉抽屜 |
-| `assignTeacherFromMenu(button)` | 2710 | 為 `button` 所在的教師卡片開啟排課抽屜 |
+| `applyAssignments()` | 3240 | 把草稿寫回真正的 `.period-select` 下拉選單（觸發 `change` 事件），關閉抽屜 |
+| `assignTeacherFromMenu(button)` | 3254 | 為 `button` 所在的教師卡片開啟排課抽屜 |
 | `moveEditorRowToPosition(row, value, selector)` / `refreshTeacherMoveButtons()` | 2716–2730 | 把 `row` 移到指定順序位置；更新每張卡片的順序輸入框上限/數值 |
-| `addTeacherRow()` | 2739 | 新增一張帶新 key 的空白教師卡片 |
+| `addTeacherRow()` | 3286 | 新增一張帶新 key 的空白教師卡片 |
 | `getTeacherDeleteKey(card)` / `getTeacherDeleteImpacts(key)` | 2744–2747 | 讀取卡片原始 key；列出目前排課中所有用到 `key` 的日/節（供刪除確認顯示） |
 | `applyTeacherCardDelete(btn)` / `confirmTeacherCardDelete()` / `deleteTeacherCard(btn)` | 2758–2779 | 刪除教師卡片並清除課表中對應的排課格；若該課有被排進課表，先跳出確認 |
 
@@ -562,34 +562,34 @@ Orbit AI 沒有分離的淺色主題——`html{color-scheme:dark}` 是寫死的
 
 | 函式 | 行號 | 說明 |
 | --- | --- | --- |
-| `renderEditorSchedule(weeklyScheduleOverride)` | 2804 | 從（覆寫值或）`applicationData.weeklySchedule` 重建 `#schedule-grid` 的每日排課列與下拉選單 |
+| `renderEditorSchedule(weeklyScheduleOverride)` | 3353 | 從（覆寫值或）`applicationData.weeklySchedule` 重建 `#schedule-grid` 的每日排課列與下拉選單 |
 | `renderEditorBells()` / `makeBellRow(number, startValue, endValue)` / `refreshBellNumbers()` | 2836–2856 | 重建節次時間清單；建立單一節次列；增刪後重新編號 |
-| `addBellRow()` | 2863 | 新增一節，預設接續上一節結束時間後 50 分鐘 |
+| `addBellRow()` | 3415 | 新增一節，預設接續上一節結束時間後 50 分鐘 |
 | `getBellDeleteImpacts(index)` / `applyBellRowDelete(btn)` / `confirmBellRowDelete()` / `deleteBellRow(btn)` | 2883–2919 | 列出哪些天在該節有排課（供刪除確認）；刪除節次列並移除課表中對應欄位；有排課時先確認 |
 | `renderEditorBreaks()` / `makeBreakRow(name, start, end)` / `addBreakRow()` / `sortEditorBreaksByTime()` / `deleteBreakRow(btn)` | 2940–2971 | 特殊時段清單的渲染、新增列、依時間排序、刪除 |
-| `saveEditor()` | 2976 | 排序節次/特殊時段、驗證時間區間（衝突時顯示對話框）、正規化表單狀態、算出與 baseline 的差異、開啟存檔確認框 |
-| `showEditorTimeConflict(message)` | 2991 | 顯示時間重疊錯誤的確認框，並附一個跳轉到相關 fold（節次或特殊時段）的按鈕 |
+| `saveEditor()` | 3537 | 排序節次/特殊時段、驗證時間區間（衝突時顯示對話框）、正規化表單狀態、算出與 baseline 的差異、開啟存檔確認框 |
+| `showEditorTimeConflict(message)` | 3554 | 顯示時間重疊錯誤的確認框，並附一個跳轉到相關 fold（節次或特殊時段）的按鈕 |
 
 #### `dashboard-render.js`（主畫面渲染與 tick）
 
 | 函式 | 行號 | 說明 |
 | --- | --- | --- |
-| `syncTestPlayPauseUi()` | 3011 | 依 `MANUALLY_TEST`/`IS_SIMULATING` 更新時間模擬面板的開始/暫停按鈕文字與樣式 |
+| `syncTestPlayPauseUi()` | 3573 | 依 `MANUALLY_TEST`/`IS_SIMULATING` 更新時間模擬面板的開始/暫停按鈕文字與樣式 |
 | （accordion IIFE） | 3049 | 讓編輯器的 `<details>` fold 在非分層模式下同時只開一個，分層模式下避免原生開合閃爍 |
 | （捲動輸入偵測 IIFE） | 3089 | 使用者一碰觸/滾輪操作課表清單，立刻設定 `userScrolledDuringAlign=true`（比 `scroll` 事件更早觸發） |
-| `fitNowTitleText(force=false)` | 3102 | 用二分搜尋縮小「現在課程」標題字體，讓它跟 meta 標籤並排時剛好塞得下寬度；依快取鍵記憶結果，`force` 時強制重算 |
-| `createMetaChip(text, cls='')` | 3154 | 建立 `<span class="meta-chip ...">` |
-| `getClassColor(key)` | 3160 | 回傳目前應套用的強調色（樣式面板 dirty 時用草稿色，否則用 `applicationData.proAccent`） |
-| `renderList(week, curIdx, nxtIdx, curDay, isDayFinished)` | 3167 | 重建 `viewDay` 的課表列表，標記 is-now/is-next、接上點擊/鍵盤事件開啟 `openModal`、重新觸發進場動畫，最後呼叫 `keepActiveClassVisible` |
+| `fitNowTitleText(force=false)` | 3669 | 用二分搜尋縮小「現在課程」標題字體，讓它跟 meta 標籤並排時剛好塞得下寬度；依快取鍵記憶結果，`force` 時強制重算 |
+| `createMetaChip(text, cls='')` | 3737 | 建立 `<span class="meta-chip ...">` |
+| `getClassColor(key)` | 3743 | 回傳目前應套用的強調色（樣式面板 dirty 時用草稿色，否則用 `applicationData.proAccent`） |
+| `renderList(week, curIdx, nxtIdx, curDay, isDayFinished)` | 3751 | 重建 `viewDay` 的課表列表，標記 is-now/is-next、接上點擊/鍵盤事件開啟 `openModal`、重新觸發進場動畫，最後呼叫 `keepActiveClassVisible` |
 | （resize/orientationchange/load 監聽） | 3243 | 視窗尺寸變化時重跑 `fitNowTitleText(true)` |
-| `mainClockTick()` | 3249 | **`setInterval` 每秒觸發的函式**——完整流程見〈[畫面每秒都在算什麼](#畫面每秒都在算什麼tick-loop)〉 |
+| `mainClockTick()` | 3836 | **`setInterval` 每秒觸發的函式**——完整流程見〈[畫面每秒都在算什麼](#畫面每秒都在算什麼tick-loop)〉 |
 
 #### `gemini-ocr.js`（AI 圖片辨識）
 
 | 函式／方法 | 行號 | 說明 |
 | --- | --- | --- |
 | `class ImagePreprocessor` → `.process(file)` | 3262 | 把選取的圖片載入 `<img>`，驗證型別／最小解析度（≥240×160），畫進同尺寸 `<canvas>` |
-| `capCanvasDimension(canvas, maxDimension=1600)` | 3288 | 若畫布最長邊超過上限就等比縮小（回傳新畫布），否則原樣回傳 |
+| `capCanvasDimension(canvas, maxDimension=1600)` | 3875 | 若畫布最長邊超過上限就等比縮小（回傳新畫布），否則原樣回傳 |
 | `getStoredGeminiApiKey()` / `setStoredGeminiApiKey(key)` | 3306–3310 | 讀取／寫入（或移除）`localStorage` 裡的 Gemini 金鑰 |
 | `class AIVisionProcessor` constructor | 3318 | 設定 `geminiModels = ['gemini-3.6-flash','gemini-3.7-flash','gemini-2.5-flash','gemini-3.5-flash-lite']`（依序嘗試的備援順序） |
 | `.buildPrompt()` | 3326 | 回傳送給 Gemini 的完整結構化擷取提示詞（schema ＋規則） |
@@ -599,9 +599,9 @@ Orbit AI 沒有分離的淺色主題——`html{color-scheme:dark}` 是寫死的
 | `.normalizeAIOutput(aiResult)` | 3429 | 把 AI 原始 JSON 轉成內部 schema：正規化時間、用產生的 `oc<N>` key 建出 `teacherDB`/`locationDB`、透過 key map 重映射 `weeklySchedule`、建立供指派預覽用的 `recognizedBlocks`、正規化 `countdownEvents` |
 | `class DataValidator` → `.validate(candidate)` | 3549 | 檢查正規化後的候選資料至少有一門課或一筆倒數事件、`bellTimes` 型別／數值合法、`weeklySchedule` 型別合法 |
 | `class ImportPreview` constructor / `.render(candidate, validation)` | 3567–3572 | 建立整份 OCR 匯入預覽 UI（可編輯的節次列、特殊時段列、課程卡片、日/節指派網格、倒數事件列），即時重新驗證指派下拉選單標籤，把送出鈕接到「收集編輯後資料 → 呼叫 onImport」 |
-| `mountOCRImporter({input, runButton, imagePreview, status, result, onImport})` | 3745 | 接線 OCR 匯入器的選檔與「執行辨識」流程：前處理成畫布 → 縮圖 → 缺金鑰則提示輸入 → 呼叫 `AIVisionProcessor.recognizeSchedule` → 驗證 → 渲染 `ImportPreview` |
-| `promptGeminiApiKey()` | 3796 | 顯示一次性的 Gemini 金鑰輸入視窗（Promise），確認後透過 `setStoredGeminiApiKey` 存檔，取消則回傳空字串 |
-| `activateOCRImporter()` | 3836 | 首次需要時才延遲接線 OCR 匯入器（用 `ocrImporterPromise` 記憶避免重複初始化）；匯入時正規化編輯後資料（沒有相關訊號時保留既有特殊時段／單雙週對調／外觀樣式），呼叫 `beginEditorImport` |
+| `mountOCRImporter({input, runButton, imagePreview, status, result, onImport})` | 4439 | 接線 OCR 匯入器的選檔與「執行辨識」流程：前處理成畫布 → 縮圖 → 缺金鑰則提示輸入 → 呼叫 `AIVisionProcessor.recognizeSchedule` → 驗證 → 渲染 `ImportPreview` |
+| `promptGeminiApiKey()` | 4498 | 顯示一次性的 Gemini 金鑰輸入視窗（Promise），確認後透過 `setStoredGeminiApiKey` 存檔，取消則回傳空字串 |
+| `activateOCRImporter()` | 4543 | 首次需要時才延遲接線 OCR 匯入器（用 `ocrImporterPromise` 記憶避免重複初始化）；匯入時正規化編輯後資料（沒有相關訊號時保留既有特殊時段／單雙週對調／外觀樣式），呼叫 `beginEditorImport` |
 | （檔案輸入的 `pointerdown`/`change` 監聽） | 3886 | 首次互動時延遲啟用 OCR 匯入器並載入選取的檔案 |
 
 **全域常數：** `GEMINI_API_KEY_STORAGE_KEY = 'orbitAiGeminiApiKey'`。
@@ -629,43 +629,43 @@ update();
 
 | 函式 | 行號 | 說明 |
 | --- | --- | --- |
-| `fetchTextAsync(url)` | 3931 | 加上快取破壞參數的 `fetch()`，回傳回應文字，非 2xx 則丟錯 |
-| `el(id)` | 3938 | `document.getElementById` 的簡寫 |
-| `getAppVersionAsync()` | 3939 | 抓取頁面 HTML＋`css/styles.css`＋`js/app.js` 串接起來，清空 `#app-version` 內容後算類 FNV-1a 32-bit 雜湊，轉成 base36 大寫回傳（抓取失敗則退回對 `ORBIT_INITIAL_MARKUP` 算雜湊） |
-| `syncAppVersion()` | 3957 | 把「版本 `<雜湊值>`」（或「版本 未知」）寫進 `#app-version` |
+| `fetchTextAsync(url)` | 4646 | 加上快取破壞參數的 `fetch()`，回傳回應文字，非 2xx 則丟錯 |
+| `el(id)` | 4654 | `document.getElementById` 的簡寫 |
+| `getAppVersionAsync()` | 4657 | 抓取頁面 HTML＋`css/styles.css`＋`js/app.js` 串接起來，清空 `#app-version` 內容後算類 FNV-1a 32-bit 雜湊，轉成 base36 大寫回傳（抓取失敗則退回對 `ORBIT_INITIAL_MARKUP` 算雜湊） |
+| `syncAppVersion()` | 4676 | 把「版本 `<雜湊值>`」（或「版本 未知」）寫進 `#app-version` |
 | `clampInt(value, min, max, fallback)` / `normalizeDay(day)` / `normalizeSeconds(seconds)` | 3966–3976 | 數值解析與邊界夾制的小工具 |
-| `selectedDay()` | 3981 | 讀取 `#test-day-input` 的值（經 `normalizeDay`） |
-| `resetRenderState()` | 3984 | 模擬日期改變時重置 `viewDay`／`autoAdvancedAfterFinishedDay`／`lastListKey`／`lastAutoScrollKey` |
-| `writeDay(day)` | 3990 | 設定 `window.TEST_DAY`、更新日期選單、呼叫 `resetRenderState` |
+| `selectedDay()` | 4702 | 讀取 `#test-day-input` 的值（經 `normalizeDay`） |
+| `resetRenderState()` | 4705 | 模擬日期改變時重置 `viewDay`／`autoAdvancedAfterFinishedDay`／`lastListKey`／`lastAutoScrollKey` |
+| `writeDay(day)` | 4711 | 設定 `window.TEST_DAY`、更新日期選單、呼叫 `resetRenderState` |
 | `persistTestState()` / `restoreTestState()` | 3996–4015 | 把模擬狀態（日期、秒數、播放中旗標、日終鎖定旗標、暫停於日終旗標、暫停時的秒數/日期）存進／讀出 `localStorage['orbitTestState']` |
-| `unlockTestControls()` | 4040 | 把滑桿/時/分輸入框的範圍解鎖成完整 0–24 小時 |
+| `unlockTestControls()` | 4771 | 把滑桿/時/分輸入框的範圍解鎖成完整 0–24 小時 |
 | `setStartOfDayInputs()` / `setEndOfDayInputs()` / `forceStartOfDayInputs()` | 4058–4077 | 把時間輸入設為 `00:00`／`24:00`；`force` 版本會在多個動畫影格/計時器裡重複寫入，跟其他競爭寫入搶最終結果 |
 | `clearSavedPausedTime()` / `clearSliderEndpointLock()` | 4085–4089 | 清除暫停時記下的秒數/日期；清除滑桿端點鎖定 |
 | `getTypedTargetSeconds()` / `selectedTargetSeconds()` | 4092–4100 | 讀取時/分輸入框算出目標秒數（24 時代表日終）；依暫停狀態/滑桿端點/輸入框決定最終「目標」秒數 |
-| `setSimSeconds(seconds, opts)` | 4106 | 設定（正規化後的）`window.TEST_TIME_SEC`，可選擇同步寫回輸入框/滑桿 |
+| `setSimSeconds(seconds, opts)` | 4844 | 設定（正規化後的）`window.TEST_TIME_SEC`，可選擇同步寫回輸入框/滑桿 |
 | `syncTestChrome()` / `refreshTestUi()` | 4116–4122 | 同步所有模擬相關 UI 狀態；呼叫 `window.update()` 並記錄 `lastSimSecond` |
-| `pauseForEditing()` | 4127 | 若處於任何模擬模式，強制切成「手動測試中但非播放中」並同步 UI（使用者開始輸入/聚焦時呼叫） |
-| `setDefaultsToCurrentTime(force)` | 4134 | 用真實目前時間預填模擬的星期/時/分/滑桿輸入（與全域變數，除非已在手動測試中且未強制） |
-| `mergeNextClassWithTimer()` | 4151 | 一次性 DOM 重組：把 `.next-box` 搬進 `.time-card` 內（若尚未巢狀化） |
-| `patchPanelOpeners()` | 4158 | monkey-patch `window.toggleTestPanel`/`openTestPanel`，開啟面板前後預填目前時間輸入（只執行一次） |
-| `syncCrossDayBeforeRender()` | 4171 | 偵測模擬時鐘播放中跨過午夜，據此把 `TEST_DAY` 往前推進 |
-| `getTestAwareNow()` | 4186 | 回傳反映真實時間，或（手動測試模式下）把 `TEST_TIME_SEC` 套進今天日期的 `Date` |
-| `applyDashboardState()` | 4196 | 依目前模擬/真實時間 vs. 今日課表，切換 `.dashboard` 上的狀態 class（`v3-15-day-finished`／`v3-16-outside-class-range`／`orbit-no-school-day`／`orbit-no-upcoming-class`） |
-| `syncTestingBody()` | 4218 | 依測試模式旗標切換 `body.testing` class |
-| `finishBoot()` | 4221 | 移除 `body` 的 `orbit-booting` class |
-| `suppressListAnimationForThisFrame()` | 4224 | 短暫（跨兩個動畫影格）加上 `body.orbit-suppress-list-animation`，離開測試模式時避免清單重新播放進場動畫造成突兀感 |
-| `patchUpdate()` | 4233 | monkey-patch `window.update`（只執行一次）：包一層在原本的 `update` 外面——離開測試模式時抑制清單動畫、渲染前先處理跨日、呼叫原始 `update`，之後依需要鎖定日終/日初輸入、刷新輸入框顯示、套用 dashboard 狀態 class、持久化模擬狀態、結束開機狀態 |
-| `enableExitButton()` | 4258 | 啟用並完全不透明化 `#test-exit-btn` |
-| `window.updateInputDisplay()` | 4265 | 把 `TEST_TIME_SEC` 寫進時/分輸入框（任一輸入框正在聚焦時跳過） |
-| `window.syncTestFromSlider()` | 4282 | 處理滑桿拖曳：拖到最大端點鎖定日終（若原本正在播放則推進一天並暫停於跨日點），否則依滑桿值設定模擬時間 |
-| `window.syncTestFromInputs()` | 4324 | 處理時/分輸入框變更：`h>=24` 鎖定日終，否則依輸入值設定模擬秒數 |
-| `window.syncTestDayChange()` | 4344 | 處理星期選單變更：重置到當日開始秒數並刷新 |
-| `startManualEndpointRun(day)` | 4354 | 從接近日終的秒數（`END_OF_DAY_SECONDS - 5秒`）開始播放，並鎖定日終狀態 |
-| `window.toggleTestPlayPause(event)` | 4365 | **播放/暫停狀態機**：從暫停時記下的秒數恢復、從手動跨日暫停恢復、從日初附近或剛好日終開始播放、或一般性地開始/停止播放（暫停時記下當時秒數/日期） |
-| `window.exitTestMode()` | 4424 | 完全重置所有模擬相關全域旗標、清除 `localStorage['orbitTestState']`、清空模擬狀態 UI、關閉模擬面板、呼叫 `update()` |
-| `window.forceAppRefresh()` | 4442 | 用帶快取破壞查詢字串 `?refresh=<timestamp>` 的 `location.replace` 重新載入頁面 |
+| `pauseForEditing()` | 4865 | 若處於任何模擬模式，強制切成「手動測試中但非播放中」並同步 UI（使用者開始輸入/聚焦時呼叫） |
+| `setDefaultsToCurrentTime(force)` | 4872 | 用真實目前時間預填模擬的星期/時/分/滑桿輸入（與全域變數，除非已在手動測試中且未強制） |
+| `mergeNextClassWithTimer()` | 4889 | 一次性 DOM 重組：把 `.next-box` 搬進 `.time-card` 內（若尚未巢狀化） |
+| `patchPanelOpeners()` | 4896 | monkey-patch `window.toggleTestPanel`/`openTestPanel`，開啟面板前後預填目前時間輸入（只執行一次） |
+| `syncCrossDayBeforeRender()` | 4909 | 偵測模擬時鐘播放中跨過午夜，據此把 `TEST_DAY` 往前推進 |
+| `getTestAwareNow()` | 4928 | 回傳反映真實時間，或（手動測試模式下）把 `TEST_TIME_SEC` 套進今天日期的 `Date` |
+| `applyDashboardState()` | 4938 | 依目前模擬/真實時間 vs. 今日課表，切換 `.dashboard` 上的狀態 class（`v3-15-day-finished`／`v3-16-outside-class-range`／`orbit-no-school-day`／`orbit-no-upcoming-class`） |
+| `syncTestingBody()` | 4972 | 依測試模式旗標切換 `body.testing` class |
+| `finishBoot()` | 4976 | 移除 `body` 的 `orbit-booting` class |
+| `suppressListAnimationForThisFrame()` | 4979 | 短暫（跨兩個動畫影格）加上 `body.orbit-suppress-list-animation`，離開測試模式時避免清單重新播放進場動畫造成突兀感 |
+| `patchUpdate()` | 4988 | monkey-patch `window.update`（只執行一次）：包一層在原本的 `update` 外面——離開測試模式時抑制清單動畫、渲染前先處理跨日、呼叫原始 `update`，之後依需要鎖定日終/日初輸入、刷新輸入框顯示、套用 dashboard 狀態 class、持久化模擬狀態、結束開機狀態 |
+| `enableExitButton()` | 5025 | 啟用並完全不透明化 `#test-exit-btn` |
+| `window.updateInputDisplay()` | 5032 | 把 `TEST_TIME_SEC` 寫進時/分輸入框（任一輸入框正在聚焦時跳過） |
+| `window.syncTestFromSlider()` | 5049 | 處理滑桿拖曳：拖到最大端點鎖定日終（若原本正在播放則推進一天並暫停於跨日點），否則依滑桿值設定模擬時間 |
+| `window.syncTestFromInputs()` | 5094 | 處理時/分輸入框變更：`h>=24` 鎖定日終，否則依輸入值設定模擬秒數 |
+| `window.syncTestDayChange()` | 5114 | 處理星期選單變更：重置到當日開始秒數並刷新 |
+| `startManualEndpointRun(day)` | 5124 | 從接近日終的秒數（`END_OF_DAY_SECONDS - 5秒`）開始播放，並鎖定日終狀態 |
+| `window.toggleTestPlayPause(event)` | 5135 | **播放/暫停狀態機**：從暫停時記下的秒數恢復、從手動跨日暫停恢復、從日初附近或剛好日終開始播放、或一般性地開始/停止播放（暫停時記下當時秒數/日期） |
+| `window.exitTestMode()` | 5194 | 完全重置所有模擬相關全域旗標、清除 `localStorage['orbitTestState']`、清空模擬狀態 UI、關閉模擬面板、呼叫 `update()` |
+| `window.forceAppRefresh()` | 5216 | 先用 `fetch(url, {cache:'reload'})` 對頁面本身與 `VERSIONED_ASSETS`（`css/styles.css`、`js/app.js`）發出網路強制重新抓取的請求，確保 HTTP 快取是最新的，再用帶 `?refresh=<timestamp>` 查詢字串的 `location.replace` 重新載入頁面——避免版本雜湊沒變時瀏覽器直接吃磁碟快取的舊檔案 |
 | `bindPlayButton()` / `bindExitButtons()` / `bindInputPauses()` | 4448–4471 | 綁定開始/暫停按鈕（先複製節點移除原本 inline `onclick` 再綁事件，避免重複綁定）、結束模擬按鈕、時/分/星期輸入框的聚焦暫停行為 |
-| `init()` | 4487 | **模組初始化**：合併下一堂課方塊進計時卡、解鎖控制項、同步版本顯示、還原（或依目前時間預填）模擬狀態、patch 面板開關與 `update`、綁定按鈕與輸入監聽、同步 UI/dashboard 狀態、結束開機、呼叫 `window.update()` |
+| `init()` | 5275 | **模組初始化**：合併下一堂課方塊進計時卡、解鎖控制項、同步版本顯示、還原（或依目前時間預填）模擬狀態、patch 面板開關與 `update`、綁定按鈕與輸入監聽、同步 UI/dashboard 狀態、結束開機、呼叫 `window.update()` |
 | （立即呼叫 `init()`） | 4512 | IIFE 結尾立即執行 |
 
 **模組內部（閉包）狀態：** `END_OF_DAY_MINUTES`／`END_OF_DAY_SECONDS`／`START_LEAD_SECONDS`／`DAY_START_SECONDS`（常數）；`lastSimSecond`、`endOfDayArmed`、`pausedAtManualRollover`、`savedPausedSecond`、`savedPausedDay`、`sliderEndpointLock`、`lastTestingState`、`updatePatched`、`panelPatched`、`defaultsInitialized`、`TEST_STATE_STORAGE_KEY='orbitTestState'`、`VERSIONED_ASSETS=['css/styles.css','js/app.js']`。
