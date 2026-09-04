@@ -388,7 +388,6 @@ body.orbit-suppress-list-animation .animate-list .row{animation:none}
   background:linear-gradient(135deg,color-mix(in srgb,var(--pro-accent) 26%,var(--orbit-panel-strong)),color-mix(in srgb,var(--pro-accent) 8%,var(--orbit-panel-strong)));
   border:1.5px solid color-mix(in srgb,var(--pro-accent) 55%,transparent);
   box-shadow:0 14px 34px color-mix(in srgb,var(--pro-accent) 30%,transparent),inset 0 1px 0 rgba(255,255,255,.09);
-  backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);
   border-left:4px solid var(--pro-accent);padding-left:10px;
 }
 .row.is-now{
@@ -396,7 +395,6 @@ body.orbit-suppress-list-animation .animate-list .row{animation:none}
   background:linear-gradient(135deg,color-mix(in srgb,var(--pro-secondary) 28%,var(--orbit-panel-strong)),color-mix(in srgb,var(--pro-secondary) 9%,var(--orbit-panel-strong)));
   border:1.5px solid color-mix(in srgb,var(--pro-secondary) 58%,transparent);
   box-shadow:0 14px 34px color-mix(in srgb,var(--pro-secondary) 34%,transparent),inset 0 1px 0 rgba(255,255,255,.09);
-  backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);
   border-left:4px solid var(--pro-secondary);padding-left:10px;
 }
 .row.is-next .period-badge{border-color:transparent;background:var(--pro-accent);color:var(--pro-accent-text)}
