@@ -4606,39 +4606,3 @@ update();
 
   init();
 })();
-
-// ---- js/liquid-glass-sheen.js ----
-// Lets the dashboard card's specular sheen (--sheen-x/--sheen-y, see
-// styles.css) glide toward the pointer/touch instead of sitting in a fixed
-// spot, so the glass reads as reacting to light rather than being a static
-// gradient painted on top of it. Cheap and optional: rAF-throttled, and a
-// device that never fires pointermove over the card (a plain tap) just
-// keeps the sheen's static default position.
-(function initGlassSheen(){
-  // The sheen is hidden outright in standalone (Home Screen) mode — see the
-  // display-mode:standalone block in styles.css — so there's nothing for
-  // this listener to drive there; skip wiring it up at all.
-  if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return;
-  var card = document.querySelector('.dashboard');
-  if (!card) return;
-  var raf = 0;
-  function move(event){
-    if (raf) return;
-    raf = requestAnimationFrame(function(){
-      raf = 0;
-      var rect = card.getBoundingClientRect();
-      if (!rect.width || !rect.height) return;
-      var x = ((event.clientX - rect.left) / rect.width) * 100;
-      var y = ((event.clientY - rect.top) / rect.height) * 100;
-      card.style.setProperty('--sheen-x', Math.max(-10, Math.min(110, x)) + '%');
-      card.style.setProperty('--sheen-y', Math.max(-30, Math.min(60, y - 30)) + '%');
-    });
-  }
-  function reset(){
-    card.style.removeProperty('--sheen-x');
-    card.style.removeProperty('--sheen-y');
-  }
-  card.addEventListener('pointermove', move, { passive: true });
-  card.addEventListener('pointerleave', reset, { passive: true });
-})();
-
