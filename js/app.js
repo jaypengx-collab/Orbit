@@ -357,8 +357,6 @@ let todayDay = viewDay;
 let lastListKey = "";
 let autoAdvancedAfterFinishedDay = null;
 let lastAutoScrollKey = "";
-let allowProgrammaticListScroll = false;
-let clampScrollFrame = 0;
 // Converts an HH:MM time string into minutes after midnight.
 function parseTime(t)  {
   const[
@@ -508,7 +506,6 @@ function refreshStyleModeLayout() {
   requestAnimationFrame(() => {
     const list=document.getElementById('schedule-list');
     if (list) {
-      delete list.dataset.autoAlignedTop;
       lastAutoScrollKey=null
     }
     if (typeof update==='function') update();
@@ -1094,11 +1091,9 @@ function update()  {
   }
 }
 
-// Set the instant the user touches or scrolls the list (see initScheduleScrollClamp),
-// not only once a 'scroll' event actually lands — iOS Safari can delay that event past
-// when a pending alignment below already fired, which is what read as the list fighting
-// the user's finger. Any pending alignment checks this and backs off instead of snapping
-// the list back under them.
+// Set the instant the user touches or scrolls the list (see initScheduleScrollInputTracking),
+// not only once a 'scroll' event actually lands. A pending one-time alignment (below) checks
+// this and backs off instead of yanking the list out from under an in-progress gesture.
 let userScrolledDuringAlign = false;
 
 function keepActiveClassVisible(list,isDayFinished,scrollKey) {
@@ -1109,8 +1104,6 @@ function keepActiveClassVisible(list,isDayFinished,scrollKey) {
   const activeRow = list.querySelector('.is-now') || list.querySelector('.is-next');
 
   if (isDayFinished || !activeRow) {
-    clearListAutoAlignedTop(list);
-    setListAutoScrollSpace(list,0);
     requestAnimationFrame(() => list.scrollTo({
       top:0,
       behavior:'auto'
@@ -1123,75 +1116,22 @@ function keepActiveClassVisible(list,isDayFinished,scrollKey) {
   // is already correct here and doesn't need to be re-polled on a timer afterwards.
   requestAnimationFrame(() => {
     if (userScrolledDuringAlign) return;
-    const targetTop=Math.max(0,activeRow.offsetTop);
-    const reserved=parseFloat(list.dataset.autoScrollSpace||'0')||0;
-    const naturalMax=Math.max(0,getNaturalListMaxScroll(list)-reserved);
-    const neededSpace=Math.max(0,targetTop-naturalMax);
-
-    setListAutoScrollSpace(list,neededSpace);
-    setListAutoAlignedTop(list,targetTop);
-    void list.offsetHeight;
-    allowProgrammaticListScroll=true;
+    // Clamped to the list's own natural scroll bound — this never manufactures extra
+    // scrollable room to force exact top-alignment for a class near the end of a long
+    // day. That used to need a second system to stop manual scrolling drifting into the
+    // manufactured room, which meant fighting iOS Safari's native rubber-band bounce at
+    // the bottom edge and reading as flicker. A class within the last screenful now
+    // settles as high as native scrolling allows instead of exactly at the top; nothing
+    // here ever imposes a ceiling tighter than the browser's own, so there is nothing
+    // left to contest during a touch gesture.
+    const targetTop=Math.min(Math.max(0,activeRow.offsetTop),getNaturalListMaxScroll(list));
     list.scrollTo({top:targetTop,behavior:'auto'});
-    requestAnimationFrame(() => {
-      allowProgrammaticListScroll=false
-    })
   })
 }
 
-// Adds hidden bottom room only when auto-scroll needs to align a late class.
-function setListAutoScrollSpace(list,space) {
-  list.dataset.autoScrollSpace=String(Math.max(0,space));
-  list.style.setProperty('--auto-scroll-space',`${Math.max(0,space)}px`)
-}
-function setListAutoAlignedTop(list,top) {
-  list.dataset.autoAlignedTop=String(Math.max(0,top))
-}
-function clearListAutoAlignedTop(list) {
-  if (!list) return;
-  delete list.dataset.autoAlignedTop;
-  /* Only called from keepActiveClassVisible when the day is finished or
-     there's no active row — never from a manual scroll/touch gesture. */
-  setListAutoScrollSpace(list,0);
-}
-
-// Real content boundary for manual scrolling.
+// Real content boundary for scrolling.
 function getNaturalListMaxScroll(list) {
   return Math.max(0,list.scrollHeight-list.clientHeight)
-}
-
-// Prevents manual scrolling from being restricted below what the auto-scroll system already
-// allows. Single source of truth for the scroll ceiling: the user is always allowed to scroll
-// at least as far as auto-scroll's own target, so the two systems never fight each other.
-//
-// Touch devices fire many 'scroll' events per frame during momentum/rubber-band deceleration
-// at the bottom edge. Correcting scrollTop synchronously on every one of those events fights
-// the browser's own elastic-bounce animation frame-by-frame, which is what reads as flicker.
-// Coalescing to a single correction per animation frame (and tolerating a couple of px of
-// native overscroll) keeps the same ceiling without contesting the bounce.
-function clampManualListScroll() {
-  if (allowProgrammaticListScroll)return;
-  userScrolledDuringAlign=true;
-  if (clampScrollFrame) return;
-  clampScrollFrame=requestAnimationFrame(()=>{
-    clampScrollFrame=0;
-    const list=document.getElementById('schedule-list');
-    if (!list)return;
-    // No reserved alignment space means the browser's own overflow bounds already equal
-    // our ceiling — there's nothing for this to guard against, so leave native scrolling
-    // (including iOS rubber-band bounce at the bottom) completely alone. Stepping in here
-    // unconditionally on every 'scroll' event was fighting that native bounce frame-by-frame,
-    // which is what read as flickering specifically on touch/Safari.
-    const reserved=parseFloat(list.dataset.autoScrollSpace||'0')||0;
-    if (reserved<=0) return;
-    const aligned=parseFloat(list.dataset.autoAlignedTop||'');
-    const max=Math.max(getNaturalListMaxScroll(list),Number.isFinite(aligned)?aligned:0);
-    const overshoot=list.scrollTop-max;
-
-    if (overshoot>2) {
-      list.scrollTop=max
-    }
-  })
 }
 
 // Closes the class detail modal.
@@ -3142,18 +3082,15 @@ function syncTestPlayPauseUi() {
     })
   })
 })();
-// The reserved auto-alignment space remains available during manual scrolling
-// so late classes can still be brought to the intended viewport position.
-(function initScheduleScrollClamp() {
+// Marks real user input the instant it starts, not only once a 'scroll' event eventually
+// fires — see the comment on keepActiveClassVisible. There is no manual-scroll correction
+// here at all: the list's scrollable bounds are always the browser's own native bounds, so
+// there is nothing for this code to enforce beyond what iOS/desktop scrolling already does.
+(function initScheduleScrollInputTracking() {
   const list=document.getElementById('schedule-list');
 
   if (!list)return;
 
-  list.addEventListener('scroll',()=>{
-    clampManualListScroll();
-  },{passive:true});
-  // Mark real user input the instant it starts, not only once a 'scroll' event
-  // eventually fires — see the comment on keepActiveClassVisible.
   ['pointerdown','touchstart','wheel'].forEach(type=>{
     list.addEventListener(type,()=>{ userScrolledDuringAlign=true },{passive:true})
   })

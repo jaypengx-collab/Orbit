@@ -343,7 +343,7 @@ body.editor-open .top-actions{opacity:0;visibility:hidden;pointer-events:none;tr
 .list-container{
   width:min(420px,100%);flex:1 1 auto;min-height:0;position:relative;overflow-y:auto;overscroll-behavior:contain;
   -webkit-overflow-scrolling:touch;padding-top:3px;
-  padding-bottom:calc(16px + var(--auto-scroll-space,0px) + env(safe-area-inset-bottom));
+  padding-bottom:calc(16px + env(safe-area-inset-bottom));
   scrollbar-color:rgba(255,255,255,.3) transparent;scrollbar-width:thin;
   transition:filter .35s ease,opacity .35s ease,transform .35s ease;
   overflow-x:hidden;
