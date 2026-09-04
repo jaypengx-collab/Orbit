@@ -417,7 +417,7 @@ body.modal-open > .dashboard,body.modal-open > .nav-bar,body.modal-open > #sched
 
 .modal-sheet{
   position:fixed;left:max(12px,env(safe-area-inset-left));right:max(12px,env(safe-area-inset-right));bottom:max(12px,env(safe-area-inset-bottom));top:auto;
-  width:auto;max-width:none;max-height:min(560px,calc(100dvh - 24px));margin:0 auto;
+  width:auto;max-width:none;height:min(415px,calc(100dvh - 24px));max-height:min(415px,calc(100dvh - 24px));margin:0 auto;
   backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
   -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
   padding:9px 20px 20px;
