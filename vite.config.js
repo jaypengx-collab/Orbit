@@ -13,6 +13,14 @@ function copyNojekyll() {
 }
 
 export default defineConfig({
+  // Relative, not absolute ('/'): this site deploys to
+  // https://jaypengx-collab.github.io/Orbit/ - a subpath, not domain root.
+  // Vite's default base emits asset URLs like "/assets/x.js", which under a
+  // subpath deploy resolve to the wrong place (domain root instead of
+  // /Orbit/) and 404, leaving the page stuck on its boot spinner forever
+  // since the module that would clear it never loads. base: './' emits
+  // "./assets/x.js" instead, which resolves correctly under any subpath.
+  base: './',
   plugins: [copyNojekyll()],
   build: {
     outDir: 'dist',
