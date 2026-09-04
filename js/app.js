@@ -3259,9 +3259,13 @@ function renderList(week,curIdx,nxtIdx,curDay,isDayFinished) {
     content.className='content';
     const name=document.createElement('div');
     name.className='row-name';
-    name.append(document.createTextNode(info.n+' '));
+    const nameText=document.createElement('span');
+    nameText.className='row-name-text';
+    nameText.textContent=info.n;
+    name.append(nameText);
     if (info.label) {
       const labelWrap=document.createElement('span');
+      labelWrap.className='row-name-week-label';
       labelWrap.innerHTML=info.label;
       name.append(labelWrap);
     }
