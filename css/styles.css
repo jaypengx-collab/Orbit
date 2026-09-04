@@ -16,17 +16,12 @@
 
 /* ---- Design tokens ---- */
 :root{
-  --orbit-ink:#08141b;
   --orbit-panel:#10232c;
   --orbit-panel-strong:#172f39;
-  --orbit-cyan:#65d4d0;
-  --orbit-cyan-soft:rgba(101,212,208,.16);
-  --orbit-amber:#f4b860;
   --orbit-coral:#ef8b77;
   --orbit-white:#f4f8f7;
   --orbit-muted:#9db1b5;
   --orbit-line:rgba(188,230,229,.16);
-  --orbit-shadow:0 18px 42px rgba(0,8,14,.28);
   --orbit-radius-lg:26px;
   --orbit-radius-md:16px;
   --v31-hub-size:46px;
@@ -35,14 +30,12 @@
   /* User-tunable theme (JS overrides these as inline styles on <body>) */
   --pro-accent:#0A84FF;
   --pro-secondary:#5856D6;
-  --pro-tertiary:#5856D6;
   --pro-accent-text:#10171A;
   --pro-secondary-text:#10171A;
   --pro-accent-readable:#0A84FF;
   --pro-secondary-readable:#5856D6;
 
   /* Semantic aliases used across components */
-  --bg:#070A12;
   --card:rgba(255,255,255,.075);
   --txt:#EFF8FF;
   --sub:#92A8B9;
@@ -57,15 +50,12 @@
   --day-today-border:var(--pro-accent);
   --day-tomorrow-border:var(--pro-secondary);
   --status-tag-next-bg:var(--pro-accent);
-  --status-tag-next-fg:#fff;
+  --status-tag-next-fg:var(--pro-accent-text);
   --status-tag-now-bg:var(--pro-secondary);
-  --status-tag-now-fg:#fff;
-  --pro-primary-soft:color-mix(in srgb,var(--pro-accent) 20%,transparent);
-  --pro-secondary-soft:color-mix(in srgb,var(--pro-secondary) 18%,transparent);
+  --status-tag-now-fg:var(--pro-secondary-text);
   --pro-action-bg:color-mix(in srgb,var(--pro-accent) 62%,#ffffff 22%);
   --pro-action-bg-2:color-mix(in srgb,var(--pro-secondary) 62%,#ffffff 22%);
-  --pro-action-text:#10171A;
-  --pro-location-text:var(--pro-accent-readable);
+  --pro-action-text:var(--pro-accent-text);
 
   /* ---- Liquid Glass material ----
      Two distinct materials, per Apple's own guidance not to stack glass on
@@ -95,7 +85,6 @@
   --well-fill:rgba(3,9,13,.4);
   --well-shadow:inset 0 1px 4px rgba(0,0,0,.4),inset 0 -1px 0 rgba(255,255,255,.03);
   --ease-glass:cubic-bezier(.16,1,.3,1);
-  --ease-spring:cubic-bezier(.34,1.56,.64,1);
 }
 
 /* ---- Base ---- */
@@ -119,12 +108,12 @@ body::before{
   background:
     linear-gradient(180deg,rgba(255,255,255,.025),transparent 32%),
     repeating-linear-gradient(90deg,rgba(255,255,255,.012) 0 1px,transparent 1px 76px),
-    linear-gradient(90deg,rgba(101,212,208,.035) 1px,transparent 1px) 0 0/72px 72px,
-    linear-gradient(rgba(101,212,208,.025) 1px,transparent 1px) 0 0/72px 72px;
+    linear-gradient(90deg,color-mix(in srgb,var(--pro-accent) 3.5%,transparent) 1px,transparent 1px) 0 0/72px 72px,
+    linear-gradient(color-mix(in srgb,var(--pro-accent) 2.5%,transparent) 1px,transparent 1px) 0 0/72px 72px;
 }
 @media (max-width:430px){body{padding-left:max(10px,env(safe-area-inset-left));padding-right:max(10px,env(safe-area-inset-right))}}
 
-.test-banner{position:fixed;top:0;left:0;width:100%;background:var(--warn);color:#000;font-size:11px;font-weight:800;text-align:center;z-index:999;padding:6px max(8px,env(safe-area-inset-right)) 6px max(8px,env(safe-area-inset-left));padding-top:calc(6px + env(safe-area-inset-top));display:none}
+.test-banner{position:fixed;top:0;left:0;width:100%;background:var(--warn);color:var(--pro-secondary-text);font-size:11px;font-weight:800;text-align:center;z-index:999;padding:6px max(8px,env(safe-area-inset-right)) 6px max(8px,env(safe-area-inset-left));padding-top:calc(6px + env(safe-area-inset-top));display:none}
 
 /* ============================================================================
    Dashboard card
@@ -169,7 +158,7 @@ body.orbit-booting .dashboard-boot-loader{visibility:visible;display:flex;positi
 
 .exam-countdown{
   touch-action:pan-y;cursor:grab;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;
-  gap:10px;padding:8px 12px;min-height:52px;
+  gap:10px;padding:8px 12px;min-height:58px;
   border-left:3px solid var(--pro-accent);
   border-radius:0 12px 12px 0;background:color-mix(in srgb,var(--orbit-panel-strong) 46%,transparent);
   backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%);
@@ -179,12 +168,12 @@ body.orbit-booting .dashboard-boot-loader{visibility:visible;display:flex;positi
 .exam-countdown-copy{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-width:0}
 .exam-countdown-label{letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff;font-size:13px;font-weight:900;max-width:100%;line-height:1.25}
 .exam-countdown-date{opacity:.7;font-size:10.5px;font-weight:700;letter-spacing:.15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--orbit-muted);max-width:100%;line-height:1.25}
-.exam-countdown-value{min-width:0;padding:0 0 0 10px;border:0;border-left:1px solid color-mix(in srgb,var(--pro-secondary) 42%,transparent);border-radius:0;background:transparent;color:var(--pro-accent-readable);font-family:ui-monospace,SFMono-Regular,monospace;font-size:22px;line-height:1.05;font-weight:850;text-align:center;letter-spacing:-.02em;white-space:nowrap}
+.exam-countdown-value{min-width:0;padding:0 0 0 10px;border:0;border-left:1px solid color-mix(in srgb,var(--pro-secondary) 42%,transparent);border-radius:0;background:transparent;color:var(--pro-accent-readable);font-family:ui-monospace,SFMono-Regular,monospace;font-size:clamp(26px,7.5vw,32px);line-height:1.05;font-weight:850;text-align:center;letter-spacing:-.02em;white-space:nowrap}
 .exam-countdown-dots{position:absolute;left:50%;bottom:2px;transform:translateX(-50%);display:flex;align-items:center;gap:3px;pointer-events:none;z-index:1}
 .exam-countdown-dots[hidden]{display:none}
 .exam-countdown-dot{width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,.28);transition:background .2s,width .2s}
 .exam-countdown-dot.active{width:10px;border-radius:3px;background:var(--accent)}
-@media (max-width:360px){.exam-countdown{min-height:46px;padding:7px 10px}.exam-countdown-label{font-size:12px}.exam-countdown-date{font-size:9.5px}.exam-countdown-value{font-size:19px}}
+@media (max-width:360px){.exam-countdown{min-height:52px;padding:7px 10px}.exam-countdown-label{font-size:12px}.exam-countdown-date{font-size:9.5px}.exam-countdown-value{font-size:clamp(23px,8vw,27px)}}
 
 .top-actions{position:relative;margin-left:auto;flex:0 0 auto;align-self:center;display:flex;align-items:center;flex-direction:row;padding:0;z-index:20}
 .top-action-btn{
@@ -195,7 +184,7 @@ body.orbit-booting .dashboard-boot-loader{visibility:visible;display:flex;positi
   box-shadow:var(--glass-shadow-soft);
 }
 .top-action-btn:active{transform:scale(.9);box-shadow:0 2px 8px rgba(0,0,0,.3)}
-#btn-menu.top-action-btn{width:var(--v31-hub-size);height:var(--v31-hub-size);border-radius:18px;background:linear-gradient(145deg,color-mix(in srgb,var(--pro-accent) 82%,transparent),color-mix(in srgb,var(--pro-accent) 55%,transparent) 70%);color:#fff;font-size:20px;box-shadow:0 12px 30px color-mix(in srgb,var(--pro-accent) 40%,transparent),0 4px 12px rgba(0,0,0,.28);font-weight:900;line-height:1;backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%)}
+#btn-menu.top-action-btn{width:var(--v31-hub-size);height:var(--v31-hub-size);border-radius:18px;background:linear-gradient(145deg,color-mix(in srgb,var(--pro-accent) 82%,transparent),color-mix(in srgb,var(--pro-accent) 55%,transparent) 70%);color:var(--pro-accent-text);font-size:20px;box-shadow:0 12px 30px color-mix(in srgb,var(--pro-accent) 40%,transparent),0 4px 12px rgba(0,0,0,.28);font-weight:900;line-height:1;backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%)}
 .top-actions.open #btn-menu.top-action-btn{transform:rotate(45deg) scale(.96);background:linear-gradient(145deg,rgba(255,69,58,.86),rgba(255,159,10,.62) 70%);box-shadow:0 12px 30px rgba(255,69,58,.3),0 4px 12px rgba(0,0,0,.28)}
 .top-actions-menu{
   position:absolute;top:calc(var(--v31-hub-size) + 8px);right:0;flex-direction:column;display:flex;gap:7px;padding:7px;
@@ -379,7 +368,7 @@ body.orbit-suppress-list-animation .animate-list .row{animation:none}
 /* Current/next class highlight — the whole point of bug #4: keep these as
    the last, most specific word on .row so nothing generic can stomp them. */
 .row.is-next{
-  border-radius:var(--orbit-radius-md);box-shadow:0 14px 34px rgba(10,132,255,.16);
+  border-radius:var(--orbit-radius-md);box-shadow:0 14px 34px color-mix(in srgb,var(--pro-accent) 16%,transparent);
   background:color-mix(in srgb,var(--orbit-panel-strong) 60%,transparent);border-color:transparent;
   backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);
   border-left:3px solid var(--pro-accent);padding-left:11px;
@@ -390,8 +379,8 @@ body.orbit-suppress-list-animation .animate-list .row{animation:none}
   backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);
   border-left:3px solid var(--pro-secondary);padding-left:11px;
 }
-.row.is-next .period-badge{border-color:transparent;background:var(--pro-accent);color:#fff}
-.row.is-now .period-badge{border-color:transparent;background:var(--pro-secondary);color:#fff}
+.row.is-next .period-badge{border-color:transparent;background:var(--pro-accent);color:var(--pro-accent-text)}
+.row.is-now .period-badge{border-color:transparent;background:var(--pro-secondary);color:var(--pro-secondary-text)}
 
 @media (max-height:700px){.row{padding:10px 12px;margin-bottom:7px}}
 @media (max-width:480px){#schedule-list .row{min-height:78px;border-radius:18px}#schedule-list .row-name{font-size:clamp(17px,5vw,22px);line-height:1.18}#schedule-list .row-meta{font-size:clamp(11px,3vw,13px)}}
@@ -527,7 +516,7 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .editor-confirm-actions{display:flex;flex-direction:column;gap:12px}
 .editor-confirm-btn{width:100%;min-height:50px;padding:13px 18px;border-radius:16px;border:none;font-size:16px;font-weight:700;cursor:pointer;transition:transform .15s,opacity .15s,box-shadow .15s;touch-action:manipulation;font-family:inherit;white-space:normal;line-height:1.2}
 .editor-confirm-btn:active{transform:scale(.96);opacity:.88}
-.editor-confirm-btn.primary{background:var(--accent);color:#fff;box-shadow:0 4px 16px rgba(10,132,255,.35)}
+.editor-confirm-btn.primary{background:var(--accent);color:var(--pro-accent-text);box-shadow:0 4px 16px color-mix(in srgb,var(--pro-accent) 35%,transparent)}
 .editor-confirm-btn.danger{background:transparent;color:#ff453a;border:1px solid rgba(255,69,58,.35);font-weight:700}
 .editor-primary-btn{background:linear-gradient(135deg,var(--pro-action-bg),var(--pro-action-bg-2));color:var(--pro-action-text);box-shadow:0 8px 22px color-mix(in srgb,var(--pro-accent) 20%,transparent);backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%)}
 @media (min-width:390px){.editor-confirm-actions{flex-direction:row}.editor-confirm-btn{flex:1 1 0}}
@@ -661,7 +650,7 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .assign-day-tabs{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;margin:12px 0 8px}
 .assign-day-tab{min-height:48px;padding:0 3px;border:1px solid var(--bd);border-radius:10px;background:rgba(255,255,255,.055);color:var(--sub);font:800 14px/1 inherit;cursor:pointer;transition:transform .12s,background .15s}
 .assign-day-tab:active{transform:scale(.95)}
-.assign-day-tab.active{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 5px 14px color-mix(in srgb,var(--accent) 28%,transparent)}
+.assign-day-tab.active{background:var(--accent);border-color:var(--accent);color:var(--pro-accent-text);box-shadow:0 5px 14px color-mix(in srgb,var(--accent) 28%,transparent)}
 .assign-day-row{display:grid;grid-template-columns:42px minmax(0,1fr);gap:8px;align-items:center}
 .assign-day-label{font-size:12px;font-weight:800;color:var(--sub)}
 .assign-grid{display:grid;gap:8px;margin:8px 0 14px}
@@ -670,7 +659,7 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .assign-box:active{transform:scale(.95)}
 .assign-box.occupied{border-color:color-mix(in srgb,var(--accent) 50%,transparent);color:var(--accent)}
 .assign-box.assigned{background:color-mix(in srgb,var(--ok) 22%,transparent);border-color:var(--ok);color:var(--ok);box-shadow:0 0 0 1px color-mix(in srgb,var(--ok) 35%,transparent)}
-.teacher-assign{min-height:40px;padding:0 14px;border:0;border-radius:13px;background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 72%,#fff 18%),color-mix(in srgb,var(--accent) 48%,#fff 18%));color:#06131c;font-weight:850;letter-spacing:.04em;box-shadow:0 6px 16px color-mix(in srgb,var(--accent) 22%,transparent);touch-action:manipulation;transition:transform .12s;backdrop-filter:blur(14px) saturate(180%);-webkit-backdrop-filter:blur(14px) saturate(180%)}
+.teacher-assign{min-height:40px;padding:0 14px;border:0;border-radius:13px;background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 72%,#fff 18%),color-mix(in srgb,var(--accent) 48%,#fff 18%));color:var(--pro-accent-text);font-weight:850;letter-spacing:.04em;box-shadow:0 6px 16px color-mix(in srgb,var(--accent) 22%,transparent);touch-action:manipulation;transition:transform .12s;backdrop-filter:blur(14px) saturate(180%);-webkit-backdrop-filter:blur(14px) saturate(180%)}
 .teacher-assign:active{transform:scale(.95)}
 .assign-sheet .editor-confirm-btn{margin-top:8px;min-height:46px;width:100%}
 @media (max-width:480px){.assign-sheet{width:calc(100vw - 20px);max-height:calc(100dvh - 28px);padding:14px;border-radius:20px}.teacher-assign{min-height:44px;padding:0 13px}.assign-day-row{grid-template-columns:39px minmax(0,1fr);gap:6px}.assign-periods{grid-template-columns:repeat(auto-fit,minmax(58px,1fr));gap:6px}.assign-box{min-height:48px;font-size:11px}}

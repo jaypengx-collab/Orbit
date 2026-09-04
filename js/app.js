@@ -489,10 +489,8 @@ const PRO_PALETTE_PRESETS={
 function applyProAccent(data=applicationData) {
   const accent=normalizeProAccent(data.proAccent);
   const secondary=normalizeProSecondary(data.proSecondary);
-  const tertiary=secondary;
   document.body.style.setProperty('--pro-accent',accent);
   document.body.style.setProperty('--pro-secondary',secondary);
-  document.body.style.setProperty('--pro-tertiary',tertiary);
   document.body.style.setProperty('--pro-accent-text',getReadableTextColor(accent));
   document.body.style.setProperty('--pro-secondary-text',getReadableTextColor(secondary));
   document.body.style.setProperty('--pro-accent-readable',getReadableSurfaceColor(accent));
@@ -1096,10 +1094,11 @@ function update()  {
   }
 }
 
-// Set by clampManualListScroll whenever the user genuinely scrolls (as opposed to the
-// programmatic scrolls align() itself performs) while an alignment sequence below is
-// still mid-flight. Lets that sequence back off instead of snapping the list back under
-// the user's finger a few hundred ms later.
+// Set the instant the user touches or scrolls the list (see initScheduleScrollClamp),
+// not only once a 'scroll' event actually lands — iOS Safari can delay that event past
+// when a pending alignment below already fired, which is what read as the list fighting
+// the user's finger. Any pending alignment checks this and backs off instead of snapping
+// the list back under them.
 let userScrolledDuringAlign = false;
 
 function keepActiveClassVisible(list,isDayFinished,scrollKey) {
@@ -1119,35 +1118,24 @@ function keepActiveClassVisible(list,isDayFinished,scrollKey) {
     return
   }
 
+  // One pass, one frame after layout: the row entrance animation only transforms
+  // opacity/transform/filter (never layout-affecting properties), so activeRow.offsetTop
+  // is already correct here and doesn't need to be re-polled on a timer afterwards.
   requestAnimationFrame(() => {
-    const align = () => {
-      // The active class genuinely changed (a new scrollKey), so the very first alignment
-      // always runs even if the user was already scrolling — but once that lands, respect
-      // any scroll the user makes of their own accord instead of re-snapping under them a
-      // couple of animation frames or a few hundred ms later.
-      if (userScrolledDuringAlign) return;
-      // Use layout coordinates, not transformed client rects from the row
-      // entrance animation. Recalculate after layout settles on mobile.
-      const targetTop=Math.max(0,activeRow.offsetTop);
-      const reserved=parseFloat(list.dataset.autoScrollSpace||'0')||0;
-      const naturalMax=Math.max(0,getNaturalListMaxScroll(list)-reserved);
-      const neededSpace=Math.max(0,targetTop-naturalMax);
+    if (userScrolledDuringAlign) return;
+    const targetTop=Math.max(0,activeRow.offsetTop);
+    const reserved=parseFloat(list.dataset.autoScrollSpace||'0')||0;
+    const naturalMax=Math.max(0,getNaturalListMaxScroll(list)-reserved);
+    const neededSpace=Math.max(0,targetTop-naturalMax);
 
-      setListAutoScrollSpace(list,neededSpace);
-      setListAutoAlignedTop(list,targetTop);
-      void list.offsetHeight;
-      allowProgrammaticListScroll=true;
-      list.scrollTo({top:targetTop,behavior:'auto'});
-      requestAnimationFrame(() => {
-        allowProgrammaticListScroll=false
-      })
-    };
-    align();
+    setListAutoScrollSpace(list,neededSpace);
+    setListAutoAlignedTop(list,targetTop);
+    void list.offsetHeight;
+    allowProgrammaticListScroll=true;
+    list.scrollTo({top:targetTop,behavior:'auto'});
     requestAnimationFrame(() => {
-      requestAnimationFrame(align);
-    });
-    window.setTimeout(align,180);
-    window.setTimeout(align,500);
+      allowProgrammaticListScroll=false
+    })
   })
 }
 
@@ -2260,8 +2248,12 @@ function autoScrollEditorWhileDragging(handle,clientY) {
     scroller.scrollTop=Math.min(maxScroll, scroller.scrollTop+Math.ceil((clientY-(bounds.bottom - edge))/4));
   }
 }
-function bindCountdownDrag(row) {
-  const handle=row.querySelector('.countdown-drag-handle');
+// Shared vertical drag-to-reorder for editor list rows (teacher cards, countdown
+// events): drags `row` by the handle matching `handleSelector`, reordering it among
+// its siblings matching `siblingsSelector`, auto-scrolling the editor sheet near its
+// edges, and calling `onMove` (if given) after every reorder and once dragging ends.
+function bindEditorDragReorder(row,handleSelector,siblingsSelector,onMove) {
+  const handle=row.querySelector(handleSelector);
   if (!handle || handle.dataset.bound) return;
   handle.dataset.bound='1';
   handle.style.touchAction='none';
@@ -2272,10 +2264,11 @@ function bindCountdownDrag(row) {
     if (!dragging) return;
     lastY=event.clientY;
     autoScrollEditorWhileDragging(handle,event.clientY);
-    const rows=[...document.querySelectorAll('#countdown-event-list .countdown-event-row')].filter(item=>item!==row);
-    const target=rows.find(item=>event.clientY<item.getBoundingClientRect().top+item.offsetHeight/2);
+    const siblings=[...document.querySelectorAll(siblingsSelector)].filter(item=>item!==row);
+    const target=siblings.find(item=>event.clientY<item.getBoundingClientRect().top+item.offsetHeight/2);
     if (target) target.parentElement.insertBefore(row,target);
-    else if (rows.length) rows[rows.length-1].parentElement.appendChild(row);
+    else if (siblings.length) siblings[siblings.length-1].parentElement.appendChild(row);
+    onMove?.()
   };
   const autoScroll=()=>{
     if (!dragging) return;
@@ -2297,6 +2290,7 @@ function bindCountdownDrag(row) {
     if (event?.pointerId!==undefined && handle.hasPointerCapture?.(event.pointerId)) {
       handle.releasePointerCapture(event.pointerId);
     }
+    onMove?.()
   };
   handle.addEventListener('pointerdown',event=>{
     if (event.button!==undefined&&event.button!==0) return;
@@ -2313,6 +2307,9 @@ function bindCountdownDrag(row) {
   });
   handle.addEventListener('pointerup',finish);
   handle.addEventListener('pointercancel',finish);
+}
+function bindCountdownDrag(row) {
+  bindEditorDragReorder(row,'.countdown-drag-handle','#countdown-event-list .countdown-event-row');
 }
 function moveEditorControlsIntoLayers() {
   const inner=document.querySelector('#editor-sheet .editor-inner');
@@ -2629,55 +2626,10 @@ function makeTeacherCard(key, subject, teacher, location) {
       positionInput.blur();
     }
   });
-  const handle=div.querySelector('.teacher-drag-handle');
-  handle.style.touchAction='none';
-  let pointerDragging=false;
-  let lastY=0;
-  let scrollFrame=0;
-  const movePointerDrag=event=>{
-    if (!pointerDragging) return;
-    lastY=event.clientY;
-    autoScrollEditorWhileDragging(handle,event.clientY);
-    const cards=[...document.querySelectorAll('#teacher-list .teacher-card')].filter(card=>card!==div);
-    const target=cards.find(card=>event.clientY<card.getBoundingClientRect().top+card.offsetHeight/2);
-    if (target) target.parentElement.insertBefore(div,target);
-    else if (cards.length) cards[cards.length-1].parentElement.appendChild(div);
+  bindEditorDragReorder(div,'.teacher-drag-handle','#teacher-list .teacher-card',()=>{
     refreshTeacherMoveButtons();
     refreshPeriodSelectOptions();
-  };
-  const autoScroll=()=>{
-    if (!pointerDragging) return;
-    const scroller=getEditorScrollContainer(handle);
-    const before=scroller?.scrollTop||0;
-    autoScrollEditorWhileDragging(handle,lastY);
-    if (scroller && scroller.scrollTop!==before) movePointerDrag({clientY:lastY});
-    scrollFrame=requestAnimationFrame(autoScroll);
-  };
-  handle.addEventListener('pointerdown',event=>{
-    if (event.button!==undefined&&event.button!==0) return;
-    event.preventDefault(); pointerDragging=true; lastY=event.clientY; div.classList.add('is-dragging');
-    handle.setPointerCapture?.(event.pointerId);
-    window.addEventListener('pointermove',movePointerDrag);
-    window.addEventListener('pointerup',finishPointerDrag);
-    window.addEventListener('pointercancel',finishPointerDrag);
-    window.addEventListener('blur',finishPointerDrag);
-    scrollFrame=requestAnimationFrame(autoScroll);
   });
-  const finishPointerDrag=event=>{
-    if (!pointerDragging) return;
-    pointerDragging=false; div.classList.remove('is-dragging');
-    window.removeEventListener('pointermove',movePointerDrag);
-    window.removeEventListener('pointerup',finishPointerDrag);
-    window.removeEventListener('pointercancel',finishPointerDrag);
-    window.removeEventListener('blur',finishPointerDrag);
-    cancelAnimationFrame(scrollFrame);
-    if (event?.pointerId!==undefined && handle.hasPointerCapture?.(event.pointerId)) {
-      handle.releasePointerCapture(event.pointerId);
-    }
-    refreshTeacherMoveButtons(); refreshPeriodSelectOptions();
-  };
-  handle.addEventListener('pointerup',finishPointerDrag);
-  handle.addEventListener('pointercancel',finishPointerDrag);
 
   div.querySelector('.tc-subject').addEventListener('input', function() {
     updateTeacherCardAvatar(div);
@@ -3192,7 +3144,12 @@ function syncTestPlayPauseUi() {
 
   list.addEventListener('scroll',()=>{
     clampManualListScroll();
-  },{passive:true})
+  },{passive:true});
+  // Mark real user input the instant it starts, not only once a 'scroll' event
+  // eventually fires — see the comment on keepActiveClassVisible.
+  ['pointerdown','touchstart','wheel'].forEach(type=>{
+    list.addEventListener(type,()=>{ userScrolledDuringAlign=true },{passive:true})
+  })
 })();
 
 
