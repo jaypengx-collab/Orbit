@@ -1177,6 +1177,13 @@ function clampManualListScroll() {
     clampScrollFrame=0;
     const list=document.getElementById('schedule-list');
     if (!list)return;
+    // No reserved alignment space means the browser's own overflow bounds already equal
+    // our ceiling — there's nothing for this to guard against, so leave native scrolling
+    // (including iOS rubber-band bounce at the bottom) completely alone. Stepping in here
+    // unconditionally on every 'scroll' event was fighting that native bounce frame-by-frame,
+    // which is what read as flickering specifically on touch/Safari.
+    const reserved=parseFloat(list.dataset.autoScrollSpace||'0')||0;
+    if (reserved<=0) return;
     const aligned=parseFloat(list.dataset.autoAlignedTop||'');
     const max=Math.max(getNaturalListMaxScroll(list),Number.isFinite(aligned)?aligned:0);
     const overshoot=list.scrollTop-max;
