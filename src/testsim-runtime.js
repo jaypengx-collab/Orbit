@@ -298,6 +298,11 @@ import { parseTime } from './schedule.js';
         if (!window.MANUALLY_TEST) setDefaultsToCurrentTime(true);
         var result = original.apply(this, arguments);
         setDefaultsToCurrentTime(false);
+        // Only compute the version hash (re-fetches the page + its bundled
+        // assets) when the panel that actually displays it is opened, not
+        // on every page load - see the comment on syncAppVersion's removed
+        // init()-time call for why that mattered.
+        if (state.testPanelOpen) syncAppVersion();
         return result;
       };
     });
@@ -674,7 +679,13 @@ import { parseTime } from './schedule.js';
   function init() {
     mergeNextClassWithTimer();
     unlockTestControls();
-    syncAppVersion();
+    // syncAppVersion() is deliberately not called here: it re-fetches the
+    // page and its bundled JS/CSS over the network (with cache: 'no-store')
+    // just to compute a version hash for a span that's only visible inside
+    // this Test Mode panel. Calling it on every single page load - for
+    // every visitor, whether or not they ever open this panel - wasted
+    // three full network requests per load. patchPanelOpeners() now calls
+    // it only when the panel is actually opened.
     var restoredTestState = restoreTestState();
     if (!defaultsInitialized && !restoredTestState) {
       setDefaultsToCurrentTime(true);

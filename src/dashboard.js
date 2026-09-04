@@ -286,57 +286,107 @@ function getDashboardDom() {
   return dashboardDom;
 }
 
+// Last-rendered values, so renderDashboard() below can skip a DOM write
+// when nothing actually changed since the previous tick. Everything here
+// changes only a handful of times a day (a name, a room, a status label) -
+// only the countdown digits and the progress-bar width genuinely need a
+// write every second, and those are cheap style/text updates rather than
+// the ~20 unconditional writes (several of them class-list/style toggles
+// that force a style recalc) the unguarded version did every tick.
+let lastRendered = null;
+function changed(key, value) {
+  return !lastRendered || lastRendered[key] !== value;
+}
+
 // Applies a schedule-calc view-model (see computeDashboardViewModel) to the
 // DOM. Pure data in, DOM writes out - no scheduling logic lives here.
 function renderDashboard(viewModel, week) {
   const dom = getDashboardDom();
 
-  dom.weekDisplay.innerHTML = getWeekLabelHtml(week);
+  if (changed('week', week)) dom.weekDisplay.innerHTML = getWeekLabelHtml(week);
 
-  dom.dot.className =
-    viewModel.dotState === 'active'
-      ? 'status-dot status-active'
-      : viewModel.dotState === 'wait'
-        ? 'status-dot status-wait'
-        : 'status-dot';
+  if (changed('dotState', viewModel.dotState)) {
+    dom.dot.className =
+      viewModel.dotState === 'active'
+        ? 'status-dot status-active'
+        : viewModel.dotState === 'wait'
+          ? 'status-dot status-wait'
+          : 'status-dot';
+  }
 
-  dom.timerGroup.style.display = viewModel.timerVisible ? 'flex' : 'none';
+  if (changed('timerVisible', viewModel.timerVisible))
+    dom.timerGroup.style.display = viewModel.timerVisible ? 'flex' : 'none';
   if (viewModel.timerVisible) {
-    dom.timerLabel.innerText = viewModel.timerLabel;
+    if (changed('timerLabel', viewModel.timerLabel))
+      dom.timerLabel.innerText = viewModel.timerLabel;
+    // The countdown digits are the one field expected to change every tick.
     dom.timerVal.innerText = viewModel.timerValue;
   }
 
-  dom.progressWrap.style.display = viewModel.progressVisible ? 'block' : 'none';
+  if (changed('progressVisible', viewModel.progressVisible))
+    dom.progressWrap.style.display = viewModel.progressVisible ? 'block' : 'none';
   if (viewModel.progressVisible) {
-    dom.progressBar.classList.toggle('is-class', viewModel.progressIsClass);
+    if (changed('progressIsClass', viewModel.progressIsClass))
+      dom.progressBar.classList.toggle('is-class', viewModel.progressIsClass);
+    // The progress-bar width is the other field expected to change every tick.
     dom.progressBar.style.width = viewModel.progressPercent + '%';
   }
 
-  dom.nowName.innerText = viewModel.statusText;
-  if (dom.dashboard) {
-    dom.dashboard.style.setProperty(
-      '--current-class-color',
-      getClassColor(viewModel.activeClassKey || viewModel.upcomingClassKey || '')
-    );
+  if (changed('statusText', viewModel.statusText)) dom.nowName.innerText = viewModel.statusText;
+  const classColorKey = viewModel.activeClassKey || viewModel.upcomingClassKey || '';
+  if (dom.dashboard && changed('classColorKey', classColorKey)) {
+    dom.dashboard.style.setProperty('--current-class-color', getClassColor(classColorKey));
   }
-  dom.nowName.classList.toggle('is-status', viewModel.compactStatus);
-  if (dom.nowStack) dom.nowStack.classList.toggle('is-status', viewModel.compactStatus);
-  dom.nowTeacher.innerText = viewModel.teacherText || '';
-  dom.nowTeacher.classList.toggle('show', !!viewModel.teacherText);
-  dom.nowPlace.innerText = viewModel.placeText || '';
-  dom.nowPlace.classList.toggle('show', !!viewModel.placeText);
-  if (dom.nowClassLabel) {
+  if (changed('compactStatus', viewModel.compactStatus)) {
+    dom.nowName.classList.toggle('is-status', viewModel.compactStatus);
+    if (dom.nowStack) dom.nowStack.classList.toggle('is-status', viewModel.compactStatus);
+  }
+  if (changed('teacherText', viewModel.teacherText)) {
+    dom.nowTeacher.innerText = viewModel.teacherText || '';
+    dom.nowTeacher.classList.toggle('show', !!viewModel.teacherText);
+  }
+  if (changed('placeText', viewModel.placeText)) {
+    dom.nowPlace.innerText = viewModel.placeText || '';
+    dom.nowPlace.classList.toggle('show', !!viewModel.placeText);
+  }
+  if (dom.nowClassLabel && changed('classLabel', viewModel.classLabel)) {
     dom.nowClassLabel.innerHTML = viewModel.classLabel || '';
     dom.nowClassLabel.classList.toggle('show', !!viewModel.classLabel);
   }
-  if (dom.metaRow) dom.metaRow.style.display = viewModel.metaRowVisible ? 'flex' : 'none';
-  fitNowTitleText();
-  dom.nextName.innerText = viewModel.nextText;
-  dom.nextMetaText.innerText = viewModel.nextMeta;
+  const titleTextChanged =
+    changed('statusText', viewModel.statusText) ||
+    changed('compactStatus', viewModel.compactStatus) ||
+    changed('metaRowVisible', viewModel.metaRowVisible);
+  if (dom.metaRow && changed('metaRowVisible', viewModel.metaRowVisible))
+    dom.metaRow.style.display = viewModel.metaRowVisible ? 'flex' : 'none';
+  // fitNowTitleText() measures layout (getBoundingClientRect) every call it
+  // makes regardless of its own internal memoization, so it's only worth
+  // calling again when something that could change the fit actually did.
+  if (titleTextChanged) fitNowTitleText();
+  if (changed('nextText', viewModel.nextText)) dom.nextName.innerText = viewModel.nextText;
+  if (changed('nextMeta', viewModel.nextMeta)) dom.nextMetaText.innerText = viewModel.nextMeta;
+
+  lastRendered = { week, ...viewModel };
+}
+
+// updateExamCountdown() computes a day-granularity D-day count (it can't
+// change more than once a day - it uses the real calendar date, not Test
+// Mode's simulated time), but was being called on every one-second tick.
+// Re-running it only when the real date has actually rolled over avoids a
+// DOM rebuild (including the countdown-dots innerHTML) 86399 times a day
+// for nothing. showCountdownEvent() (swiping between countdown events)
+// still calls updateExamCountdown() directly, bypassing this guard, since
+// that's a real, immediate change the user just made.
+let lastCountdownDateKey = null;
+function updateExamCountdownIfDayChanged() {
+  const dateKey = new Date().toDateString();
+  if (dateKey === lastCountdownDateKey) return;
+  lastCountdownDateKey = dateKey;
+  updateExamCountdown();
 }
 
 function update() {
-  updateExamCountdown();
+  updateExamCountdownIfDayChanged();
   const dom = getDashboardDom();
   let now = new Date();
   if (window.MANUALLY_TEST) {
