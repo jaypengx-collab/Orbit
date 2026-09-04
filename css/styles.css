@@ -117,16 +117,7 @@
 .modal-sheet, .editor-inner, .test-panel, .style-panel, .editor-confirm-sheet,
 .assign-sheet, .ocr-apikey-sheet, .top-actions-menu, .row.is-now, .row.is-next,
 .close-btn, .save-btn, .editor-primary-btn, .settings-transfer-btn.primary,
-.style-apply-btn, .teacher-assign{
-  position:relative;
-  /* Forces each backdrop-filter surface onto its own isolated GPU layer.
-     Without this, iOS Safari's standalone (Home Screen) mode has a known
-     compositing bug where a blurred layer's sampling region can get
-     mis-tiled and repainted as a "ghost" duplicate elsewhere on the page —
-     it doesn't happen in a regular browser tab, only once installed. */
-  transform:translateZ(0);
-  -webkit-transform:translateZ(0);
-}
+.style-apply-btn, .teacher-assign{position:relative}
 .dashboard::before, .nav-bar::before, .nav-item.active::before, .top-action-btn::before, .exam-countdown::before,
 .modal-sheet::before, .editor-inner::before, .test-panel::before, .style-panel::before, .editor-confirm-sheet::before,
 .assign-sheet::before, .ocr-apikey-sheet::before, .top-actions-menu::before, .row.is-now::before, .row.is-next::before,
@@ -848,3 +839,40 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 @media (max-width:390px){.style-preset-grid{gap:4px}.style-preset-chip{font-size:9px}#style-editor-content{max-height:calc(100dvh - 138px)}.style-panel{max-width:none}}
 @media (max-width:480px){#schedule-list .row{padding:15px 16px}.style-preset-grid{display:grid;grid-template-columns:none;gap:7px}.style-preset-chip{display:flex;gap:5px;box-sizing:border-box;padding:5px;border-radius:9px}.style-preset-swatch{width:100%;height:17px;box-sizing:border-box;border-radius:5px}.style-slot-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}.style-slot-row{display:block;min-width:0}.style-slot-row .style-slot{height:50px;min-width:0;box-sizing:border-box;border-radius:9px;display:block;width:100%;overflow:hidden}.style-slot-row .style-slot-swatch{display:block;width:auto;height:auto;border-radius:5px;position:absolute;inset:5px}.style-slot-row{position:relative;width:100%;height:50px}.style-slot-row .style-slot-save{min-height:22px;padding:0;border-radius:7px;position:absolute;right:4px;top:4px;width:22px;height:22px;min-width:22px;z-index:2;line-height:20px}.style-slot-row .style-slot-save:empty{display:none}}
 @media (max-width:400px){.style-preset-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.style-preset-chip{padding-inline:3px;font-size:10px}.style-preset-swatch{width:16px;height:16px}}
+
+/* ============================================================================
+   Standalone (Home Screen) mode overrides
+   Kept at the very end of the cascade on purpose: several rules above set
+   backdrop-filter with the same or higher specificity, so this block has to
+   win by SOURCE ORDER, not just by matching a media query. Placed anywhere
+   earlier, a later component rule quietly re-applies backdrop-filter and
+   this override does nothing.
+   ========================================================================= */
+/* iOS Safari has a known compositing bug where backdrop-filter blur on a
+   page running in standalone display mode can get its blurred sampling
+   region mis-tiled and repainted as a duplicate "ghost" element elsewhere
+   on screen. It reproduces reliably once installed to the Home Screen and
+   not at all in a regular browser tab — forcing a GPU layer with
+   transform:translateZ(0) was not enough to avoid it. display-mode:
+   standalone (supported since iOS 12.2) turns it off only in the context
+   where it actually happens, so a normal Safari tab still gets the full
+   blurred glass. Fills are bumped more opaque here since there's no
+   blur-behind to carry the translucency, and the animated sheen (which
+   depends on backdrop-filter to read as "glass" rather than just a moving
+   gradient) is dropped too. */
+@media (display-mode:standalone){
+  :root{
+    --glass-fill:color-mix(in srgb,var(--orbit-panel) 90%,transparent);
+    --glass-fill-strong:color-mix(in srgb,var(--orbit-panel-strong) 94%,transparent);
+  }
+  .dashboard, .nav-bar, .nav-item.active, .top-action-btn, #btn-menu.top-action-btn, .exam-countdown,
+  .modal-sheet, .editor-inner, .test-panel, .style-panel, .editor-confirm-sheet,
+  .assign-sheet, .ocr-apikey-sheet, .top-actions-menu, .row.is-now, .row.is-next,
+  .close-btn, .save-btn, .editor-primary-btn, .settings-transfer-btn.primary,
+  .style-apply-btn, .teacher-assign, .editor-sheet, .modal-overlay, .editor-confirm-overlay{
+    backdrop-filter:none !important;-webkit-backdrop-filter:none !important;
+  }
+  .dashboard::after, .modal-sheet::after, .editor-inner::after, .test-panel::after, .style-panel::after{
+    display:none;
+  }
+}

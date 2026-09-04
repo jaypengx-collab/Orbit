@@ -4615,6 +4615,10 @@ update();
 // device that never fires pointermove over the card (a plain tap) just
 // keeps the sheen's static default position.
 (function initGlassSheen(){
+  // The sheen is hidden outright in standalone (Home Screen) mode — see the
+  // display-mode:standalone block in styles.css — so there's nothing for
+  // this listener to drive there; skip wiring it up at all.
+  if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return;
   var card = document.querySelector('.dashboard');
   if (!card) return;
   var raf = 0;
