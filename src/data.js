@@ -10,13 +10,12 @@ import {
 } from './appearance.js';
 import { editorTimeToMinutes } from './editor-core.js';
 import { getStoredGeminiApiKey } from './gemini-ocr.js';
+import { DEFAULT_STYLE_PRIMARY, DEFAULT_STYLE_SECONDARY } from './constants.js';
 
 // ---- js/data.js ----
 // App defaults and live simulator state.
 const ORBIT_INITIAL_MARKUP = document.documentElement.outerHTML;
 const REVERSE_WEEK_LOGIC_DEFAULT = false;
-const DEFAULT_STYLE_PRIMARY = '#0A84FF';
-const DEFAULT_STYLE_SECONDARY = '#5856D6';
 window.MANUALLY_TEST = false;
 window.TEST_DAY = 1;
 window.TEST_TIME_SEC = 8 * 3600;
@@ -314,8 +313,6 @@ function saveData(d) {
 const dayNames = ['日', '一', '二', '三', '四', '五', '六'];
 
 export {
-  DEFAULT_STYLE_PRIMARY,
-  DEFAULT_STYLE_SECONDARY,
   ORBIT_APP_ID,
   ORBIT_INITIAL_MARKUP,
   ORBIT_STORAGE_SCHEMA,

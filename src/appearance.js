@@ -3,7 +3,7 @@
 import { state } from './state.js';
 import { closeTestPanel, setOverlayVisible } from './dashboard.js';
 import { fitNowTitleText } from './dashboard-render.js';
-import { DEFAULT_STYLE_PRIMARY, DEFAULT_STYLE_SECONDARY } from './data.js';
+import { DEFAULT_STYLE_PRIMARY, DEFAULT_STYLE_SECONDARY } from './constants.js';
 import { applyEditorSettingsData, cloneSettingsData, isEditorDirty } from './editor-backup.js';
 import {
   closeEditor,
