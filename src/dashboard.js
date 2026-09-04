@@ -17,9 +17,9 @@ import {
   getWeekLabelHtml,
   getWeekType,
   pad2,
-  parseTime,
   processSplitName
 } from './schedule.js';
+import { computeDashboardViewModel } from './schedule-calc.js';
 
 // ---- js/dashboard.js ----
 // Opens or closes the manual time simulation panel.
@@ -125,9 +125,6 @@ function bindSheetDragToDismiss(panelId, closeFn) {
 bindSheetDragToDismiss('debug-panel', closeTestPanel);
 bindSheetDragToDismiss('style-panel', closeStylePanel);
 bindSheetDragToDismiss('sheet', closeModal);
-function decorateSpecialTimeName(name) {
-  return name ? name.trim() : '';
-}
 // Changes the visible day when a navigation tab is pressed.
 function handleNav(d) {
   state.viewDay = d;
@@ -261,202 +258,125 @@ if (countdownCard) {
 }
 
 // Recomputes the current class, next class, timer, and visible schedule state.
+// DOM nodes update()/render() touch every tick, queried once instead of via
+// getElementById/querySelector on every single call (previously ~20 lookups
+// a second even while nothing on screen was changing).
+let dashboardDom = null;
+function getDashboardDom() {
+  if (dashboardDom) return dashboardDom;
+  dashboardDom = {
+    simStatus: document.getElementById('sim-status'),
+    weekDisplay: document.getElementById('week-display-main'),
+    dot: document.getElementById('dot'),
+    progressWrap: document.getElementById('progress-wrap'),
+    progressBar: document.getElementById('progress-bar'),
+    timerGroup: document.getElementById('timer-group'),
+    timerLabel: document.querySelector('.timer-label'),
+    timerVal: document.getElementById('timer-val'),
+    nowName: document.getElementById('now-name'),
+    nowStack: document.querySelector('.now-stack'),
+    dashboard: document.querySelector('.dashboard'),
+    nowTeacher: document.getElementById('now-teacher'),
+    nowPlace: document.getElementById('now-place'),
+    nowClassLabel: document.getElementById('now-class-label'),
+    metaRow: document.querySelector('.now-meta-row'),
+    nextName: document.getElementById('next-name'),
+    nextMetaText: document.getElementById('next-meta-text')
+  };
+  return dashboardDom;
+}
+
+// Applies a schedule-calc view-model (see computeDashboardViewModel) to the
+// DOM. Pure data in, DOM writes out - no scheduling logic lives here.
+function renderDashboard(viewModel, week) {
+  const dom = getDashboardDom();
+
+  dom.weekDisplay.innerHTML = getWeekLabelHtml(week);
+
+  dom.dot.className =
+    viewModel.dotState === 'active'
+      ? 'status-dot status-active'
+      : viewModel.dotState === 'wait'
+        ? 'status-dot status-wait'
+        : 'status-dot';
+
+  dom.timerGroup.style.display = viewModel.timerVisible ? 'flex' : 'none';
+  if (viewModel.timerVisible) {
+    dom.timerLabel.innerText = viewModel.timerLabel;
+    dom.timerVal.innerText = viewModel.timerValue;
+  }
+
+  dom.progressWrap.style.display = viewModel.progressVisible ? 'block' : 'none';
+  if (viewModel.progressVisible) {
+    dom.progressBar.classList.toggle('is-class', viewModel.progressIsClass);
+    dom.progressBar.style.width = viewModel.progressPercent + '%';
+  }
+
+  dom.nowName.innerText = viewModel.statusText;
+  if (dom.dashboard) {
+    dom.dashboard.style.setProperty(
+      '--current-class-color',
+      getClassColor(viewModel.activeClassKey || viewModel.upcomingClassKey || '')
+    );
+  }
+  dom.nowName.classList.toggle('is-status', viewModel.compactStatus);
+  if (dom.nowStack) dom.nowStack.classList.toggle('is-status', viewModel.compactStatus);
+  dom.nowTeacher.innerText = viewModel.teacherText || '';
+  dom.nowTeacher.classList.toggle('show', !!viewModel.teacherText);
+  dom.nowPlace.innerText = viewModel.placeText || '';
+  dom.nowPlace.classList.toggle('show', !!viewModel.placeText);
+  if (dom.nowClassLabel) {
+    dom.nowClassLabel.innerHTML = viewModel.classLabel || '';
+    dom.nowClassLabel.classList.toggle('show', !!viewModel.classLabel);
+  }
+  if (dom.metaRow) dom.metaRow.style.display = viewModel.metaRowVisible ? 'flex' : 'none';
+  fitNowTitleText();
+  dom.nextName.innerText = viewModel.nextText;
+  dom.nextMetaText.innerText = viewModel.nextMeta;
+}
+
 function update() {
   updateExamCountdown();
+  const dom = getDashboardDom();
   let now = new Date();
   if (window.MANUALLY_TEST) {
     const h = Math.floor((window.TEST_TIME_SEC || 0) / 3600),
       m = Math.floor(((window.TEST_TIME_SEC || 0) % 3600) / 60),
       s = (window.TEST_TIME_SEC || 0) % 60;
     now.setHours(h, m, s, 0);
-    const simStatus = document.getElementById('sim-status');
-    if (simStatus)
-      simStatus.innerText = window.IS_SIMULATING ? `${pad2(h)}:${pad2(m)}:${pad2(s)}` : '';
-  } else {
-    const simStatus = document.getElementById('sim-status');
-    if (simStatus) simStatus.innerText = '';
+    if (dom.simStatus)
+      dom.simStatus.innerText = window.IS_SIMULATING ? `${pad2(h)}:${pad2(m)}:${pad2(s)}` : '';
+  } else if (dom.simStatus) {
+    dom.simStatus.innerText = '';
   }
   const curDay = window.MANUALLY_TEST ? window.TEST_DAY : now.getDay();
-  const mins = now.getHours() * 60 + now.getMinutes();
-  const secs = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
   const week = getWeekType();
-  const today = state.runtimeSchedule[curDay] || [];
-  const lastClass = today[today.length - 1];
-  const isSchoolDay = today.length > 0;
-  const isDayFinished = isSchoolDay && !!lastClass && mins >= parseTime(lastClass.e);
-  if (!isDayFinished && state.autoAdvancedAfterFinishedDay === curDay) {
+
+  const viewModel = computeDashboardViewModel({
+    now,
+    curDay,
+    week,
+    todaySchedule: state.runtimeSchedule[curDay],
+    breakTimes: state.applicationData.breakTimes
+  });
+
+  if (!viewModel.isDayFinished && state.autoAdvancedAfterFinishedDay === curDay) {
     state.autoAdvancedAfterFinishedDay = null;
   }
-  if (isDayFinished && state.viewDay === curDay && state.autoAdvancedAfterFinishedDay !== curDay) {
+  if (
+    viewModel.isDayFinished &&
+    state.viewDay === curDay &&
+    state.autoAdvancedAfterFinishedDay !== curDay
+  ) {
     state.viewDay = getNextSchoolDay(curDay);
     state.autoAdvancedAfterFinishedDay = curDay;
   }
-  let curIdx = -1,
-    nxtIdx = -1;
-  today.forEach((c, i) => {
-    if (mins >= parseTime(c.s) && mins < parseTime(c.e)) curIdx = i;
-    if (mins < parseTime(c.s) && nxtIdx === -1) nxtIdx = i;
-  });
-  const activeBreak =
-    curIdx === -1
-      ? (state.applicationData.breakTimes || []).find(
-          item =>
-            item.name &&
-            item.start &&
-            item.end &&
-            mins >= parseTime(item.start) &&
-            mins < parseTime(item.end)
-        )
-      : null;
-  document.getElementById('week-display-main').innerHTML = getWeekLabelHtml(week);
-  const dot = document.getElementById('dot');
-  let st = '載入中…',
-    nt = '×',
-    ct = '',
-    currentPlace = '',
-    nextMeta = '',
-    statusDesc = '',
-    classLabel = '';
-  const pw = document.getElementById('progress-wrap'),
-    pb = document.getElementById('progress-bar');
-  if (isSchoolDay) {
-    if (activeBreak) {
-      st = decorateSpecialTimeName(activeBreak.name);
-      statusDesc = '';
-      dot.className = 'status-dot status-wait';
-      document.getElementById('timer-group').style.display = 'flex';
-      document.querySelector('.timer-label').innerText = '上課';
-      const breakStart = parseTime(activeBreak.start) * 60,
-        breakEnd = parseTime(activeBreak.end) * 60,
-        diff = breakEnd - secs;
-      document.getElementById('timer-val').innerText =
-        `${Math.floor(diff / 60)}:${pad2(diff % 60)}`;
-      pw.style.display = 'block';
-      pw.classList.remove('is-class');
-      pb.style.width = Math.min(100, ((secs - breakStart) / (breakEnd - breakStart)) * 100) + '%';
-      curIdx = -1;
-      nxtIdx = today.findIndex(c => parseTime(c.s) >= parseTime(activeBreak.end));
-    } else if (curIdx !== -1) {
-      const info = processSplitName(today[curIdx], week);
-      st = info.n;
-      ct = info.t;
-      classLabel = info.label || '';
-      currentPlace = today[curIdx].loc || '';
-      dot.className = 'status-dot status-active';
-      document.getElementById('timer-group').style.display = 'flex';
-      document.querySelector('.timer-label').innerText = '下課';
-      const endSec = parseTime(today[curIdx].e) * 60,
-        startSec = parseTime(today[curIdx].s) * 60,
-        diff = endSec - secs;
-      document.getElementById('timer-val').innerText =
-        `${Math.floor(diff / 60)}:${pad2(diff % 60)}`;
-      const total = endSec - startSec,
-        elapsed = secs - startSec;
-      pw.style.display = 'block';
-      pw.classList.add('is-class');
-      pb.style.width = Math.min(100, (elapsed / total) * 100) + '%';
-    } else {
-      dot.className = 'status-dot status-wait';
-      const fs = parseTime('08:00'),
-        last = lastClass,
-        le = last ? parseTime(last.e) : parseTime('16:45');
-      if (mins < fs) {
-        st = '尚未開始';
-        document.getElementById('timer-group').style.display = 'none';
-        pw.style.display = 'none';
-      } else if (mins >= le) {
-        st = '放學時間';
-        statusDesc = '';
-        dot.className = 'status-dot';
-        document.getElementById('timer-group').style.display = 'none';
-        pw.style.display = 'none';
-      } else {
-        document.getElementById('timer-group').style.display = 'flex';
-        document.querySelector('.timer-label').innerText = '上課';
-        st = '下課';
-        statusDesc = '';
-        if (nxtIdx !== -1) {
-          const ns = parseTime(today[nxtIdx].s) * 60,
-            diff = ns - secs;
-          document.getElementById('timer-val').innerText =
-            `${Math.floor(diff / 60)}:${pad2(diff % 60)}`;
-          const pe = nxtIdx > 0 ? parseTime(today[nxtIdx - 1].e) * 60 : parseTime('08:00') * 60,
-            bt = ns - pe,
-            be = secs - pe;
-          pw.style.display = 'block';
-          pw.classList.remove('is-class');
-          pb.style.width = Math.min(100, (be / bt) * 100) + '%';
-        } else {
-          pw.style.display = 'none';
-        }
-      }
-    }
-    if (nxtIdx !== -1) {
-      const info = processSplitName(today[nxtIdx], week);
-      nt = info.n;
-      nextMeta = [today[nxtIdx].s, info.t, today[nxtIdx].loc].filter(Boolean).join(' · ');
-    } else {
-      nt = curDay === 5 ? '週末愉快' : '再見';
-      nextMeta = '';
-    }
-  } else {
-    st = '今日無課';
-    statusDesc = '';
-    nt = '週一見';
-    dot.className = 'status-dot';
-    document.getElementById('timer-group').style.display = 'none';
-    pw.style.display = 'none';
-    nextMeta = '';
-  }
-  const nowName = document.getElementById('now-name');
-  const nowStack = document.querySelector('.now-stack');
-  const timerGroup = document.getElementById('timer-group');
-  const compactStatus = !timerGroup || timerGroup.style.display === 'none';
-  const statusLabel = document.getElementById('status-label');
-  if (statusLabel)
-    statusLabel.innerText = dot.classList.contains('status-active')
-      ? '上課中'
-      : dot.classList.contains('status-wait')
-        ? timerGroup && timerGroup.style.display !== 'none'
-          ? '休息中'
-          : '等待中'
-        : '無課';
-  nowName.innerText = st;
-  const dashboard = document.querySelector('.dashboard');
-  if (dashboard) {
-    const activeClass = curIdx >= 0 ? today[curIdx] : null;
-    const upcomingClass = nxtIdx >= 0 ? today[nxtIdx] : null;
-    dashboard.style.setProperty(
-      '--current-class-color',
-      getClassColor(activeClass?.key || upcomingClass?.key || '')
-    );
-  }
-  nowName.classList.toggle('is-status', compactStatus);
-  if (nowStack) nowStack.classList.toggle('is-status', compactStatus);
-  const nowTeacher = document.getElementById('now-teacher');
-  nowTeacher.innerText = ct || '';
-  nowTeacher.classList.toggle('show', !!ct);
-  const nowPlace = document.getElementById('now-place');
-  nowPlace.innerText = currentPlace || '';
-  nowPlace.classList.toggle('show', !!currentPlace);
-  const nowClassLabel = document.getElementById('now-class-label');
-  if (nowClassLabel) {
-    nowClassLabel.innerHTML = classLabel || '';
-    nowClassLabel.classList.toggle('show', !!classLabel);
-  }
-  const metaRow = document.querySelector('.now-meta-row');
-  if (metaRow)
-    metaRow.style.display = !compactStatus && (ct || currentPlace || classLabel) ? 'flex' : 'none';
-  fitNowTitleText();
-  document.getElementById('next-name').innerText = nt;
-  const nextClass = nxtIdx >= 0 ? today[nxtIdx] : null;
-  const nextInfo = nextClass ? processSplitName(nextClass, week) : null;
-  document.getElementById('next-meta-text').innerText = nextClass
-    ? [nextClass.s, nextInfo?.t, nextClass.loc].filter(Boolean).join(' · ')
-    : '';
-  const liveStateKey = `${window.MANUALLY_TEST ? 'T' : 'R'}-${curDay}-${week}-${curIdx}-${nxtIdx}-${activeBreak ? activeBreak.name : ''}-${isDayFinished}-${state.viewDay}`;
+
+  renderDashboard(viewModel, week);
+
+  const liveStateKey = `${window.MANUALLY_TEST ? 'T' : 'R'}-${curDay}-${week}-${viewModel.curIdx}-${viewModel.nxtIdx}-${viewModel.activeBreakName}-${viewModel.isDayFinished}-${state.viewDay}`;
   if (state.lastListKey !== liveStateKey) {
-    renderList(week, curIdx, nxtIdx, curDay, isDayFinished);
+    renderList(week, viewModel.curIdx, viewModel.nxtIdx, curDay, viewModel.isDayFinished);
     state.lastListKey = liveStateKey;
   }
 }
