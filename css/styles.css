@@ -762,7 +762,7 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .style-panel-overlay{background:rgba(0,0,0,.58)}
 .style-panel{
   width:min(calc(100vw - 24px),480px);max-width:480px;border-radius:28px;
-  left:50%;right:auto;transform:translate(-50%,calc(100% + 24px));max-height:calc(100dvh - 20px);overscroll-behavior:contain;
+  left:50%;right:auto;transform:translate(-50%,calc(100% + 24px));max-height:calc(100dvh - 20px - env(safe-area-inset-top));overscroll-behavior:contain;
   padding:14px 15px 15px;gap:11px;background:var(--glass-fill-strong);box-shadow:var(--glass-shadow);overflow-y:auto;
   backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
 }
