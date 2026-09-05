@@ -71,6 +71,12 @@ function bindSheetDragToDismiss(panelId, closeFn) {
   const panel = document.getElementById(panelId);
   const handle = panel && panel.querySelector('.test-panel-handle');
   if (!panel || !handle) return;
+  // Test/style panels are horizontally centered via left:50% + translateX(-50%)
+  // baked into their CSS transform (modal-sheet isn't - it's positioned with
+  // left/right instead). Dragging must preserve that -50% or the panel loses
+  // its centering and ends up shoved off to the right of the screen.
+  const centered = panel.classList.contains('test-panel');
+  const translate = y => (centered ? `translate(-50%,${y}px)` : `translateY(${y}px)`);
   let dragging = false;
   let startY = 0;
   const threshold = 90;
@@ -78,7 +84,7 @@ function bindSheetDragToDismiss(panelId, closeFn) {
     panel.style.transition = open
       ? 'transform .35s cubic-bezier(.16,1,.3,1)'
       : 'transform .22s cubic-bezier(.4,0,1,1)';
-    panel.style.transform = open ? 'translateY(0)' : `translateY(${panel.offsetHeight + 40}px)`;
+    panel.style.transform = open ? translate(0) : translate(panel.offsetHeight + 40);
     setTimeout(
       () => {
         panel.style.transition = '';
@@ -90,7 +96,7 @@ function bindSheetDragToDismiss(panelId, closeFn) {
   const move = event => {
     if (!dragging) return;
     const deltaY = Math.max(0, event.clientY - startY);
-    panel.style.transform = `translateY(${deltaY}px)`;
+    panel.style.transform = translate(deltaY);
   };
   const finish = event => {
     if (!dragging) return;
@@ -106,7 +112,7 @@ function bindSheetDragToDismiss(panelId, closeFn) {
       return;
     }
     panel.style.transition = 'transform .22s cubic-bezier(.4,0,1,1)';
-    panel.style.transform = `translateY(${panel.offsetHeight + 40}px)`;
+    panel.style.transform = translate(panel.offsetHeight + 40);
     setTimeout(() => {
       closeFn();
       requestAnimationFrame(() => settle(panel.classList.contains('show')));
