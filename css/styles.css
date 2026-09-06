@@ -782,44 +782,37 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 }
 .style-panel.show{transform:translate(-50%,0)}
 
-/* .editor-sheet's own padding/gap/overflow, finished here (after .test-panel)
-   so they actually win the cascade tie - see the comment on .editor-sheet's
-   main rule above. gap:0, not .test-panel's gap:7px: every fold already
-   carries its own margin-bottom for spacing, so a flex gap on top of that
-   would double it. */
-.editor-sheet{padding:12px 15px 15px;gap:0;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch}
+/* .editor-sheet's own padding/overflow, finished here (after .test-panel) so
+   they actually win the cascade tie - see the comment on .editor-sheet's
+   main rule above. overflow:hidden, not auto: the sheet itself no longer
+   scrolls - see .editor-sheet-body below - this is only here so the sheet's
+   own rounded corners still clip whatever the body scrolls past them.
+   No side/bottom padding either: unlike .style-panel, content here isn't a
+   direct child of the padded box any more, .editor-sheet-body owns its own. */
+.editor-sheet{padding:12px 0 0;overflow:hidden}
+/* The header (handle + title/close button) is a plain, non-scrolling flex
+   item using .test-panel's own header styling completely unmodified - no
+   sticky positioning, no background, no blur, nothing editor-specific. It
+   *looks* pinned only because .editor-sheet-body - not .editor-sheet itself
+   - is what actually scrolls: the header simply isn't part of the region
+   that moves, the same way it wouldn't be if this content just happened to
+   be short enough to never scroll, like the style tab's. That is what
+   actually mimics the style tab's header instead of approximating it with
+   position:sticky + a matching background - there is no separate "pinned
+   header" mechanism here to look unlike anything else in the first place. */
+.editor-sheet-body{
+  flex:1 1 auto;min-width:0;min-height:0;overflow-y:auto;overflow-x:hidden;
+  -webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+  padding:0 15px 15px;display:flex;flex-direction:column;gap:0;
+}
 /* Flex items shrink to fit a constrained cross-container by default; with
-   .editor-sheet's max-height regularly smaller than its total content (a
-   dozen rows in an open fold, easily), that shrank each fold down to fit
-   instead of letting the sheet scroll, and .editor-fold's own overflow:
-   hidden silently clipped whatever got squeezed out. flex-shrink:0 makes
-   every direct child keep its natural height so there is real overflow for
-   .editor-sheet's own scrolling to work with. */
-.editor-sheet>*{flex-shrink:0}
-/* The title/close button stay pinned at the top instead of scrolling away -
-   .test-panel's own header (used as-is by the style/test-mode panels)
-   never needs this because their content is short enough to never scroll
-   past it in practice, but it's the same header otherwise: same markup,
-   same look, just kept in place here since the editor's content routinely
-   is long enough to scroll under it.
-   A -12px top offset (matching .editor-sheet's own top padding exactly) is
-   what actually cancels that padding for a sticky element - margin doesn't
-   reliably do it, since a sticky element's static position (what margin
-   shifts) and its sticky clamp are computed separately. Both the handle and
-   the header use it so they land flush with zero gap once stuck; the
-   handle's higher z-index keeps it the interactive element where they
-   overlap (it reads as the header's own grab affordance, not a seam).
-   Same glass material as .editor-inner itself (var(--glass-fill-strong) +
-   the same backdrop blur), not a flat opaque color - true translucency
-   was the actual point of the style tab's "transparent" header, not just
-   the absence of a background-color rule. A flat opaque fill would have
-   been legible too, but it's a second, different-looking surface stacked
-   on the card; blurring what scrolls underneath (the same trick the whole
-   card already uses on the dashboard behind it) keeps the header read as
-   the same sheet of glass, just with scrolled text softened behind it
-   instead of overlapping it unreadably. */
-.editor-sheet .test-panel-handle{position:sticky;top:-12px;z-index:3}
-.editor-sheet .editor-header{position:sticky;top:-12px;z-index:2;margin:0 -15px 10px;padding:14px 15px 12px;background:var(--glass-fill-strong);backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));border-radius:28px 28px 0 0}
+   .editor-sheet-body regularly shorter than its total content (a dozen rows
+   in an open fold, easily), that shrank each fold down to fit instead of
+   letting the body scroll, and .editor-fold's own overflow:hidden silently
+   clipped whatever got squeezed out. flex-shrink:0 makes every direct child
+   keep its natural height so there is real overflow for the body's own
+   scrolling to work with. */
+.editor-sheet-body>*{flex-shrink:0}
 .style-panel select{width:100%;padding:9px 10px;border:1px solid var(--bd);border-radius:10px;background:#2c2c2e;color:var(--txt);font:inherit}
 .style-panel input[type="color"]{width:100%;height:42px;padding:3px;border:1px solid var(--bd);border-radius:10px;background:transparent;cursor:pointer}
 .style-panel .editor-fold-body{min-width:0}

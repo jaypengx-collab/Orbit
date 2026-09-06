@@ -176,9 +176,9 @@ function openEditor() {
 }
 
 function orderEditorFolds() {
-  const sheet = document.getElementById('editor-sheet');
-  const saveBtn = sheet && sheet.querySelector('.save-btn');
-  if (!sheet || !saveBtn) return;
+  const body = document.getElementById('editor-sheet-body');
+  const saveBtn = body && body.querySelector('.save-btn');
+  if (!body || !saveBtn) return;
   [
     'editor-fold-schedule',
     'editor-fold-countdown',
@@ -188,7 +188,7 @@ function orderEditorFolds() {
     'editor-fold-transfer'
   ].forEach(id => {
     const section = document.getElementById(id);
-    if (section) sheet.insertBefore(section, saveBtn);
+    if (section) body.insertBefore(section, saveBtn);
   });
 }
 function renderCountdownEvent() {
@@ -257,12 +257,13 @@ function refreshCountdownMoveButtons() {
 function getEditorScrollContainer(handle) {
   const sheet = handle.closest('.editor-sheet');
   if (!sheet) return null;
+  const body = sheet.querySelector('#editor-sheet-body');
   const activeFold = sheet.querySelector('details.editor-fold.active .editor-fold-body');
-  const candidates = [activeFold, sheet].filter(Boolean);
+  const candidates = [activeFold, body, sheet].filter(Boolean);
   for (const candidate of candidates) {
     if (candidate.scrollHeight > candidate.clientHeight) return candidate;
   }
-  return sheet;
+  return body || sheet;
 }
 function autoScrollEditorWhileDragging(handle, clientY) {
   const scroller = getEditorScrollContainer(handle);
