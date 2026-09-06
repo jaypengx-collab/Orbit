@@ -26,3 +26,16 @@ setInterval(mainClockTick, 1000);
 syncTestPlayPauseUi();
 syncTestToolbar();
 window.update();
+
+// Caches the whole app shell so a return visit can load almost entirely
+// from disk instead of the network - see public/sw.js for the actual
+// caching strategy and why it can't go stale. import.meta.env.PROD (not a
+// dev-mode check of our own) keeps this out of `vite dev`, where a service
+// worker would just fight the dev server's own module reloading.
+// updateViaCache:'none' stops the browser's own HTTP cache from ever
+// serving a stale copy of sw.js itself when checking for an update.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
+  });
+}

@@ -7,7 +7,6 @@
 import { state } from './state.js';
 import { closeTestPanel, syncTestToolbar } from './dashboard.js';
 import { syncTestPlayPauseUi } from './dashboard-render.js';
-import { ORBIT_INITIAL_MARKUP } from './data.js';
 import { parseTime } from './schedule.js';
 
 // ---- js/testsim-runtime.js ----
@@ -41,49 +40,19 @@ import { parseTime } from './schedule.js';
     if (stylesheet) urls.push(stylesheet.href);
     return urls;
   }
-  // Fetched with fetch() (async) rather than a synchronous XMLHttpRequest so computing
-  // the version hash never blocks page boot — it used to freeze rendering for as long as
-  // it took to re-download every source file over the network on every single page load.
-  function fetchTextAsync(url) {
-    var bustedUrl =
-      url + (url.indexOf('?') === -1 ? '?' : '&') + '_v=' + Date.now() + Math.random();
-    return fetch(bustedUrl, { cache: 'no-store' }).then(function (response) {
-      if (!response.ok) throw new Error('Unable to fetch ' + url);
-      return response.text();
-    });
-  }
   function el(id) {
     return document.getElementById(id);
   }
-  function getAppVersionAsync() {
-    var url = window.location.href.replace(/[?#].*$/, '');
-    return Promise.all([fetchTextAsync(url)].concat(getVersionedAssetUrls().map(fetchTextAsync)))
-      .then(function (parts) {
-        return parts.join('');
-      })
-      .catch(function () {
-        return ORBIT_INITIAL_MARKUP;
-      })
-      .then(function (source) {
-        source = source.replace(/(<span id="app-version"[^>]*>)[\s\S]*?(<\/span>)/, '$1$2');
-        var hash = 2166136261;
-        for (var i = 0; i < source.length; i++) {
-          hash ^= source.charCodeAt(i);
-          hash = Math.imul(hash, 16777619);
-        }
-        return (hash >>> 0).toString(36).toUpperCase();
-      });
-  }
+  // Date-based, not a content hash: a glance is enough to tell whether this
+  // load is on the latest deploy, which a hash never gave you without a
+  // side-by-side comparison. Bump this alongside index.html's own ?v=
+  // query strings and public/sw.js's APP_VERSION whenever the app actually
+  // changes - all three staying in sync is what makes both this label and
+  // a forced update via the 更新 button below mean anything.
+  var APP_VERSION_DATE = '2026.09.06';
   function syncAppVersion() {
     var version = el('app-version');
-    if (!version) return;
-    getAppVersionAsync()
-      .then(function (hash) {
-        version.textContent = '版本 ' + hash;
-      })
-      .catch(function () {
-        version.textContent = '版本 未知';
-      });
+    if (version) version.textContent = '版本 ' + APP_VERSION_DATE;
   }
   function clampInt(value, min, max, fallback) {
     var n = parseInt(value, 10);
@@ -303,11 +272,6 @@ import { parseTime } from './schedule.js';
         if (!window.MANUALLY_TEST) setDefaultsToCurrentTime(true);
         var result = original.apply(this, arguments);
         setDefaultsToCurrentTime(false);
-        // Only compute the version hash (re-fetches the page + its bundled
-        // assets) when the panel that actually displays it is opened, not
-        // on every page load - see the comment on syncAppVersion's removed
-        // init()-time call for why that mattered.
-        if (state.testPanelOpen) syncAppVersion();
         return result;
       };
     });
@@ -622,21 +586,62 @@ import { parseTime } from './schedule.js';
     window.update();
   };
   window.forceAppRefresh = function () {
+    var btn = el('test-refresh-btn');
+    if (btn && btn.disabled) return; // already in progress - ignore repeat clicks
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '更新中…';
+    }
     function reloadNow() {
       var url = new URL(window.location.href);
       url.searchParams.set('refresh', String(Date.now()));
       window.location.replace(url.toString());
     }
-    // Prime the HTTP cache with network-fresh copies of the app shell's own
-    // assets first, so the reload below is a true full reload (picks up a
-    // new deploy even when its version query string didn't change) instead
-    // of a plain refresh that can still be served straight from disk cache.
+    function timeout(ms) {
+      return new Promise(function (resolve) {
+        setTimeout(resolve, ms);
+      });
+    }
+    // Clear every layer that could otherwise keep this tab on an old
+    // version: the service worker's own Cache Storage (public/sw.js),
+    // the service worker registration itself (update() makes the browser
+    // re-check sw.js for changes right now instead of whenever it next
+    // feels like it), and the browser's HTTP cache for the app shell's own
+    // assets (re-fetched below with cache:'reload').
+    var cacheCleanup =
+      'caches' in window
+        ? caches
+            .keys()
+            .then(function (keys) {
+              return Promise.all(
+                keys.map(function (key) {
+                  return caches.delete(key);
+                })
+              );
+            })
+            .catch(function () {})
+        : Promise.resolve();
+    var swCleanup =
+      'serviceWorker' in navigator
+        ? navigator.serviceWorker
+            .getRegistration()
+            .then(function (reg) {
+              return reg ? reg.update() : null;
+            })
+            .catch(function () {})
+        : Promise.resolve();
     var refetches = [window.location.href.replace(/[?#].*$/, '')]
       .concat(getVersionedAssetUrls())
       .map(function (url) {
         return fetch(url, { cache: 'reload' }).catch(function () {});
       });
-    Promise.all(refetches).then(reloadNow, reloadNow);
+    // A true hard reload beats waiting forever: race the actual cleanup
+    // against a short timeout so a slow or stuck network never leaves the
+    // button just sitting there disabled and looking broken.
+    Promise.race([Promise.all([cacheCleanup, swCleanup].concat(refetches)), timeout(4000)]).then(
+      reloadNow,
+      reloadNow
+    );
   };
 
   function bindPlayButton() {
@@ -685,13 +690,7 @@ import { parseTime } from './schedule.js';
   function init() {
     mergeNextClassWithTimer();
     unlockTestControls();
-    // syncAppVersion() is deliberately not called here: it re-fetches the
-    // page and its bundled JS/CSS over the network (with cache: 'no-store')
-    // just to compute a version hash for a span that's only visible inside
-    // this Test Mode panel. Calling it on every single page load - for
-    // every visitor, whether or not they ever open this panel - wasted
-    // three full network requests per load. patchPanelOpeners() now calls
-    // it only when the panel is actually opened.
+    syncAppVersion();
     var restoredTestState = restoreTestState();
     if (!defaultsInitialized && !restoredTestState) {
       setDefaultsToCurrentTime(true);

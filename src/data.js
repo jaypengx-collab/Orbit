@@ -14,7 +14,6 @@ import { DEFAULT_STYLE_PRIMARY, DEFAULT_STYLE_SECONDARY } from './constants.js';
 
 // ---- js/data.js ----
 // App defaults and live simulator state.
-const ORBIT_INITIAL_MARKUP = document.documentElement.outerHTML;
 const REVERSE_WEEK_LOGIC_DEFAULT = false;
 window.MANUALLY_TEST = false;
 window.TEST_DAY = 1;
@@ -317,7 +316,6 @@ const dayNames = ['日', '一', '二', '三', '四', '五', '六'];
 
 export {
   ORBIT_APP_ID,
-  ORBIT_INITIAL_MARKUP,
   ORBIT_STORAGE_SCHEMA,
   REVERSE_WEEK_LOGIC_DEFAULT,
   dayNames,

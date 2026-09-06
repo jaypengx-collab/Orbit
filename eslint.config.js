@@ -47,5 +47,17 @@ export default [
         ...globals.node
       }
     }
+  },
+  {
+    // A classic (non-module) service worker script - self/caches/fetch/
+    // Response/URL are its own global scope, not the page's window.
+    files: ['public/sw.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'script',
+      globals: {
+        ...globals.serviceworker
+      }
+    }
   }
 ];
