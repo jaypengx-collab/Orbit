@@ -4,7 +4,7 @@
 // one specific sub-form each and are driven from here.
 import { state } from './state.js';
 import { openStylePanel } from './appearance.js';
-import { closeTestPanel, getCountdownEvents } from './dashboard.js';
+import { closeTestPanel, getCountdownEvents, setOverlayVisible } from './dashboard.js';
 import {
   applyPendingSaveEditor,
   decodeTransferData,
@@ -152,10 +152,8 @@ function openEditor() {
   hideEditorDiscardConfirm();
   closeTestPanel();
   document.querySelector('.top-actions')?.classList.remove('open');
-  const sheet = document.getElementById('editor-sheet');
 
-  document.body.classList.add('editor-open');
-  sheet.classList.add('show');
+  setOverlayVisible('editor-sheet-overlay', 'editor-sheet', true, 'editor-open');
 
   try {
     renderEditorTeachers();
@@ -178,9 +176,9 @@ function openEditor() {
 }
 
 function orderEditorFolds() {
-  const inner = document.querySelector('#editor-sheet .editor-inner');
-  const saveBtn = inner && inner.querySelector('.save-btn');
-  if (!inner || !saveBtn) return;
+  const sheet = document.getElementById('editor-sheet');
+  const saveBtn = sheet && sheet.querySelector('.save-btn');
+  if (!sheet || !saveBtn) return;
   [
     'editor-fold-schedule',
     'editor-fold-countdown',
@@ -190,7 +188,7 @@ function orderEditorFolds() {
     'editor-fold-transfer'
   ].forEach(id => {
     const section = document.getElementById(id);
-    if (section) inner.insertBefore(section, saveBtn);
+    if (section) sheet.insertBefore(section, saveBtn);
   });
 }
 function renderCountdownEvent() {
@@ -260,8 +258,7 @@ function getEditorScrollContainer(handle) {
   const sheet = handle.closest('.editor-sheet');
   if (!sheet) return null;
   const activeFold = sheet.querySelector('details.editor-fold.active .editor-fold-body');
-  const inner = sheet.querySelector('.editor-inner');
-  const candidates = [activeFold, inner, sheet].filter(Boolean);
+  const candidates = [activeFold, sheet].filter(Boolean);
   for (const candidate of candidates) {
     if (candidate.scrollHeight > candidate.clientHeight) return candidate;
   }
@@ -355,13 +352,13 @@ function bindCountdownDrag(row) {
   );
 }
 function moveEditorControlsIntoLayers() {
-  const inner = document.querySelector('#editor-sheet .editor-inner');
+  const sheet = document.getElementById('editor-sheet');
   const scheduleBody = document.querySelector('#editor-fold-schedule .editor-fold-body');
   const transfer = document.getElementById('editor-fold-transfer');
   const options = document.getElementById('editor-fold-options');
   const toggleRow = options && options.querySelector('.toggle-row');
   const drillActions = scheduleBody && scheduleBody.querySelector('.editor-drill-actions');
-  if (inner) inner.classList.add('is-layered');
+  if (sheet) sheet.classList.add('is-layered');
   if (transfer) {
     transfer.classList.add('editor-save-tools');
     transfer.open = false;
@@ -624,7 +621,7 @@ async function closeEditor(force) {
 
   if (!sheet.classList.contains('show')) {
     hideEditorDiscardConfirm();
-    document.body.classList.remove('editor-open');
+    setOverlayVisible('editor-sheet-overlay', 'editor-sheet', false, 'editor-open');
     return;
   }
 
@@ -635,8 +632,7 @@ async function closeEditor(force) {
 
   hideEditorDiscardConfirm();
   const hadUnconsumedImportData = await hasUnconsumedImportData();
-  sheet.classList.remove('show');
-  document.body.classList.remove('editor-open');
+  setOverlayVisible('editor-sheet-overlay', 'editor-sheet', false, 'editor-open');
   // Wipe any AI import data (pasted JSON and AI-recognized photo result) so it never lingers
   // into the next time the editor is opened.
   clearTransferField();

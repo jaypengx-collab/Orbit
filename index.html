@@ -165,10 +165,10 @@
     完成
   </button>
 </div>
-<div id="editor-sheet" class="editor-sheet" role="dialog" aria-modal="true" aria-label="編輯課表">
-  <div class="editor-inner">
-    <div class="test-panel-handle" aria-hidden="true"></div>
-    <div class="editor-header">
+<div id="editor-sheet-overlay" class="test-panel-overlay" onclick="closeEditor()" aria-hidden="true"></div>
+<div id="editor-sheet" class="test-panel editor-sheet" role="dialog" aria-modal="true" aria-label="編輯課表">
+  <div class="test-panel-handle" aria-hidden="true"></div>
+  <div class="editor-header">
       <div class="editor-title">
         編輯課表
       </div>
@@ -307,7 +307,6 @@
     <button type="button" class="save-btn" onclick="saveEditor()">
       儲存
     </button>
-  </div>
 </div>
 <template id="ocr-preview-template">
   <div class="ocr-import-preview-title">辨識結果與匯入預覽</div>

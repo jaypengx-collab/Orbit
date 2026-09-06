@@ -472,52 +472,36 @@ body.modal-open > .dashboard,body.modal-open > .nav-bar,body.modal-open > #sched
 
 /* ============================================================================
    Editor sheet (schedule editor + all its sub-sections)
+   Built directly on .test-panel - the same base the style/test-mode sheets
+   use - instead of its own bespoke full-screen-overlay-plus-inner-card
+   structure. That old structure was a genuinely different implementation
+   (a full-viewport dim wrapper containing a separately-styled centered
+   card) stacked on top of the shared component system every other popup
+   already uses, which is exactly what kept reading as extra layers no
+   amount of color/blur tuning inside it could fully resolve. Now there is
+   only the one shared shape: .test-panel-overlay behind, one glass sheet in
+   front, nothing wrapping anything else.
    ========================================================================= */
 .editor-sheet{
-  /* Pure dim veil, no blur of its own - matching .test-panel-overlay/
-     .style-panel-overlay/.modal-overlay's flat dim. The glass/blur look
-     lives on .editor-inner alone (same split those other sheets use: a flat
-     dim overlay behind, one blurred glass card on top); doubling the blur
-     here on the full-screen wrapper too made the editor read as two stacked
-     glass layers instead of the single card every other popup shows. */
-  position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.58);
-  z-index:200;overflow:hidden;
-  transform:translateY(100%);transition:transform .4s var(--ease-glass),visibility 0s linear .4s;
-  padding:calc(env(safe-area-inset-top) + 12px) 12px 12px;
-  /* Same reasoning as .modal-sheet/.test-panel: a full-height fixed sheet
-     pushed off-screen by translateY(100%) of ITS OWN height is only
-     guaranteed hidden if that height was computed correctly — iOS Safari
-     standalone mode has known viewport-height timing quirks, so this also
-     gets a hard visibility fallback rather than relying on the transform
-     alone. */
-  visibility:hidden;
+  width:min(calc(100vw - 24px),480px);max-width:480px;
+  left:50%;right:auto;transform:translate(-50%,calc(100% + 24px));
+  max-height:calc(100dvh - 20px - env(safe-area-inset-top));overscroll-behavior:contain;
+  /* padding/gap/overflow are finished below, after .test-panel is defined -
+     .test-panel's own padding/gap/overflow shorthand would otherwise win
+     this tie (same specificity, later in the cascade) and silently undo
+     them, which is exactly what broke this panel's internal scrolling the
+     first time around. */
 }
-.editor-sheet.show{transform:translateY(0);visibility:visible;transition:transform .4s var(--ease-glass),visibility 0s linear 0s}
-body.editor-open .dashboard{z-index:0;pointer-events:none}
-body.editor-open .editor-sheet{z-index:1000000}
-.editor-inner{
-  max-height:100%;margin:0 auto;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:12px;
-  width:min(calc(100vw - 24px),480px);max-width:480px;border-radius:28px;
-  background:var(--glass-fill-strong);box-shadow:var(--glass-shadow);
-  backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
-}
-.editor-sheet .editor-inner{padding-bottom:82px}
-.editor-inner.is-layered .editor-fold{display:none}
-.editor-inner.is-layered .editor-fold.active{display:block}
-.editor-inner.is-layered #editor-fold-transfer.editor-save-tools{display:block;margin-top:10px}
+body.editor-open .dashboard{pointer-events:none}
+.editor-sheet.is-layered .editor-fold{display:none}
+.editor-sheet.is-layered .editor-fold.active{display:block}
+.editor-sheet.is-layered #editor-fold-transfer.editor-save-tools{display:block;margin-top:10px}
 .editor-inline-options{margin-bottom:9px}
 .editor-header{display:flex;align-items:center;justify-content:space-between;min-height:32px;margin-bottom:12px;padding-top:0}
-/* Solid --orbit-panel-strong - the exact color .editor-fold's own background
-   already is - not a translucent tone of its own. A translucent/blurred
-   header still shows a hard seam the instant a fold's opaque body scrolls
-   under it (two different materials meeting); matching the fold's own solid
-   color outright means there's nothing to see a seam between once it does. */
-.editor-sheet .editor-header{position:sticky;top:-14px;z-index:2;margin:-18px -18px 16px;padding:16px 18px 14px;gap:12px;background:var(--orbit-panel-strong);border-radius:28px 28px 0 0}
-.editor-title{color:var(--pro-accent);font-weight:800;letter-spacing:-.04em}
 .editor-sheet .editor-title{font-size:20px;font-weight:800;letter-spacing:-.4px}
+.editor-title{color:var(--pro-accent);font-weight:800;letter-spacing:-.04em}
 .editor-close{font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;width:32px;height:32px;background:rgba(255,255,255,.06);color:var(--orbit-white);border:1px solid color-mix(in srgb,var(--pro-accent) 18%,transparent);border-radius:12px;transition:transform .15s,background .15s}
 .editor-close:active{transform:scale(.9);background:rgba(255,255,255,.12)}
-.editor-inner>.test-panel-handle{margin:-4px auto 8px}
 
 .editor-fold{margin-bottom:10px;overflow:hidden;border-radius:16px;border:1px solid color-mix(in srgb,var(--pro-accent) 18%,transparent);background:#172f39}
 .editor-sheet .editor-fold{margin-bottom:14px;border-radius:14px}
@@ -670,7 +654,7 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .ocr-import-preview-meta,.ocr-import-preview-note{font-size:11px;line-height:1.4;color:var(--sub)}
 .ocr-import-class-card{width:100%;padding:10px 12px}
 .ocr-import-class-card .tc-subject{flex:1;min-width:0}
-.editor-inner.is-layered #ocr-import-result .editor-fold{display:block;margin-bottom:10px}
+.editor-sheet.is-layered #ocr-import-result .editor-fold{display:block;margin-bottom:10px}
 #ocr-import-result .editor-fold[hidden]{display:none}
 #ocr-import-result .editor-fold-summary{display:flex}
 #ocr-import-result .editor-fold-body{display:block}
@@ -722,8 +706,7 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .editor-hint-title{font-size:10px;color:var(--accent);font-weight:700;margin-bottom:3px;letter-spacing:.35px}
 .editor-hint-body{font-size:11px;color:var(--sub);line-height:1.4}
 
-@media (max-width:480px){.editor-fold-summary{padding:11px 12px}.editor-inner{width:calc(100vw - 16px);max-height:calc(100dvh - 16px);padding:10px;border-radius:16px}.editor-sheet{padding:calc(env(safe-area-inset-top) + 8px) 8px 8px}.editor-sheet .editor-header{border-radius:16px 16px 0 0;margin:-14px -14px 14px;padding:14px 14px 12px}.schedule-day-row{padding:11px 11px 11px 9px;border-radius:14px;display:block;overflow:hidden}.schedule-day-label{display:block}.schedule-periods{width:100%;overflow-x:auto;overflow-y:hidden;padding:1px 1px 6px;scroll-snap-type:x proximity;display:flex;flex-wrap:nowrap}.schedule-periods .period-select{width:108px;flex:0 0 108px;min-height:38px;box-sizing:border-box;scroll-snap-align:start}.teacher-card{position:relative;margin-bottom:10px;display:block;width:100%;border-radius:14px;padding:14px 14px 14px 12px}.teacher-card .teacher-fields{display:grid;margin:0;grid-template-columns:minmax(0,1fr) minmax(0,1fr);margin-top:0;gap:10px;width:calc(100% - 44px)}.teacher-card .tc-subject{grid-column:1 / -1}.teacher-card .teacher-fields .editor-input{display:block;width:100%;max-width:100%;box-sizing:border-box;min-height:44px}.teacher-card .teacher-avatar{margin:0 0 8px}.teacher-card .delete-btn{position:absolute;min-width:28px;width:28px;height:28px;padding:0;top:auto;right:11px;bottom:11px}.teacher-card .teacher-order-actions{align-items:center;margin-top:10px;display:flex;gap:7px}.teacher-card .teacher-order-actions .teacher-drag-handle{order:-1}.countdown-event-row{margin-bottom:9px;padding:12px 12px 12px 14px}.countdown-event-header{margin-bottom:10px}.countdown-event-fields{gap:9px}}
-@media (max-width:430px){.editor-inner{border-radius:20px}}
+@media (max-width:480px){.editor-fold-summary{padding:11px 12px}.schedule-day-row{padding:11px 11px 11px 9px;border-radius:14px;display:block;overflow:hidden}.schedule-day-label{display:block}.schedule-periods{width:100%;overflow-x:auto;overflow-y:hidden;padding:1px 1px 6px;scroll-snap-type:x proximity;display:flex;flex-wrap:nowrap}.schedule-periods .period-select{width:108px;flex:0 0 108px;min-height:38px;box-sizing:border-box;scroll-snap-align:start}.teacher-card{position:relative;margin-bottom:10px;display:block;width:100%;border-radius:14px;padding:14px 14px 14px 12px}.teacher-card .teacher-fields{display:grid;margin:0;grid-template-columns:minmax(0,1fr) minmax(0,1fr);margin-top:0;gap:10px;width:calc(100% - 44px)}.teacher-card .tc-subject{grid-column:1 / -1}.teacher-card .teacher-fields .editor-input{display:block;width:100%;max-width:100%;box-sizing:border-box;min-height:44px}.teacher-card .teacher-avatar{margin:0 0 8px}.teacher-card .delete-btn{position:absolute;min-width:28px;width:28px;height:28px;padding:0;top:auto;right:11px;bottom:11px}.teacher-card .teacher-order-actions{align-items:center;margin-top:10px;display:flex;gap:7px}.teacher-card .teacher-order-actions .teacher-drag-handle{order:-1}.countdown-event-row{margin-bottom:9px;padding:12px 12px 12px 14px}.countdown-event-header{margin-bottom:10px}.countdown-event-fields{gap:9px}}
 
 /* ============================================================================
    Test panel (time simulation) and style panel
@@ -794,6 +777,21 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
   backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
 }
 .style-panel.show{transform:translate(-50%,0)}
+
+/* .editor-sheet's own padding/gap/overflow, finished here (after .test-panel)
+   so they actually win the cascade tie - see the comment on .editor-sheet's
+   main rule above. gap:0, not .test-panel's gap:7px: every fold already
+   carries its own margin-bottom for spacing, so a flex gap on top of that
+   would double it. */
+.editor-sheet{padding:12px 15px calc(15px + 82px);gap:0;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch}
+/* Flex items shrink to fit a constrained cross-container by default; with
+   .editor-sheet's max-height regularly smaller than its total content (a
+   dozen rows in an open fold, easily), that shrank each fold down to fit
+   instead of letting the sheet scroll, and .editor-fold's own overflow:
+   hidden silently clipped whatever got squeezed out. flex-shrink:0 makes
+   every direct child keep its natural height so there is real overflow for
+   .editor-sheet's own scrolling to work with. */
+.editor-sheet>*{flex-shrink:0}
 .style-panel select{width:100%;padding:9px 10px;border:1px solid var(--bd);border-radius:10px;background:#2c2c2e;color:var(--txt);font:inherit}
 .style-panel input[type="color"]{width:100%;height:42px;padding:3px;border:1px solid var(--bd);border-radius:10px;background:transparent;cursor:pointer}
 .style-panel .editor-fold-body{min-width:0}
@@ -909,7 +907,7 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
     --glass-fill-strong:color-mix(in srgb,var(--orbit-panel-strong) 90%,transparent);
   }
   .dashboard, .nav-bar, .nav-item.active, .top-action-btn, #btn-menu.top-action-btn, .exam-countdown,
-  .modal-sheet, .editor-inner, .test-panel, .style-panel, .editor-confirm-sheet,
+  .modal-sheet, .test-panel, .style-panel, .editor-confirm-sheet,
   .assign-sheet, .ocr-apikey-sheet, .top-actions-menu, .row.is-now, .row.is-next,
   .close-btn, .save-btn, .editor-primary-btn, .settings-transfer-btn.primary,
   .style-apply-btn, .teacher-assign, .editor-sheet, .modal-overlay, .editor-confirm-overlay{
