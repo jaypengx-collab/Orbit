@@ -101,9 +101,9 @@ function addBellRow() {
     endValue = `${pad2(Math.floor(endMinutes / 60))}:${pad2(endMinutes % 60)}`;
   }
 
-  document
-    .getElementById('bell-list')
-    .appendChild(makeBellRow(rows.length + 1, startValue, endValue));
+  const row = makeBellRow(rows.length + 1, startValue, endValue);
+  row.classList.add('row-enter');
+  document.getElementById('bell-list').appendChild(row);
   refreshBellNumbers();
   const draft = collectEditorFormState();
   renderEditorSchedule(draft.weeklySchedule);
@@ -188,7 +188,9 @@ function makeBreakRow(name, start, end) {
 
 // Adds a blank named break row.
 function addBreakRow() {
-  document.getElementById('break-list').appendChild(makeBreakRow('', '', ''));
+  const row = makeBreakRow('', '', '');
+  row.classList.add('row-enter');
+  document.getElementById('break-list').appendChild(row);
   sortEditorBreaksByTime();
 }
 

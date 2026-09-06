@@ -204,7 +204,7 @@ function addCountdownEventRow(event = { name: '', startDate: '', endDate: '' }, 
   const list = document.getElementById('countdown-event-list');
   if (!list || list.children.length >= 12) return;
   const row = document.createElement('div');
-  row.className = 'countdown-event-row';
+  row.className = index === undefined ? 'countdown-event-row row-enter' : 'countdown-event-row';
   row.innerHTML =
     '<div class="countdown-event-header"><span class="countdown-event-title">倒數活動</span><div class="countdown-event-actions"><span class="countdown-drag-handle" role="button" tabindex="0" title="拖曳排序" aria-label="拖曳排序">☰</span><label class="order-position-label">順序<input class="order-position" type="number" min="1" inputmode="numeric" aria-label="倒數活動順序"></label><button type="button" class="countdown-event-remove" aria-label="移除倒數">×</button></div></div><div class="countdown-event-fields"><label>活動名稱<input class="editor-input countdown-event-name" maxlength="80" placeholder="例如：116 學測"></label><label class="countdown-event-daterange-label">日期<div class="countdown-date-range"><input class="editor-input countdown-event-start" type="date" aria-label="開始日期"><span class="time-sep">→</span><input class="editor-input countdown-event-end" type="date" aria-label="結束日期"></div></label></div>';
   const nameInput = row.querySelector('.countdown-event-name');

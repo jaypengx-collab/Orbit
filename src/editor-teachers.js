@@ -275,9 +275,9 @@ function refreshTeacherMoveButtons() {
 
 // Adds a blank teacher row to the editor.
 function addTeacherRow() {
-  document
-    .getElementById('teacher-list')
-    .appendChild(makeTeacherCard(generateTeacherKey(), '', ''));
+  const card = makeTeacherCard(generateTeacherKey(), '', '');
+  card.classList.add('row-enter');
+  document.getElementById('teacher-list').appendChild(card);
   refreshPeriodSelectOptions();
 }
 

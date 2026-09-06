@@ -113,8 +113,11 @@ function bindSheetDragToDismiss(panelId, closeFn) {
     }
     panel.style.transition = 'transform .22s cubic-bezier(.4,0,1,1)';
     panel.style.transform = translate(panel.offsetHeight + 40);
-    setTimeout(() => {
-      closeFn();
+    setTimeout(async () => {
+      // closeFn may be async (e.g. closeEditor's unsaved-changes check) - await
+      // it so the 'show' class check below reflects the actual outcome instead
+      // of racing an in-flight promise.
+      await closeFn();
       requestAnimationFrame(() => settle(panel.classList.contains('show')));
     }, 220);
   };
@@ -134,6 +137,7 @@ function bindSheetDragToDismiss(panelId, closeFn) {
 bindSheetDragToDismiss('debug-panel', closeTestPanel);
 bindSheetDragToDismiss('style-panel', closeStylePanel);
 bindSheetDragToDismiss('sheet', closeModal);
+bindSheetDragToDismiss('editor-sheet', () => closeEditor());
 // Changes the visible day when a navigation tab is pressed.
 function handleNav(d) {
   state.viewDay = d;
@@ -189,6 +193,14 @@ function showCountdownEvent(index) {
   const events = getCountdownEvents();
   activeCountdownIndex = (index + events.length) % events.length;
   updateExamCountdown();
+  const card = document.getElementById('exam-countdown');
+  if (card) {
+    card.classList.remove('is-swapping');
+    // Force reflow so re-adding the class restarts the animation even when
+    // swiping again before the previous swap animation finished.
+    void card.offsetWidth;
+    card.classList.add('is-swapping');
+  }
 }
 function updateExamCountdown() {
   const el = document.getElementById('exam-countdown-value');
