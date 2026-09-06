@@ -474,8 +474,14 @@ body.modal-open > .dashboard,body.modal-open > .nav-bar,body.modal-open > #sched
    Editor sheet (schedule editor + all its sub-sections)
    ========================================================================= */
 .editor-sheet{
+  /* Pure dim veil, no blur of its own - matching .test-panel-overlay/
+     .style-panel-overlay/.modal-overlay's flat dim. The glass/blur look
+     lives on .editor-inner alone (same split those other sheets use: a flat
+     dim overlay behind, one blurred glass card on top); doubling the blur
+     here on the full-screen wrapper too made the editor read as two stacked
+     glass layers instead of the single card every other popup shows. */
   position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.58);
-  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);z-index:200;overflow:hidden;
+  z-index:200;overflow:hidden;
   transform:translateY(100%);transition:transform .4s var(--ease-glass),visibility 0s linear .4s;
   padding:calc(env(safe-area-inset-top) + 12px) 12px 12px;
   /* Same reasoning as .modal-sheet/.test-panel: a full-height fixed sheet
