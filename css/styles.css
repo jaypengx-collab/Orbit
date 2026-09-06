@@ -1010,17 +1010,23 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
    glow body itself uses, layered under the flat mix - reaches every panel
    that references either variable for free. Screenshotted next to the
    website version at several strengths to land here: strong enough to
-   read as colour, not so strong it looks painted on. */
+   read as colour, not so strong it looks painted on.
+   The flat mix itself uses html/body's own near-black (#0B1117), not
+   --orbit-panel/--orbit-panel-strong (#10232c/#172f39): those read as a
+   subtle blue-grey tint under blur at the website's ~22-30% fill, but at
+   the opacity this fallback needs to stay legible without blur, that same
+   blue hue took over the whole panel - "blue-grey plastic" instead of the
+   black glass the website actually reads as. */
 @media (display-mode:standalone){
   :root{
     --glass-fill:
       radial-gradient(120% 70% at 10% -10%,color-mix(in srgb,var(--pro-accent) 14%,transparent),transparent 60%),
       radial-gradient(100% 70% at 110% 0%,color-mix(in srgb,var(--pro-secondary) 12%,transparent),transparent 65%),
-      color-mix(in srgb,var(--orbit-panel) 68%,transparent);
+      color-mix(in srgb,#0B1117 68%,transparent);
     --glass-fill-strong:
       radial-gradient(120% 70% at 10% -10%,color-mix(in srgb,var(--pro-accent) 10%,transparent),transparent 60%),
       radial-gradient(100% 70% at 110% 0%,color-mix(in srgb,var(--pro-secondary) 8%,transparent),transparent 65%),
-      color-mix(in srgb,var(--orbit-panel-strong) 76%,transparent);
+      color-mix(in srgb,#0d1620 76%,transparent);
   }
   .dashboard, .nav-bar, .nav-item.active, .top-action-btn, #btn-menu.top-action-btn, .exam-countdown,
   .modal-sheet, .test-panel, .style-panel, .editor-confirm-sheet,
