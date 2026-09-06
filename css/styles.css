@@ -563,9 +563,18 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .toggle-switch.on{background:var(--accent)}
 .toggle-switch.on::after{transform:translateX(18px)}
 
-.teacher-list{display:flex;flex-direction:column;gap:12px}
-.teacher-card{background:rgba(255,255,255,.07);border:1px solid color-mix(in srgb,var(--pro-accent) 16%,rgba(255,255,255,.10));border-left:3px solid color-mix(in srgb,var(--pro-accent) 45%,transparent);border-radius:12px;padding:10px 12px 10px 10px;width:100%;max-width:100%;display:flex;flex-wrap:wrap;align-items:center;gap:8px;box-sizing:border-box;transition:box-shadow .15s,transform .15s,opacity .15s}
-.teacher-card.is-dragging{transform:scale(.985);box-shadow:0 8px 24px rgba(0,0,0,.25);opacity:.55;outline:2px solid var(--accent)}
+/* Grouped list style (teacher/bell/break/countdown/schedule rows): one
+   bordered container per list, flat rows inside separated by a hairline -
+   the same "single box, divided rows" pattern the class-info popup's
+   m-occ-list/occ-row already uses - instead of every row being its own
+   nested card. Fewer independently-boxed layers stacked inside each other. */
+.teacher-list,.bell-list,.countdown-editor-list,.schedule-grid{
+  display:flex;flex-direction:column;gap:0;border-radius:16px;
+  border:1px solid var(--bd);background:rgba(255,255,255,.04);overflow:hidden;
+}
+.teacher-card{background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,.08);border-radius:0;padding:12px;width:100%;max-width:100%;display:flex;flex-wrap:wrap;align-items:center;gap:8px;box-sizing:border-box;transition:box-shadow .15s,transform .15s,opacity .15s,background .15s}
+.teacher-card:last-child{border-bottom:none}
+.teacher-card.is-dragging{transform:scale(.985);box-shadow:0 8px 24px rgba(0,0,0,.25);opacity:.55;background:rgba(255,255,255,.07);outline:2px solid var(--accent)}
 .teacher-avatar{--avatar-hue:210;width:28px;height:28px;border-radius:50%;background:hsla(var(--avatar-hue),70%,55%,.18);color:hsl(var(--avatar-hue),70%,60%);font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1px solid hsla(var(--avatar-hue),70%,55%,.35)}
 .teacher-fields{display:contents}
 .teacher-card .tc-subject{flex:1 1 calc(50% - 4px);min-width:min(96px,40%)}
@@ -591,19 +600,17 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .delete-btn:active{background:rgba(255,69,58,.36);transform:scale(.9)}
 .editor-sheet .delete-btn{width:22px;height:22px;font-size:12px;border-radius:6px;flex-shrink:0}
 
-.schedule-grid{display:flex;flex-direction:column;gap:8px}
-.editor-sheet .schedule-grid{gap:12px}
-.schedule-day-row{background:rgba(255,255,255,.07);border:1px solid color-mix(in srgb,var(--pro-accent) 16%,rgba(255,255,255,.10));border-left:3px solid color-mix(in srgb,var(--pro-accent) 45%,transparent);border-radius:12px;padding:10px 12px 10px 10px}
+.schedule-day-row{background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,.08);border-radius:0;padding:12px}
+.schedule-day-row:last-child{border-bottom:none}
 .schedule-day-label{font-size:12px;font-weight:700;color:var(--sub);margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px}
 .schedule-periods{display:flex;gap:6px;flex-wrap:wrap}
 .period-select{flex:1;min-width:64px;max-width:132px;background:rgba(255,255,255,.07);border:1px solid var(--bd);color:var(--txt);padding:6px 8px;border-radius:10px;font-size:12px;font-family:inherit;text-overflow:ellipsis;cursor:pointer;transition:border-color .2s;text-align:left;text-align-last:left}
 .period-select:focus{outline:none;border-color:var(--accent)}
 .editor-sheet .period-select{padding:6px 8px;font-size:12px;min-width:64px;max-width:132px;border-radius:10px;min-height:40px}
 
-.bell-list{display:flex;flex-direction:column;gap:8px}
-.editor-sheet .bell-list{gap:12px}
-.bell-row{background:rgba(255,255,255,.07);border:1px solid color-mix(in srgb,var(--pro-secondary) 16%,rgba(255,255,255,.10));border-left:3px solid color-mix(in srgb,var(--pro-secondary) 45%,transparent);border-radius:12px;padding:10px 12px 10px 10px;display:flex;gap:8px;align-items:center}
-.editor-sheet .bell-row{gap:8px;padding:14px 14px 14px 12px;border-radius:14px}
+.bell-row{background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,.08);border-radius:0;padding:12px;display:flex;gap:8px;align-items:center}
+.bell-row:last-child{border-bottom:none}
+.editor-sheet .bell-row{gap:8px;padding:14px 14px 14px 12px}
 .bell-num{width:26px;height:26px;border-radius:7px;background:rgba(255,255,255,.05);color:var(--sub);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .editor-sheet .bell-num{width:24px;height:24px;font-size:12px}
 .bell-inputs{display:flex;align-items:center;gap:7px;flex:1}
@@ -612,11 +619,10 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .editor-sheet .time-input{padding:7px 9px;border-radius:10px;font-size:13px;min-height:40px}
 .time-sep{color:var(--sub);font-weight:700;font-size:14px}
 
-.countdown-editor-list{display:flex;flex-direction:column;gap:8px}
-.editor-sheet .countdown-editor-list{gap:12px}
-.countdown-event-row{position:relative;display:block;box-sizing:border-box;padding:10px 10px 10px 12px;border:1px solid color-mix(in srgb,var(--pro-accent) 16%,var(--orbit-line));border-left:3px solid color-mix(in srgb,var(--pro-accent) 45%,transparent);border-radius:14px;background:rgba(255,255,255,.04);min-width:0;max-width:100%}
-.countdown-event-row.is-dragging{opacity:.68;transform:scale(.985);box-shadow:0 8px 24px rgba(0,0,0,.25)}
-.editor-sheet .countdown-event-row{border-radius:14px;display:block}
+.countdown-event-row{position:relative;display:block;box-sizing:border-box;padding:12px;border:none;border-bottom:1px solid rgba(255,255,255,.08);border-radius:0;background:transparent;min-width:0;max-width:100%}
+.countdown-event-row:last-child{border-bottom:none}
+.countdown-event-row.is-dragging{opacity:.68;transform:scale(.985);box-shadow:0 8px 24px rgba(0,0,0,.25);background:rgba(255,255,255,.05)}
+.editor-sheet .countdown-event-row{display:block}
 .countdown-event-header{position:absolute;top:8px;right:8px;flex-direction:row;display:flex;align-items:center;gap:8px;margin-bottom:8px;width:100%;justify-content:space-between;box-sizing:border-box}
 .editor-sheet .countdown-event-header{position:static;width:100%;display:flex;flex-direction:row;justify-content:space-between;align-items:center}
 .countdown-event-title{font-size:12px;font-weight:800;color:var(--pro-accent);flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
