@@ -105,7 +105,15 @@ body{
      (e.g. the three toolbar icons) without falling back to a fixed brand color. */
   --pro-blend:color-mix(in srgb,var(--pro-accent) 50%,var(--pro-secondary) 50%);
   font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif;
-  margin:0;padding:calc(env(safe-area-inset-top) + 10px) max(12px,env(safe-area-inset-right)) calc(env(safe-area-inset-bottom) + 10px) max(12px,env(safe-area-inset-left));
+  /* No env(safe-area-inset-bottom) here, on purpose: unlike the top notch
+     (which really does sit over content) and the sides, the home indicator
+     doesn't need reserved space to stay usable - it overlays translucently
+     on top of whatever's already there. Reserving space for it anyway
+     (tried once, reverted) only ate into the one screen edge with no
+     browser chrome to have already made room for it - most visible in
+     standalone/Home Screen mode, where there's no URL bar at all and this
+     was the single biggest source of dead space at the bottom of the app. */
+  margin:0;padding:calc(env(safe-area-inset-top) + 10px) max(12px,env(safe-area-inset-right)) 10px max(12px,env(safe-area-inset-left));
   display:flex;flex-direction:column;align-items:center;letter-spacing:-.02em;
   transition:background .3s,color .3s;min-height:100dvh;height:100dvh;width:100%;
   position:relative;overflow:hidden;overscroll-behavior:none;-webkit-text-size-adjust:100%;
@@ -977,19 +985,25 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
    (supported since iOS 12.2) turns the blur off only in the context where
    it actually happens, so a normal Safari tab (or Chrome) still gets the
    full blurred glass exactly as intended.
-   Without blur-behind to carry the translucency, a fill anywhere near the
-   website's ~22-30% would let the busy gradient background show through
-   unblurred and wreck legibility - some extra opacity here is a real,
-   permanent requirement, not just leftover caution. What was leftover
-   caution was how much: 85-90% read as nearly solid panels, a much bigger
-   gap from the website's glassy look than legibility actually demands
-   against this app's soft gradient background. Dialed back to the
-   lowest opacity that still keeps text readable over it, to close as much
-   of that gap as this constraint allows. */
+   There is no WebKit/Safari engine in this environment to test this
+   against directly (only Chromium is available, and Chromium's automation
+   protocol doesn't support overriding display-mode either - confirmed by
+   trying it), so the actual ghosting bug can't be reproduced or verified
+   here. What WAS verified: this rule's own fallback look. Chromium was
+   driven headlessly with the exact ruleset below force-injected (since the
+   media query itself can't be triggered), screenshotted, and compared
+   pixel-for-pixel against the normal blurred version. Without blur-behind
+   to carry the translucency, a fill anywhere near the website's ~22-30%
+   let the busy gradient background AND whatever text sits under a panel
+   show through completely unblurred, which read as noisy/glitchy rather
+   than "more transparent" - the 85-90% this replaced avoided that but as
+   nearly solid panels, further from the website's glassy look than
+   legibility actually demands. This is the opacity where the unblurred
+   bleed-through stops being distracting without going that far. */
 @media (display-mode:standalone){
   :root{
-    --glass-fill:color-mix(in srgb,var(--orbit-panel) 55%,transparent);
-    --glass-fill-strong:color-mix(in srgb,var(--orbit-panel-strong) 64%,transparent);
+    --glass-fill:color-mix(in srgb,var(--orbit-panel) 68%,transparent);
+    --glass-fill-strong:color-mix(in srgb,var(--orbit-panel-strong) 76%,transparent);
   }
   .dashboard, .nav-bar, .nav-item.active, .top-action-btn, #btn-menu.top-action-btn, .exam-countdown,
   .modal-sheet, .test-panel, .style-panel, .editor-confirm-sheet,

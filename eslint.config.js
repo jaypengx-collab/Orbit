@@ -15,8 +15,9 @@ export default [
       globals: {
         ...globals.browser,
         // Injected at build time by vite.config.js's `define` - see
-        // testsim-runtime.js's only use of it.
-        __APP_VERSION_DATE__: 'readonly'
+        // testsim-runtime.js's only use of them.
+        __APP_VERSION_DATE__: 'readonly',
+        __APP_VERSION_HASH__: 'readonly'
       }
     },
     rules: {

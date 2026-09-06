@@ -43,17 +43,19 @@ import { parseTime } from './schedule.js';
   function el(id) {
     return document.getElementById(id);
   }
-  // Date-based, not a content hash: a glance is enough to tell whether this
-  // load is on the latest deploy, which a hash never gave you without a
-  // side-by-side comparison. __APP_VERSION_DATE__ is injected by
-  // vite.config.js from the checked-out commit's date, so this - along with
+  // Date plus hash, not just a content hash: the date is what makes a
+  // glance enough to tell whether this load is on today's deploy, while the
+  // hash is what still tells two same-day pushes apart (a plain date
+  // repeats across every push made that day). Both are injected by
+  // vite.config.js from the checked-out commit, so this - along with
   // index.html's ?v= query strings and public/sw.js's cache name, both
   // derived from the same commit's hash - always matches what's actually
   // deployed without anyone having to remember to bump anything by hand.
   var APP_VERSION_DATE = __APP_VERSION_DATE__;
+  var APP_VERSION_HASH = __APP_VERSION_HASH__;
   function syncAppVersion() {
     var version = el('app-version');
-    if (version) version.textContent = '版本 ' + APP_VERSION_DATE;
+    if (version) version.textContent = '版本 ' + APP_VERSION_DATE + ' · ' + APP_VERSION_HASH;
   }
   function clampInt(value, min, max, fallback) {
     var n = parseInt(value, 10);

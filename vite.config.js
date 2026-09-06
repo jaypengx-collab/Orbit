@@ -73,7 +73,11 @@ export default defineConfig({
   base: './',
   plugins: [copyNojekyll(), injectAppVersion()],
   define: {
-    __APP_VERSION_DATE__: JSON.stringify(APP_VERSION.date)
+    // The date alone repeats across every push made the same day - the
+    // hash is what keeps the displayed tag actually distinguishing one
+    // deploy from the next when there are several in a day.
+    __APP_VERSION_DATE__: JSON.stringify(APP_VERSION.date),
+    __APP_VERSION_HASH__: JSON.stringify(APP_VERSION.hash)
   },
   build: {
     outDir: 'dist',
