@@ -178,19 +178,29 @@ body.orbit-booting .dashboard-boot-loader{visibility:visible;display:flex;positi
   box-shadow:var(--glass-edge-shadow);
   transition:box-shadow .15s,transform .12s var(--ease-glass);
 }
-.exam-countdown:active{cursor:grabbing;transform:scale(.98)}
+/* Grabbing cursor only - no press-scale here. A tap alone does nothing (only
+   an actual swipe changes the active event), so animating on every press
+   would be feedback for an action that didn't happen; .is-swapping below is
+   the only animation, and it's only ever added once a swipe crosses the
+   distance threshold in showCountdownEvent(). */
+.exam-countdown:active{cursor:grabbing}
 @keyframes countdownSwap{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
 .exam-countdown.is-swapping .exam-countdown-copy,.exam-countdown.is-swapping .exam-countdown-value{animation:countdownSwap .22s ease}
 .exam-countdown-copy{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-width:0}
-.exam-countdown-label{letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff;font-size:13px;font-weight:900;max-width:100%;line-height:1.25}
-.exam-countdown-date{opacity:.7;font-size:10.5px;font-weight:700;letter-spacing:.15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--orbit-muted);max-width:100%;line-height:1.25}
+/* font-size is the CSS ceiling fitCountdownLabelText() (src/dashboard.js)
+   shrinks down from for a long event name, before text-overflow:ellipsis
+   ever has to kick in as the last resort. .exam-countdown-date doesn't get
+   the same treatment - its longest realistic form (a cross-year range) is
+   short and predictable enough to just always fit at this fixed size. */
+.exam-countdown-label{letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff;font-size:15px;font-weight:900;max-width:100%;line-height:1.25}
+.exam-countdown-date{opacity:.7;font-size:12px;font-weight:700;letter-spacing:.15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--orbit-muted);max-width:100%;line-height:1.25}
 .exam-countdown-value{min-width:0;padding:0 0 0 10px;border:0;border-left:1px solid color-mix(in srgb,var(--pro-secondary) 42%,transparent);border-radius:0;background:transparent;color:var(--pro-accent-readable);font-family:ui-monospace,SFMono-Regular,monospace;font-size:clamp(22px,6.4vw,26px);line-height:1.05;font-weight:850;text-align:center;letter-spacing:-.02em;white-space:nowrap}
 .exam-countdown-unit{font-size:.42em;font-weight:800;letter-spacing:0;margin-left:3px;color:var(--orbit-muted);vertical-align:.2em}
 .exam-countdown-dots{position:absolute;left:50%;bottom:2px;transform:translateX(-50%);display:flex;align-items:center;gap:3px;pointer-events:none;z-index:1}
 .exam-countdown-dots[hidden]{display:none}
 .exam-countdown-dot{width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,.28);transition:background .2s,width .2s}
 .exam-countdown-dot.active{width:10px;border-radius:3px;background:var(--accent)}
-@media (max-width:360px){.exam-countdown{min-height:54px;padding:7px 11px;width:206px}.exam-countdown-label{font-size:12px}.exam-countdown-date{font-size:9.5px}.exam-countdown-value{font-size:clamp(20px,7.4vw,23px)}}
+@media (max-width:360px){.exam-countdown{min-height:54px;padding:7px 11px;width:206px}.exam-countdown-label{font-size:14px}.exam-countdown-date{font-size:11px}.exam-countdown-value{font-size:clamp(20px,7.4vw,23px)}}
 
 .top-actions{position:relative;margin-left:auto;flex:0 0 auto;align-self:center;display:flex;align-items:center;flex-direction:row;padding:0;z-index:20}
 .top-action-btn{

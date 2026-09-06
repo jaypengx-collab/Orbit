@@ -215,6 +215,34 @@ function showCountdownEvent(index) {
     card.classList.add('is-swapping');
   }
 }
+// Shrinks the countdown event name to fit its column instead of immediately
+// falling back to the CSS text-overflow:ellipsis truncation - the date next
+// to it doesn't need this (its longest realistic form, a cross-year range,
+// is short and predictable enough to just always fit at its own fixed size).
+function fitCountdownLabelText() {
+  const label = document.querySelector('.exam-countdown-label');
+  const copy = document.querySelector('.exam-countdown-copy');
+  if (!label || !copy) return;
+  label.style.fontSize = '';
+  const maxSize = parseFloat(getComputedStyle(label).fontSize);
+  const minSize = Math.max(10, maxSize - 4);
+  const available = copy.clientWidth;
+  if (!available || label.scrollWidth <= available + 1) return;
+  let lo = minSize,
+    hi = maxSize,
+    best = minSize;
+  for (let i = 0; i < 12; i++) {
+    const mid = (lo + hi) / 2;
+    label.style.fontSize = mid + 'px';
+    if (label.scrollWidth <= available + 1) {
+      best = mid;
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+  }
+  label.style.fontSize = Math.floor(best) + 'px';
+}
 function updateExamCountdown() {
   const el = document.getElementById('exam-countdown-value');
   const card = document.getElementById('exam-countdown');
@@ -232,6 +260,7 @@ function updateExamCountdown() {
   const dateLabel = document.querySelector('.exam-countdown-date');
   if (label) label.textContent = event.name;
   if (dateLabel) dateLabel.textContent = formatCountdownEventDate(event);
+  fitCountdownLabelText();
   const dots = document.getElementById('exam-countdown-dots');
   if (dots) {
     if (events.length < 2) {
@@ -290,6 +319,8 @@ if (countdownCard) {
   });
   countdownCard.addEventListener('pointercancel', () => (countdownSwipeStartX = null));
 }
+window.addEventListener('resize', () => fitCountdownLabelText());
+window.addEventListener('orientationchange', () => setTimeout(() => fitCountdownLabelText(), 120));
 
 // Recomputes the current class, next class, timer, and visible schedule state.
 // DOM nodes update()/render() touch every tick, queried once instead of via
