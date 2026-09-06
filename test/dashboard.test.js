@@ -77,4 +77,14 @@ describe('dashboard update() against the real app', () => {
     window.update();
     expect(text('now-name')).toBe('尚未開始');
   });
+
+  it('redirects an empty Saturday/Sunday viewDay to Monday instead of showing "這天沒有課"', () => {
+    setSimTime(8, 20);
+    state.viewDay = 0; // Sunday has no classes in the fixture
+    window.update();
+    expect(state.viewDay).toBe(1);
+    state.viewDay = 6; // neither does Saturday
+    window.update();
+    expect(state.viewDay).toBe(1);
+  });
 });

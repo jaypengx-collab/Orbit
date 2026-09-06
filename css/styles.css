@@ -13,6 +13,8 @@
 @keyframes orbit-boot-spin{to{transform:rotate(360deg)}}
 @keyframes orbit-row-in{from{opacity:0;transform:translateY(16px) scale(.97);filter:blur(3px)}to{opacity:1;transform:translateY(0) scale(1);filter:blur(0)}}
 @keyframes orbit-card-in{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes orbit-nav-slide{from{opacity:0;transform:translateX(calc(var(--nav-dir,1) * 22px))}to{opacity:1;transform:translateX(0)}}
+#schedule-list.nav-slide{animation:orbit-nav-slide .3s var(--ease-glass)}
 
 /* ---- Design tokens ---- */
 :root{
@@ -357,7 +359,7 @@ body.editor-open .top-actions{opacity:0;visibility:hidden;pointer-events:none;tr
 
 .animate-list .row{animation:orbit-row-in .5s var(--ease-glass) both;animation-delay:calc(var(--row-i,0) * 45ms)}
 body.orbit-suppress-list-animation .animate-list .row{animation:none}
-@media (prefers-reduced-motion:reduce){.animate-list .row{animation:none}}
+@media (prefers-reduced-motion:reduce){.animate-list .row{animation:none}#schedule-list.nav-slide{animation:none}}
 
 .row{
   transition:transform .2s var(--ease-glass),border-color .2s,background .2s,box-shadow .2s;

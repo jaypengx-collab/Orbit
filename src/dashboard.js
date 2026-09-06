@@ -138,8 +138,21 @@ bindSheetDragToDismiss('debug-panel', closeTestPanel);
 bindSheetDragToDismiss('style-panel', closeStylePanel);
 bindSheetDragToDismiss('sheet', closeModal);
 bindSheetDragToDismiss('editor-sheet', () => closeEditor());
-// Changes the visible day when a navigation tab is pressed.
+// Changes the visible day when a navigation tab is pressed, sliding the
+// schedule list in from the side the newly picked tab sits on relative to
+// the one that was active (so hopping right along the week bar reads as
+// "forward" and vice versa).
 function handleNav(d) {
+  const list = document.getElementById('schedule-list');
+  if (list && d !== state.viewDay) {
+    const buttons = [...document.querySelectorAll('.nav-item')];
+    const oldIndex = buttons.findIndex(btn => parseInt(btn.dataset.day, 10) === state.viewDay);
+    const newIndex = buttons.findIndex(btn => parseInt(btn.dataset.day, 10) === d);
+    list.style.setProperty('--nav-dir', newIndex > oldIndex ? '1' : '-1');
+    list.classList.remove('nav-slide');
+    void list.offsetWidth;
+    list.classList.add('nav-slide');
+  }
   state.viewDay = d;
   window.update();
 }
@@ -422,6 +435,15 @@ function update() {
   }
   const curDay = window.MANUALLY_TEST ? window.TEST_DAY : now.getDay();
   const week = getWeekType();
+
+  // A blank Saturday/Sunday should never be the day we land on by default -
+  // point at Monday (or whichever day actually has classes) instead. This
+  // covers both the very first render and Test Mode restoring a simulated
+  // Sat/Sun straight into state.viewDay, bypassing state.js's own initial
+  // Sat/Sun -> Monday fallback.
+  if ((state.viewDay === 0 || state.viewDay === 6) && !(state.runtimeSchedule[state.viewDay] || []).length) {
+    state.viewDay = getNextSchoolDay(state.viewDay);
+  }
 
   const viewModel = computeDashboardViewModel({
     now,
