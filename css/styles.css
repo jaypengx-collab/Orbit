@@ -787,9 +787,12 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
    main rule above. overflow:hidden, not auto: the sheet itself no longer
    scrolls - see .editor-sheet-body below - this is only here so the sheet's
    own rounded corners still clip whatever the body scrolls past them.
-   No side/bottom padding either: unlike .style-panel, content here isn't a
-   direct child of the padded box any more, .editor-sheet-body owns its own. */
-.editor-sheet{padding:12px 0 0;overflow:hidden}
+   Side padding stays here (not duplicated on .editor-sheet-body): the
+   header is still a direct child of .editor-sheet, not of the body, and
+   needs the same inset as the content below it or the title reads shifted
+   left of everything else. .editor-sheet-body only adds its own bottom
+   padding - its sides come from this same padding box, same as the header's. */
+.editor-sheet{padding:12px 15px 0;overflow:hidden}
 /* The header (handle + title/close button) is a plain, non-scrolling flex
    item using .test-panel's own header styling completely unmodified - no
    sticky positioning, no background, no blur, nothing editor-specific. It
@@ -803,7 +806,7 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .editor-sheet-body{
   flex:1 1 auto;min-width:0;min-height:0;overflow-y:auto;overflow-x:hidden;
   -webkit-overflow-scrolling:touch;overscroll-behavior:contain;
-  padding:0 15px 15px;display:flex;flex-direction:column;gap:0;
+  padding:0 0 15px;display:flex;flex-direction:column;gap:0;
 }
 /* Flex items shrink to fit a constrained cross-container by default; with
    .editor-sheet-body regularly shorter than its total content (a dozen rows
