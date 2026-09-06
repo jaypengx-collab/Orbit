@@ -247,7 +247,7 @@ import { parseTime } from './schedule.js';
     opts = opts || {};
     unlockTestControls();
     window.TEST_TIME_SEC = normalizeSeconds(seconds);
-    if (opts.writeInputs !== false) updateInputDisplay();
+    if (opts.writeInputs !== false) window.updateInputDisplay();
     if (opts.writeSlider !== false) {
       var slider = el('test-time-slider');
       if (slider) slider.value = String(Math.floor(window.TEST_TIME_SEC / 60));
@@ -419,7 +419,8 @@ import { parseTime } from './schedule.js';
       ) {
         forceStartOfDayInputs();
       }
-      if (window.MANUALLY_TEST && window.IS_SIMULATING && !endOfDayArmed) updateInputDisplay();
+      if (window.MANUALLY_TEST && window.IS_SIMULATING && !endOfDayArmed)
+        window.updateInputDisplay();
       applyDashboardState();
       syncTestingBody();
       lastTestingState = !!(window.MANUALLY_TEST || window.IS_SIMULATING);
@@ -697,7 +698,7 @@ import { parseTime } from './schedule.js';
       defaultsInitialized = true;
     }
     if (restoredTestState) {
-      updateInputDisplay();
+      window.updateInputDisplay();
       var slider = el('test-time-slider');
       if (slider) slider.value = String(Math.floor(window.TEST_TIME_SEC / 60));
     }

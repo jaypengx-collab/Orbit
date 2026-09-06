@@ -190,7 +190,7 @@ function sanitizeBreakTimes(bellTimes, breakTimes = []) {
     try {
       validateTimeIntervals(bellTimes, [...validBreaks, { name, start, end }]);
       validBreaks.push({ name, start, end });
-    } catch (error) {
+    } catch {
       // Keep a valid timetable even if one optional break conflicts.
     }
   });
@@ -200,7 +200,7 @@ function sanitizeBreakTimes(bellTimes, breakTimes = []) {
     try {
       validateTimeIntervals(bellTimes, [...validBreaks, { ...defaultBreak }]);
       validBreaks.push({ ...defaultBreak });
-    } catch (error) {
+    } catch {
       // Only add the default break when it fits the current timetable.
     }
   });
@@ -296,7 +296,7 @@ function loadData() {
     };
 
     return normalized;
-  } catch (error) {
+  } catch {
     return getDefaultData();
   }
 }
@@ -307,7 +307,10 @@ function saveData(d) {
       'classFocusData',
       JSON.stringify({ ...d, __orbit: { app: ORBIT_APP_ID, schema: ORBIT_STORAGE_SCHEMA } })
     );
-  } catch (e) {}
+  } catch {
+    // localStorage can throw (private browsing, quota exceeded) - nothing
+    // more useful to do here than drop this save attempt.
+  }
 }
 // Runtime schedule data is rebuilt from the editable settings before display.
 const dayNames = ['日', '一', '二', '三', '四', '五', '六'];

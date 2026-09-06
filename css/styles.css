@@ -168,7 +168,6 @@ body.orbit-booting .dashboard-boot-loader{visibility:visible;display:flex;positi
 .status-dot{width:9px;height:9px;border-radius:50%;background:var(--sub);box-shadow:0 0 0 4px color-mix(in srgb,var(--pro-secondary) 16%,transparent),0 0 14px color-mix(in srgb,var(--pro-secondary) 48%,transparent)}
 .status-active{background:var(--pro-secondary);box-shadow:0 0 0 5px color-mix(in srgb,var(--pro-secondary) 18%,transparent),0 0 20px color-mix(in srgb,var(--pro-secondary) 32%,transparent)}
 .status-wait{background:var(--pro-accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--pro-accent) 16%,transparent),0 0 14px color-mix(in srgb,var(--pro-accent) 42%,transparent)}
-#status-label{color:var(--orbit-muted);font-size:9px;font-weight:800;letter-spacing:.04em}
 
 .exam-countdown{
   touch-action:pan-y;cursor:grab;display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);align-items:center;justify-self:center;

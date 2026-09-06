@@ -542,7 +542,9 @@ async function copyTransferText(text) {
     try {
       await navigator.clipboard.writeText(text);
       return;
-    } catch (error) {}
+    } catch {
+      // Fall through to the execCommand('copy') fallback below.
+    }
   }
   const helper = document.createElement('textarea');
   helper.value = text;
@@ -564,7 +566,7 @@ async function exportEditorSettings(data = settingsDataForExport()) {
     text.focus();
     text.select();
     setTransferStatus('已產生並複製匯出內容。');
-  } catch (error) {
+  } catch {
     setTransferStatus('匯出失敗：無法建立設定備份。', true);
   }
 }
@@ -783,7 +785,7 @@ async function previewImportEditorSettings() {
     }
     state.pendingEditorImportData = next;
     showEditorImportModeConfirm(current, next);
-  } catch (error) {
+  } catch {
     state.pendingEditorImportData = null;
     text.value = '';
     setTransferStatus('匯入失敗：內容無效或已損毀。', true);
@@ -895,7 +897,7 @@ function mergeImportedSettings(current, imported, preserveStyle = false) {
     try {
       validateTimeIntervals(merged.bellTimes, [...keptBreaks, item]);
       keptBreaks.push(item);
-    } catch (error) {
+    } catch {
       replacedActions.push(`移除特殊時段「${item.name}」（與匯入的節次時間衝突）`);
     }
   });

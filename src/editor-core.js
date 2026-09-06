@@ -399,7 +399,7 @@ function clearTransferField() {
   }
   setTransferStatus('');
 }
-function openEditorFold(id, force = false) {
+function openEditorFold(id) {
   document.querySelectorAll('#editor-sheet details.editor-fold').forEach(section => {
     // The transfer/OCR-import section is an always-visible tools panel, not a layer —
     // it manages its own open/closed state (see initEditorAccordion) and must never be
@@ -410,7 +410,6 @@ function openEditorFold(id, force = false) {
     section.open = active;
     section.classList.toggle('active', active);
   });
-  // Do not force-scroll the editor when switching layers.
 }
 
 function setEditorConfirmContent(
@@ -476,7 +475,7 @@ function getEditorUnsavedDiff() {
       state.editorBaselineData || normalizeSettingsData(state.applicationData),
       settingsDataForExport()
     );
-  } catch (error) {
+  } catch {
     return '';
   }
 }
@@ -572,7 +571,7 @@ async function hasDuplicateTransferData() {
     });
     const current = settingsDataForExport();
     return describeSettingsDiff(current, next) === '沒有變更。';
-  } catch (error) {
+  } catch {
     return false;
   }
 }

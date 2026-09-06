@@ -18,8 +18,10 @@ import { state } from './state.js';
 state.applicationData = loadData();
 buildSchedule();
 try {
-  setStyleMode('pro');
-} catch (e) {}
+  setStyleMode();
+} catch {
+  // Best-effort: a failure here (e.g. the DOM not being ready yet) shouldn't block boot.
+}
 setInterval(mainClockTick, 1000);
 syncTestPlayPauseUi();
 syncTestToolbar();

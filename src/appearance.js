@@ -232,7 +232,7 @@ function applyPendingStyleSave() {
     return;
   }
   applyEditorSettingsData(state.pendingStyleSaveData, { statusMessage: '樣式已儲存。' });
-  setStyleMode('pro');
+  setStyleMode();
   state.pendingStyleSaveData = null;
   document.getElementById('style-panel')?.classList.remove('style-draft-dirty');
   hideEditorDiscardConfirm();
@@ -359,7 +359,7 @@ function showStyleDiscardConfirm() {
 function discardStyleChangesAndClose() {
   hideEditorDiscardConfirm();
   setOverlayVisible('style-panel-overlay', 'style-panel', false, 'style-panel-open');
-  setStyleMode('pro');
+  setStyleMode();
   document.getElementById('style-panel')?.classList.remove('style-draft-dirty');
 }
 function applyStylePreset(name) {

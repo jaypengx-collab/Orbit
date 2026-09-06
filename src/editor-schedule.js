@@ -238,7 +238,7 @@ function showEditorTimeConflict(message) {
     () => {
       hideEditorDiscardConfirm();
       const isBreakConflict = /特殊時段/.test(message);
-      openEditorFold(isBreakConflict ? 'editor-fold-breaks' : 'editor-fold-bells', true);
+      openEditorFold(isBreakConflict ? 'editor-fold-breaks' : 'editor-fold-bells');
     },
     '返回編輯'
   );

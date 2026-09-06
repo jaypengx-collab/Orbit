@@ -171,7 +171,6 @@ function renderAssignmentDay(day) {
   periods.className = 'assign-periods';
   for (let period = 0; period < count; period++) {
     const slot = `${day}:${period}`,
-      original = assignmentDraft.original.get(slot) || '',
       value = assignmentDraft.draft.get(slot) || '';
     const valueLabel = value ? getEditorClassLabelFromDom(value) || value : '';
     const box = document.createElement('button');

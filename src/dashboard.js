@@ -369,7 +369,7 @@ function renderDashboard(viewModel, week) {
   if (changed('statusText', viewModel.statusText)) dom.nowName.innerText = viewModel.statusText;
   const classColorKey = viewModel.activeClassKey || viewModel.upcomingClassKey || '';
   if (dom.dashboard && changed('classColorKey', classColorKey)) {
-    dom.dashboard.style.setProperty('--current-class-color', getClassColor(classColorKey));
+    dom.dashboard.style.setProperty('--current-class-color', getClassColor());
   }
   if (changed('compactStatus', viewModel.compactStatus)) {
     dom.nowName.classList.toggle('is-status', viewModel.compactStatus);

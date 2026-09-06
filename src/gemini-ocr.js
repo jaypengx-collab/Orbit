@@ -213,7 +213,7 @@ Interpret the timetable visually and use your best judgment to reconstruct its s
     try {
       parsed = JSON.parse(cleaned);
     } catch (error) {
-      throw new Error(`AI 回傳的內容不是有效的 JSON：${error.message}`);
+      throw new Error(`AI 回傳的內容不是有效的 JSON：${error.message}`, { cause: error });
     }
     return this.normalizeAIOutput(parsed);
   }
@@ -263,9 +263,9 @@ Interpret the timetable visually and use your best judgment to reconstruct its s
     let courseCounter = 1;
     if (aiResult.teacherDB && typeof aiResult.teacherDB === 'object') {
       Object.entries(aiResult.teacherDB).forEach(([dbKey, val]) => {
-        let subject = '';
-        let teacher = '';
-        let location = '';
+        let subject;
+        let teacher;
+        let location;
 
         if (Array.isArray(val)) {
           subject = String(val[0] || dbKey).trim();
@@ -604,7 +604,7 @@ class ImportPreview {
   }
 }
 
-function mountOCRImporter({ input, runButton, imagePreview, status, result, onImport }) {
+function mountOCRImporter({ runButton, imagePreview, status, result, onImport }) {
   const preprocessor = new ImagePreprocessor();
   const validator = new DataValidator();
   const aiProcessor = new AIVisionProcessor();
@@ -718,7 +718,6 @@ function activateOCRImporter() {
   if (!input || !runButton || !imagePreview || !statusElement || !result) return Promise.resolve();
   ocrImporterPromise = new Promise((resolve, reject) => {
     const config = {
-      input,
       runButton,
       imagePreview,
       result,

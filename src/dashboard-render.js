@@ -180,7 +180,7 @@ function createMetaChip(text, cls = '') {
   span.textContent = text;
   return span;
 }
-function getClassColor(key) {
+function getClassColor() {
   const draftPanel = document.getElementById('style-panel');
   const activeStyle =
     state.stylePanelDraft && draftPanel?.classList.contains('style-draft-dirty')
@@ -211,7 +211,7 @@ function renderList(week, curIdx, nxtIdx, curDay, isDayFinished) {
     const isNext = isToday && i === nxtIdx;
     const row = document.createElement('div');
     row.className = `row ${isNow ? 'is-now' : ''} ${isNext ? 'is-next' : ''}`.trim();
-    row.style.setProperty('--class-color', getClassColor(c.key));
+    row.style.setProperty('--class-color', getClassColor());
     row.style.setProperty('--row-i', String(i));
     row.tabIndex = 0;
     row.role = 'button';
@@ -252,7 +252,7 @@ function renderList(week, curIdx, nxtIdx, curDay, isDayFinished) {
     if (info.t) meta.append(createMetaChip(info.t, 'meta-teacher'));
     if (c.loc) {
       const locationChip = createMetaChip(c.loc, 'meta-location');
-      locationChip.style.setProperty('--class-color', getClassColor(c.key));
+      locationChip.style.setProperty('--class-color', getClassColor());
       meta.append(locationChip);
     }
     content.append(name, meta);
