@@ -999,11 +999,28 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
    than "more transparent" - the 85-90% this replaced avoided that but as
    nearly solid panels, further from the website's glassy look than
    legibility actually demands. This is the opacity where the unblurred
-   bleed-through stops being distracting without going that far. */
+   bleed-through stops being distracting without going that far.
+   That alone still read as flat/grey next to the website, though - the
+   website's colour doesn't actually come from the fill, it comes from
+   backdrop-filter's saturate/brightness intensifying body's own accent
+   gradients as they show through the blur, which a flat opaque fill has
+   none of. --glass-fill/--glass-fill-strong are read as a plain
+   `background` everywhere (verified: never as a border/shadow color), so
+   redefining them here as full multi-layer backgrounds - the same corner
+   glow body itself uses, layered under the flat mix - reaches every panel
+   that references either variable for free. Screenshotted next to the
+   website version at several strengths to land here: strong enough to
+   read as colour, not so strong it looks painted on. */
 @media (display-mode:standalone){
   :root{
-    --glass-fill:color-mix(in srgb,var(--orbit-panel) 68%,transparent);
-    --glass-fill-strong:color-mix(in srgb,var(--orbit-panel-strong) 76%,transparent);
+    --glass-fill:
+      radial-gradient(120% 70% at 10% -10%,color-mix(in srgb,var(--pro-accent) 14%,transparent),transparent 60%),
+      radial-gradient(100% 70% at 110% 0%,color-mix(in srgb,var(--pro-secondary) 12%,transparent),transparent 65%),
+      color-mix(in srgb,var(--orbit-panel) 68%,transparent);
+    --glass-fill-strong:
+      radial-gradient(120% 70% at 10% -10%,color-mix(in srgb,var(--pro-accent) 10%,transparent),transparent 60%),
+      radial-gradient(100% 70% at 110% 0%,color-mix(in srgb,var(--pro-secondary) 8%,transparent),transparent 65%),
+      color-mix(in srgb,var(--orbit-panel-strong) 76%,transparent);
   }
   .dashboard, .nav-bar, .nav-item.active, .top-action-btn, #btn-menu.top-action-btn, .exam-countdown,
   .modal-sheet, .test-panel, .style-panel, .editor-confirm-sheet,
@@ -1012,4 +1029,20 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
   .style-apply-btn, .teacher-assign, .editor-sheet, .modal-overlay, .editor-confirm-overlay{
     backdrop-filter:none !important;-webkit-backdrop-filter:none !important;
   }
+  /* body's own 100dvh (dynamic viewport height) is meant to shrink for a
+     browser toolbar that can show/hide - useful in a normal Safari tab,
+     meaningless in standalone, since there is no toolbar to ever show.
+     iOS Safari has a specific bug where 100dvh gets stuck evaluating to
+     that shorter "toolbar visible" height in standalone mode right after a
+     JS-driven reload (exactly what the test panel's 更新 button does) -
+     body then falls short of the real screen height and the sliver below
+     it renders as the WebView's own bare canvas, which color-scheme:dark
+     (set on html) makes black rather than this app's background color,
+     since that sliver sits outside any element's painted box entirely.
+     100lvh (large viewport height - the size when browser UI is fully
+     collapsed) is never subject to that "toolbar visible" state to begin
+     with, so it can't get stuck reporting it - and in true standalone mode
+     it should always equal the same value dvh was already converging on
+     anyway, so this is a strictly safer floor, not a behavior change. */
+  body{height:100lvh}
 }

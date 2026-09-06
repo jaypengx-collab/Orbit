@@ -45,10 +45,20 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
 // (forceAppRefresh()'s location.replace() in testsim-runtime.js reproduces
 // this every time) or across a tab restored from the background/app
 // switcher (bfcache) - the page is then laid out against whatever viewport
-// metrics WebKit had cached instead of the real ones. Nudging the body's
-// height by an imperceptible amount forces a genuine layout pass that
-// picks the current values back up.
+// metrics WebKit had cached instead of the real ones. Two nudges, since
+// each targets a different cached value: re-touching the viewport meta tag
+// (removing and re-inserting it, not just rewriting its content - a
+// content rewrite alone is a documented no-op here) is what's specifically
+// known to force Safari to redo its safe-area-inset-* computation; the
+// body height toggle forces a genuine layout pass so a stuck 100dvh/100lvh
+// (see the standalone media query in styles.css) picks the current
+// viewport back up too.
 function nudgeSafeAreaRecalc() {
+  const viewport = document.querySelector('meta[name="viewport"]');
+  if (viewport && viewport.parentNode) {
+    const refreshed = viewport.cloneNode(true);
+    viewport.replaceWith(refreshed);
+  }
   document.body.style.height = '100.01dvh';
   requestAnimationFrame(() => {
     document.body.style.height = '';
