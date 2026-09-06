@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
-import { copyFileSync } from 'node:fs';
+import { copyFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 
 // .nojekyll has to ride along in the build output so GitHub Pages serves
 // dist/ the same way it serves the repo root today.
@@ -8,6 +9,55 @@ function copyNojekyll() {
     name: 'copy-nojekyll',
     closeBundle() {
       copyFileSync('.nojekyll', 'dist/.nojekyll');
+    }
+  };
+}
+
+// The app's "version" is derived from the checked-out commit instead of a
+// hand-edited constant, so cache-busting and the version tag can never drift
+// out of sync with each other (or with what's actually deployed) the way a
+// manually bumped string could. The short hash is what makes every value
+// below actually change on every deploy; the commit date is only for the
+// human-readable "版本 …" label. Falls back to a timestamp outside a git
+// checkout (e.g. a source tarball) so the build never hard-fails.
+function readGitVersion() {
+  try {
+    const hash = execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString()
+      .trim();
+    const date = execSync('git log -1 --format=%cd --date=format:%Y.%m.%d', {
+      stdio: ['ignore', 'pipe', 'ignore']
+    })
+      .toString()
+      .trim();
+    if (hash && date) return { hash, date };
+  } catch {
+    // Not a git checkout - fall through to the timestamp fallback below.
+  }
+  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return {
+    hash: String(now.getTime()),
+    date: `${now.getFullYear()}.${pad(now.getMonth() + 1)}.${pad(now.getDate())}`
+  };
+}
+const APP_VERSION = readGitVersion();
+
+// Replaces the literal token "__APP_VERSION__" (used for cache-busting query
+// strings in index.html, and for public/sw.js's own cache name) with the
+// real version everywhere it appears - index.html via Vite's own HTML
+// transform, and public/sw.js by patching the copy Vite already places in
+// dist/ once the build has finished writing it.
+function injectAppVersion() {
+  return {
+    name: 'inject-app-version',
+    transformIndexHtml(html) {
+      return html.replaceAll('__APP_VERSION__', APP_VERSION.hash);
+    },
+    closeBundle() {
+      const swPath = 'dist/sw.js';
+      const content = readFileSync(swPath, 'utf8').replaceAll('__APP_VERSION__', APP_VERSION.hash);
+      writeFileSync(swPath, content);
     }
   };
 }
@@ -21,7 +71,10 @@ export default defineConfig({
   // since the module that would clear it never loads. base: './' emits
   // "./assets/x.js" instead, which resolves correctly under any subpath.
   base: './',
-  plugins: [copyNojekyll()],
+  plugins: [copyNojekyll(), injectAppVersion()],
+  define: {
+    __APP_VERSION_DATE__: JSON.stringify(APP_VERSION.date)
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true

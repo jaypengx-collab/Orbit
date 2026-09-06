@@ -13,7 +13,10 @@ export default [
       ecmaVersion: 2022,
       sourceType: 'module',
       globals: {
-        ...globals.browser
+        ...globals.browser,
+        // Injected at build time by vite.config.js's `define` - see
+        // testsim-runtime.js's only use of it.
+        __APP_VERSION_DATE__: 'readonly'
       }
     },
     rules: {

@@ -10,11 +10,14 @@
 //      deploy makes activate() below throw away every old cache entry
 //      instead of letting them accumulate or linger.
 //
-// Bump APP_VERSION here alongside index.html's own ?v= query strings and
-// testsim-runtime.js's APP_VERSION_DATE - keeping all three in sync is what
-// makes the version tag (and a forced update via the test panel's 更新
-// button) actually mean something.
-const APP_VERSION = '20260906b';
+// "__APP_VERSION__" is a literal token, not a variable - vite.config.js's
+// injectAppVersion() plugin replaces it (and the matching token in
+// index.html's own ?v= query strings) with the checked-out commit's short
+// hash once the build has copied this file into dist/. That's what keeps
+// this, the version tag, and a forced update via the test panel's 更新
+// button all in sync automatically, with nothing to remember to bump by
+// hand on a new deploy.
+const APP_VERSION = '__APP_VERSION__';
 const CACHE_NAME = 'orbit-cache-' + APP_VERSION;
 
 self.addEventListener('install', () => {

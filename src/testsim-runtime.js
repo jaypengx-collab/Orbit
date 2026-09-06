@@ -45,11 +45,12 @@ import { parseTime } from './schedule.js';
   }
   // Date-based, not a content hash: a glance is enough to tell whether this
   // load is on the latest deploy, which a hash never gave you without a
-  // side-by-side comparison. Bump this alongside index.html's own ?v=
-  // query strings and public/sw.js's APP_VERSION whenever the app actually
-  // changes - all three staying in sync is what makes both this label and
-  // a forced update via the 更新 button below mean anything.
-  var APP_VERSION_DATE = '2026.09.06';
+  // side-by-side comparison. __APP_VERSION_DATE__ is injected by
+  // vite.config.js from the checked-out commit's date, so this - along with
+  // index.html's ?v= query strings and public/sw.js's cache name, both
+  // derived from the same commit's hash - always matches what's actually
+  // deployed without anyone having to remember to bump anything by hand.
+  var APP_VERSION_DATE = __APP_VERSION_DATE__;
   function syncAppVersion() {
     var version = el('app-version');
     if (version) version.textContent = '版本 ' + APP_VERSION_DATE;

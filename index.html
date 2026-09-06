@@ -9,11 +9,11 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Orbit AI">
     <link rel="manifest" href="manifest.json">
-    <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png?v=20260906b">
-    <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png?v=20260906b">
-    <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png?v=20260906b">
+    <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png?v=__APP_VERSION__">
+    <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png?v=__APP_VERSION__">
+    <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png?v=__APP_VERSION__">
     <title>Orbit AI</title>
-    <link rel="stylesheet" href="css/styles.css?v=20260906b">
+    <link rel="stylesheet" href="css/styles.css?v=__APP_VERSION__">
   </head>
 <body class="orbit-booting">
 <div id="test-banner" class="test-banner">
@@ -406,7 +406,7 @@
   </div>
   <div class="editor-fold">
     <div class="editor-fold-body">
-      <label>
+      <label for="test-day-input">
         星期
       </label>
       <select id="test-day-input" onchange="syncTestDayChange()">
@@ -432,7 +432,7 @@
           週日
         </option>
       </select>
-      <label>
+      <label for="in-h">
         時間（時／分）
       </label>
       <div style="display:flex;gap:8px;align-items:center">
@@ -440,7 +440,7 @@
         <span style="color:var(--sub)">
           :
         </span>
-        <input type="number" id="in-m" min="0" max="59" value="0" onchange="syncTestFromInputs()" style="width:60px;text-align:center">
+        <input type="number" id="in-m" min="0" max="59" value="0" onchange="syncTestFromInputs()" style="width:60px;text-align:center" aria-label="分">
       </div>
       <input type="range" id="test-time-slider" min="480" max="1440" value="480" oninput="syncTestFromSlider()">
     </div>
@@ -499,6 +499,6 @@
   </div>
   <div class="style-panel-actions" id="style-editor-actions"><button type="button" class="style-apply-btn" onclick="enterStylePreview()">預覽並儲存</button></div>
 </div>
-  <script type="module" src="src/main.js?v=20260906b"></script>
+  <script type="module" src="src/main.js?v=__APP_VERSION__"></script>
 </body>
 </html>

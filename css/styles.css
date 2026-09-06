@@ -105,7 +105,7 @@ body{
      (e.g. the three toolbar icons) without falling back to a fixed brand color. */
   --pro-blend:color-mix(in srgb,var(--pro-accent) 50%,var(--pro-secondary) 50%);
   font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif;
-  margin:0;padding:calc(env(safe-area-inset-top) + 10px) max(12px,env(safe-area-inset-right)) 10px max(12px,env(safe-area-inset-left));
+  margin:0;padding:calc(env(safe-area-inset-top) + 10px) max(12px,env(safe-area-inset-right)) calc(env(safe-area-inset-bottom) + 10px) max(12px,env(safe-area-inset-left));
   display:flex;flex-direction:column;align-items:center;letter-spacing:-.02em;
   transition:background .3s,color .3s;min-height:100dvh;height:100dvh;width:100%;
   position:relative;overflow:hidden;overscroll-behavior:none;-webkit-text-size-adjust:100%;
@@ -340,14 +340,18 @@ body.editor-open .top-actions{opacity:0;visibility:hidden;pointer-events:none;tr
   border-radius:11px;padding:8px 3px;font-weight:700;color:var(--orbit-muted);
 }
 .nav-item:active{transform:scale(.95)}
-.nav-item.is-today{color:#fff;border:2px solid var(--day-today-border);background:color-mix(in srgb,var(--pro-accent) 24%,transparent);box-shadow:0 0 0 1px color-mix(in srgb,var(--pro-accent) 32%,transparent),0 4px 14px color-mix(in srgb,var(--pro-accent) 24%,transparent)}
-.nav-item.is-tomorrow{color:#fff;border:2px solid var(--day-tomorrow-border);background:color-mix(in srgb,var(--pro-secondary) 26%,transparent);box-shadow:0 0 0 1px color-mix(in srgb,var(--pro-secondary) 32%,transparent),0 4px 14px color-mix(in srgb,var(--pro-secondary) 24%,transparent)}
+.nav-item.is-today{color:#fff;border:2px solid var(--day-today-border);background:color-mix(in srgb,var(--pro-accent) 24%,transparent);box-shadow:0 0 0 1px color-mix(in srgb,var(--pro-accent) 32%,transparent)}
+.nav-item.is-tomorrow{color:#fff;border:2px solid var(--day-tomorrow-border);background:color-mix(in srgb,var(--pro-secondary) 26%,transparent);box-shadow:0 0 0 1px color-mix(in srgb,var(--pro-secondary) 32%,transparent)}
 /* .active always wins the fill when combined with is-today/is-tomorrow — the
    selected tab reads as the solid pill; the today/tomorrow ring only needs to
-   show up as a plain outline while browsing a different day. */
-.nav-item.active{background:linear-gradient(135deg,color-mix(in srgb,var(--pro-accent) 58%,#ffffff),color-mix(in srgb,var(--pro-accent) 28%,#ffffff));color:var(--pro-accent-text);box-shadow:0 8px 22px color-mix(in srgb,var(--pro-accent) 25%,transparent)}
+   show up as a plain outline while browsing a different day. No drop shadow
+   here (beyond the today/tomorrow ring's hard-edged outline above): iOS
+   Safari was rendering this pill with no shadow at all while desktop Chrome
+   drew a soft one, so the blurred layer is dropped everywhere to match the
+   flatter look consistently across platforms. */
+.nav-item.active{background:linear-gradient(135deg,color-mix(in srgb,var(--pro-accent) 58%,#ffffff),color-mix(in srgb,var(--pro-accent) 28%,#ffffff));color:var(--pro-accent-text)}
 .nav-item.active.is-today{border-color:color-mix(in srgb,var(--pro-accent) 34%,transparent)}
-.nav-item.active.is-tomorrow{border-color:color-mix(in srgb,var(--pro-secondary) 72%,#ffffff 28%);box-shadow:0 8px 22px color-mix(in srgb,var(--pro-secondary) 30%,transparent)}
+.nav-item.active.is-tomorrow{border-color:color-mix(in srgb,var(--pro-secondary) 72%,#ffffff 28%)}
 @media (max-width:480px){.nav-bar{gap:6px;padding:4px}.nav-item{font-size:14px;padding:0 10px;min-height:44px;height:44px}}
 @media (max-width:430px){.nav-bar{margin-bottom:10px}}
 
@@ -421,11 +425,21 @@ body.orbit-suppress-list-animation .animate-list .row{animation:none}
 @media (max-width:430px){#schedule-list .row{padding:15px 14px}}
 
 /* ============================================================================
-   Detail modal
+   Detail modal (class info popup)
+   The sheet itself (.modal-sheet below) already shares the same --glass-*
+   tokens as the settings/style/test-mode sheets, but this popup used to sit
+   over its own darker, blurred radial-gradient overlay that also blurred,
+   dimmed and scaled down the dashboard behind it - the glass panel ended up
+   floating over an already-murky background instead of the same crisp,
+   flatly-dimmed one every other sheet shows through, which read as
+   noticeably less transparent even though the panel's own material was
+   identical. Reusing .test-panel-overlay's plain, unblurred dim (and
+   dropping the dashboard blur/scale entirely) makes this popup match the
+   rest of the app's popups instead of looking like a separate UI system.
    ========================================================================= */
-.modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:radial-gradient(120% 90% at 50% 0%,rgba(8,18,26,.55),rgba(3,8,12,.86));opacity:0;visibility:hidden;transition:opacity .3s,visibility .3s;z-index:100;backdrop-filter:blur(10px)}
+.modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.58);opacity:0;visibility:hidden;transition:opacity .3s,visibility .3s;z-index:100}
 .modal-overlay.show{opacity:1;visibility:visible}
-body.modal-open > .dashboard,body.modal-open > .nav-bar,body.modal-open > #schedule-list{filter:blur(6px) saturate(85%);opacity:.5;transform:scale(.98);pointer-events:none;transition:filter .35s ease,opacity .35s ease,transform .35s ease}
+body.modal-open > .dashboard,body.modal-open > .nav-bar,body.modal-open > #schedule-list{pointer-events:none}
 
 .modal-sheet{
   position:fixed;left:max(12px,env(safe-area-inset-left));right:max(12px,env(safe-area-inset-right));bottom:12px;top:auto;
@@ -501,6 +515,19 @@ body.modal-open > .dashboard,body.modal-open > .nav-bar,body.modal-open > #sched
      them, which is exactly what broke this panel's internal scrolling the
      first time around. */
 }
+/* .test-panel's base height:auto shrink-wraps to whatever content is
+   actually visible - fine for a sheet with one fixed layout, but this one
+   swaps its entire visible content (courtesy of .is-layered below) between
+   pages as different in size as the full schedule grid and a two-row
+   special-time list. Height:auto plus bottom-anchored positioning means
+   drilling into a shorter page snapped the sheet's top edge sharply
+   downward, opening a big dead gap between it and the dimmed background
+   above. Pinning the sheet to its own max-height instead keeps its outline
+   constant across every page - .editor-sheet-body's own scrolling already
+   handles a page taller than that just fine, and a shorter page simply
+   leaves the rest of the same-size sheet blank, the way a normal settings
+   app's sub-pages do, rather than resizing the whole sheet around it. */
+.editor-sheet.is-layered{height:calc(100dvh - 20px - env(safe-area-inset-top))}
 body.editor-open .dashboard{pointer-events:none}
 .editor-sheet.is-layered .editor-fold{display:none}
 .editor-sheet.is-layered .editor-fold.active{display:block}
@@ -585,6 +612,16 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 
 .break-row{align-items:flex-start}
 .break-row .teacher-fields{flex:1;min-width:0;flex-wrap:wrap;gap:8px;display:flex}
+/* .break-name inherits .editor-input's flex:1;min-width:0, so on a narrow
+   screen it and .bell-inputs (also flex:1) shrunk evenly toward the row's
+   width instead of ever actually wrapping - min-width:0 lets a flex item
+   shrink all the way to nothing, and flex-wrap only kicks in once an item
+   can no longer shrink. That left barely enough room to show 2-3 Chinese
+   characters of the name before it scrolled. A 100% flex-basis makes this
+   item alone fill the whole first line, which is what forces .bell-inputs
+   onto a line of its own beneath it - full name width, full time-input
+   width, instead of both fighting over one row. */
+.break-row .break-name{flex-basis:100%}
 .editor-input{flex:1;background:rgba(255,255,255,.07);border:1px solid var(--bd);color:var(--txt);padding:7px 10px;border-radius:10px;font-size:13px;font-family:inherit;min-width:0;transition:border-color .2s,box-shadow .2s;line-height:1.25;text-align:left;text-align-last:left}
 .editor-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
 .editor-input::placeholder{opacity:.55;color:var(--sub);font-size:13px}
@@ -932,15 +969,27 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
    region mis-tiled and repainted as a duplicate "ghost" element elsewhere
    on screen. It reproduces reliably once installed to the Home Screen and
    not at all in a regular browser tab — forcing a GPU layer with
-   transform:translateZ(0) was not enough to avoid it. display-mode:
-   standalone (supported since iOS 12.2) turns it off only in the context
-   where it actually happens, so a normal Safari tab still gets the full
-   blurred glass. Fills are bumped more opaque here since there's no
-   blur-behind to carry the translucency. */
+   transform:translateZ(0) was not enough to avoid it, and it affects
+   static panels (.dashboard, .nav-bar) just as much as the animated
+   bottom sheets, so it isn't specifically a transform/animation
+   invalidation issue either — just re-enabling the blur here isn't a safe
+   bet without a device to confirm it against. display-mode: standalone
+   (supported since iOS 12.2) turns the blur off only in the context where
+   it actually happens, so a normal Safari tab (or Chrome) still gets the
+   full blurred glass exactly as intended.
+   Without blur-behind to carry the translucency, a fill anywhere near the
+   website's ~22-30% would let the busy gradient background show through
+   unblurred and wreck legibility - some extra opacity here is a real,
+   permanent requirement, not just leftover caution. What was leftover
+   caution was how much: 85-90% read as nearly solid panels, a much bigger
+   gap from the website's glassy look than legibility actually demands
+   against this app's soft gradient background. Dialed back to the
+   lowest opacity that still keeps text readable over it, to close as much
+   of that gap as this constraint allows. */
 @media (display-mode:standalone){
   :root{
-    --glass-fill:color-mix(in srgb,var(--orbit-panel) 85%,transparent);
-    --glass-fill-strong:color-mix(in srgb,var(--orbit-panel-strong) 90%,transparent);
+    --glass-fill:color-mix(in srgb,var(--orbit-panel) 55%,transparent);
+    --glass-fill-strong:color-mix(in srgb,var(--orbit-panel-strong) 64%,transparent);
   }
   .dashboard, .nav-bar, .nav-item.active, .top-action-btn, #btn-menu.top-action-btn, .exam-countdown,
   .modal-sheet, .test-panel, .style-panel, .editor-confirm-sheet,
