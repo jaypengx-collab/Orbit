@@ -668,7 +668,11 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 
 .save-btn{width:100%;padding:14px;font-size:16px;font-weight:700;cursor:pointer;transition:transform .15s,opacity .15s,box-shadow .15s;margin-top:10px;min-height:42px;border:none;border-radius:14px;background:linear-gradient(135deg,var(--pro-action-bg),var(--pro-action-bg-2));color:var(--pro-action-text);box-shadow:0 8px 22px color-mix(in srgb,var(--pro-accent) 20%,transparent);backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%)}
 .save-btn:active{transform:scale(.97);opacity:.9;box-shadow:0 3px 10px color-mix(in srgb,var(--pro-accent) 22%,transparent)}
-.editor-sheet .save-btn{position:sticky;border-radius:16px;bottom:0;padding:15px;margin-top:12px;box-shadow:0 -8px 24px rgba(0,0,0,.16),0 6px 20px color-mix(in srgb,var(--pro-accent) 24%,transparent);font-size:16px;font-weight:700;min-height:46px}
+/* A normal flow element at the end of the form, not pinned to the bottom of
+   the viewport the whole time - it only shows up once someone's actually
+   scrolled through (and, in layered mode, drilled into) the section they
+   came to edit, same as any other "confirm" button at the end of a form. */
+.editor-sheet .save-btn{border-radius:16px;padding:15px;margin-top:12px;box-shadow:0 6px 20px color-mix(in srgb,var(--pro-accent) 24%,transparent);font-size:16px;font-weight:700;min-height:46px}
 .save-toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ok);color:var(--pro-secondary-text);padding:10px 20px;border-radius:20px;font-size:14px;font-weight:700;opacity:0;z-index:300;transition:opacity .3s,transform .3s;pointer-events:none}
 .save-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
@@ -783,7 +787,7 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
    main rule above. gap:0, not .test-panel's gap:7px: every fold already
    carries its own margin-bottom for spacing, so a flex gap on top of that
    would double it. */
-.editor-sheet{padding:12px 15px calc(15px + 82px);gap:0;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.editor-sheet{padding:12px 15px 15px;gap:0;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch}
 /* Flex items shrink to fit a constrained cross-container by default; with
    .editor-sheet's max-height regularly smaller than its total content (a
    dozen rows in an open fold, easily), that shrank each fold down to fit
@@ -792,6 +796,24 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
    every direct child keep its natural height so there is real overflow for
    .editor-sheet's own scrolling to work with. */
 .editor-sheet>*{flex-shrink:0}
+/* The title/close button stay pinned at the top instead of scrolling away -
+   .test-panel's own header (used as-is by the style/test-mode panels)
+   never needs this because their content is short enough to never scroll
+   past it in practice, but it's the same header otherwise: same markup,
+   same look, just kept in place here since the editor's content routinely
+   is long enough to scroll under it.
+   A -12px top offset (matching .editor-sheet's own top padding exactly) is
+   what actually cancels that padding for a sticky element - margin doesn't
+   reliably do it, since a sticky element's static position (what margin
+   shifts) and its sticky clamp are computed separately. Both the handle and
+   the header use it so they land flush with zero gap once stuck; the
+   handle's higher z-index keeps it the interactive element where they
+   overlap (it reads as the header's own grab affordance, not a seam).
+   Solid var(--orbit-panel-strong) - the exact color .editor-fold's own body
+   already is - so a fold scrolling underneath meets the same color rather
+   than a visible seam. */
+.editor-sheet .test-panel-handle{position:sticky;top:-12px;z-index:3}
+.editor-sheet .editor-header{position:sticky;top:-12px;z-index:2;margin:0 -15px 10px;padding:14px 15px 12px;background:var(--orbit-panel-strong);border-radius:28px 28px 0 0}
 .style-panel select{width:100%;padding:9px 10px;border:1px solid var(--bd);border-radius:10px;background:#2c2c2e;color:var(--txt);font:inherit}
 .style-panel input[type="color"]{width:100%;height:42px;padding:3px;border:1px solid var(--bd);border-radius:10px;background:transparent;cursor:pointer}
 .style-panel .editor-fold-body{min-width:0}
@@ -848,9 +870,11 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .style-apply-btn{border:none;background:color-mix(in srgb,var(--pro-accent) 78%,transparent);color:var(--pro-accent-text,#092027);box-shadow:0 8px 20px color-mix(in srgb,var(--pro-accent) 24%,transparent);min-height:42px;border-radius:13px;backdrop-filter:blur(14px) saturate(180%);-webkit-backdrop-filter:blur(14px) saturate(180%)}
 .style-cancel-btn{background:transparent;border:1px solid color-mix(in srgb,var(--pro-accent) 20%,transparent);color:var(--orbit-coral);min-height:42px;border-radius:12px}
 
-@media (max-width:390px){.style-preset-grid{gap:4px}.style-preset-chip{font-size:9px}#style-editor-content{max-height:calc(100dvh - 138px)}.style-panel{max-width:none}}
-@media (max-width:480px){#schedule-list .row{padding:15px 16px}.style-preset-grid{display:grid;grid-template-columns:none;gap:7px}.style-preset-chip{display:flex;gap:5px;box-sizing:border-box;padding:5px;border-radius:9px}.style-preset-swatch{width:100%;height:17px;box-sizing:border-box;border-radius:5px}.style-slot-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}.style-slot-row{display:block;min-width:0}.style-slot-row .style-slot{height:50px;min-width:0;box-sizing:border-box;border-radius:9px;display:block;width:100%;overflow:hidden}.style-slot-row .style-slot-swatch{display:block;width:auto;height:auto;border-radius:5px;position:absolute;inset:5px}.style-slot-row{position:relative;width:100%;height:50px}.style-slot-row .style-slot-save{min-height:22px;padding:0;border-radius:7px;position:absolute;right:4px;top:4px;width:22px;height:22px;min-width:22px;z-index:2;line-height:20px}.style-slot-row .style-slot-save:empty{display:none}}
-@media (max-width:400px){.style-preset-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.style-preset-chip{padding-inline:3px;font-size:10px}.style-preset-swatch{width:16px;height:16px}}
+@media (max-width:390px){#style-editor-content{max-height:calc(100dvh - 138px)}.style-panel{max-width:none}}
+/* 內建預設 (built-in presets) on a phone: a horizontal swipe row of fixed-
+   width chips instead of a vertical list - five stacked full-width rows ate
+   a third of the panel's height for no reason a side-scroll doesn't fix. */
+@media (max-width:480px){#schedule-list .row{padding:15px 16px}.style-preset-grid{display:flex;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;gap:8px;padding:1px 1px 6px;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}.style-preset-chip{flex:0 0 72px;display:grid;justify-items:center;gap:5px;box-sizing:border-box;padding:7px 4px;border-radius:11px;scroll-snap-align:start}.style-preset-swatch{width:100%;height:18px;box-sizing:border-box;border-radius:6px}.style-slot-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}.style-slot-row{display:block;min-width:0}.style-slot-row .style-slot{height:50px;min-width:0;box-sizing:border-box;border-radius:9px;display:block;width:100%;overflow:hidden}.style-slot-row .style-slot-swatch{display:block;width:auto;height:auto;border-radius:5px;position:absolute;inset:5px}.style-slot-row{position:relative;width:100%;height:50px}.style-slot-row .style-slot-save{min-height:22px;padding:0;border-radius:7px;position:absolute;right:4px;top:4px;width:22px;height:22px;min-width:22px;z-index:2;line-height:20px}.style-slot-row .style-slot-save:empty{display:none}}
 
 /* ============================================================================
    Large screens (tablet / desktop)
