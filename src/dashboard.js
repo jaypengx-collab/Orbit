@@ -4,7 +4,7 @@
 // the toolbar/modal/countdown-card UI around it.
 import { state } from './state.js';
 import { closeStylePanel } from './appearance.js';
-import { fitNowTitleText, getClassColor, renderList } from './dashboard-render.js';
+import { fitNowTitleText, getClassColor, renderList, shrinkFontToFit } from './dashboard-render.js';
 import { dayNames, formatCountdownEventDate, normalizeCountdownEvents } from './data.js';
 import { isEditorDirty } from './editor-backup.js';
 import {
@@ -224,24 +224,20 @@ function fitCountdownLabelText() {
   const copy = document.querySelector('.exam-countdown-copy');
   if (!label || !copy) return;
   label.style.fontSize = '';
-  const maxSize = parseFloat(getComputedStyle(label).fontSize);
-  const minSize = Math.max(10, maxSize - 4);
+  const defaultSize = parseFloat(getComputedStyle(label).fontSize);
+  // Same shrink ratio fitNowTitleText uses for the "now playing" title
+  // (down to roughly half its default size) rather than the few px of
+  // headroom this had before - that shallow a range meant text-overflow:
+  // ellipsis was doing most of the work for any name longer than a few
+  // characters. text-overflow:ellipsis (in CSS) stays on as the backstop
+  // for names too long to fit even at minSize - this column is a fraction
+  // of the "now playing" title's width, so unlike that title, an 80-
+  // character name (the input's own max length) genuinely cannot always be
+  // shrunk down to a legible size and still fit.
+  const minSize = Math.max(9, Math.round(defaultSize * 0.6));
   const available = copy.clientWidth;
-  if (!available || label.scrollWidth <= available + 1) return;
-  let lo = minSize,
-    hi = maxSize,
-    best = minSize;
-  for (let i = 0; i < 12; i++) {
-    const mid = (lo + hi) / 2;
-    label.style.fontSize = mid + 'px';
-    if (label.scrollWidth <= available + 1) {
-      best = mid;
-      lo = mid;
-    } else {
-      hi = mid;
-    }
-  }
-  label.style.fontSize = Math.floor(best) + 'px';
+  if (!available) return;
+  shrinkFontToFit(label, available, defaultSize, minSize);
 }
 function updateExamCountdown() {
   const el = document.getElementById('exam-countdown-value');

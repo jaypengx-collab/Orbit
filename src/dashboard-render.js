@@ -105,6 +105,29 @@ function syncTestPlayPauseUi() {
 })();
 
 /* Dashboard sizing and accessible list rendering. */
+// Shrinks el's font-size (assumed already single-line/nowrap with visible
+// overflow) to fit within `available` px, binary-searching between minSize
+// and defaultSize; leaves it at defaultSize if that already fits. Shared by
+// fitNowTitleText (the "now playing" title) and dashboard.js's countdown
+// event name fit.
+function shrinkFontToFit(el, available, defaultSize, minSize) {
+  el.style.fontSize = defaultSize + 'px';
+  if (el.scrollWidth <= available + 1) return;
+  let lo = minSize,
+    hi = defaultSize,
+    best = minSize;
+  for (let i = 0; i < 22; i++) {
+    const mid = (lo + hi) / 2;
+    el.style.fontSize = mid + 'px';
+    if (el.scrollWidth <= available + 1) {
+      best = mid;
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+  }
+  el.style.fontSize = Math.floor(best) + 'px';
+}
 let titleFitState = { key: '', raf: 0 };
 function fitNowTitleText(force = false) {
   const title = document.getElementById('now-name');
@@ -153,25 +176,7 @@ function fitNowTitleText(force = false) {
     title.style.letterSpacing = hasLatin ? '-.95px' : '-.8px';
     title.style.width = available + 'px';
     title.style.maxWidth = available + 'px';
-    title.style.fontSize = defaultSize + 'px';
-
-    // Keep the default size when it fits. Only shrink when it would exceed bounds.
-    if (title.scrollWidth <= available + 1) return;
-
-    let lo = minSize,
-      hi = defaultSize,
-      best = minSize;
-    for (let i = 0; i < 22; i++) {
-      const mid = (lo + hi) / 2;
-      title.style.fontSize = mid + 'px';
-      if (title.scrollWidth <= available + 1) {
-        best = mid;
-        lo = mid;
-      } else {
-        hi = mid;
-      }
-    }
-    title.style.fontSize = Math.floor(best) + 'px';
+    shrinkFontToFit(title, available, defaultSize, minSize);
   });
 }
 function createMetaChip(text, cls = '') {
@@ -286,4 +291,11 @@ function mainClockTick() {
   window.update();
 }
 
-export { fitNowTitleText, getClassColor, mainClockTick, renderList, syncTestPlayPauseUi };
+export {
+  fitNowTitleText,
+  getClassColor,
+  mainClockTick,
+  renderList,
+  shrinkFontToFit,
+  syncTestPlayPauseUi
+};
