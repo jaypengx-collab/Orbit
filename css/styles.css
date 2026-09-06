@@ -507,7 +507,12 @@ body.editor-open .editor-sheet{z-index:1000000}
 .editor-inner.is-layered #editor-fold-transfer.editor-save-tools{display:block;margin-top:10px}
 .editor-inline-options{margin-bottom:9px}
 .editor-header{display:flex;align-items:center;justify-content:space-between;min-height:32px;margin-bottom:12px;padding-top:0}
-.editor-sheet .editor-header{position:sticky;top:-14px;z-index:2;margin:-18px -18px 16px;padding:16px 18px 14px;gap:12px;background:color-mix(in srgb,var(--orbit-panel-strong) 86%,transparent);border-bottom:1px solid var(--orbit-line);border-radius:28px 28px 0 0;backdrop-filter:none}
+/* Solid --orbit-panel-strong - the exact color .editor-fold's own background
+   already is - not a translucent tone of its own. A translucent/blurred
+   header still shows a hard seam the instant a fold's opaque body scrolls
+   under it (two different materials meeting); matching the fold's own solid
+   color outright means there's nothing to see a seam between once it does. */
+.editor-sheet .editor-header{position:sticky;top:-14px;z-index:2;margin:-18px -18px 16px;padding:16px 18px 14px;gap:12px;background:var(--orbit-panel-strong);border-radius:28px 28px 0 0}
 .editor-title{color:var(--pro-accent);font-weight:800;letter-spacing:-.04em}
 .editor-sheet .editor-title{font-size:20px;font-weight:800;letter-spacing:-.4px}
 .editor-close{font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;width:32px;height:32px;background:rgba(255,255,255,.06);color:var(--orbit-white);border:1px solid color-mix(in srgb,var(--pro-accent) 18%,transparent);border-radius:12px;transition:transform .15s,background .15s}
