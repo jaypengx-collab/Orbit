@@ -28,18 +28,16 @@ function buildSchedule() {
   });
   renderNavBar();
 }
-// Renders weekday navigation buttons based on which days have classes.
+// Renders weekday navigation buttons for whichever days actually have
+// classes (Mon-Fri included - an empty weekday is just as pointless to show
+// a tab for as an empty Saturday/Sunday). Falls back to the plain Mon-Fri
+// set when nothing has been scheduled at all yet, so a first-time user still
+// has something to tap instead of a blank nav bar.
 function renderNavBar() {
   const navBar = document.querySelector('.nav-bar');
   if (!navBar) return;
-  const days = [1, 2, 3, 4, 5];
-  const hasWE =
-    (state.runtimeSchedule[0] && state.runtimeSchedule[0].length > 0) ||
-    (state.runtimeSchedule[6] && state.runtimeSchedule[6].length > 0);
-  if (hasWE) {
-    if (state.runtimeSchedule[6] && state.runtimeSchedule[6].length > 0) days.push(6);
-    if (state.runtimeSchedule[0] && state.runtimeSchedule[0].length > 0) days.push(0);
-  }
+  let days = [1, 2, 3, 4, 5, 6, 0].filter(d => (state.runtimeSchedule[d] || []).length > 0);
+  if (!days.length) days = [1, 2, 3, 4, 5];
   const labels = {
     0: '週日',
     1: '週一',

@@ -87,4 +87,20 @@ describe('dashboard update() against the real app', () => {
     window.update();
     expect(state.viewDay).toBe(1);
   });
+
+  it('redirects an empty weekday viewDay too, not just Saturday/Sunday', () => {
+    setSimTime(8, 20);
+    state.viewDay = 2; // Tuesday has no classes in the fixture
+    window.update();
+    expect(state.viewDay).toBe(3); // next day with classes
+  });
+
+  it('only shows nav tabs for days that actually have classes', () => {
+    setSimTime(8, 20);
+    window.update();
+    const days = [...document.querySelectorAll('.nav-item')].map(btn =>
+      parseInt(btn.dataset.day, 10)
+    );
+    expect(days).toEqual([1, 3]); // only Monday and Wednesday have classes
+  });
 });

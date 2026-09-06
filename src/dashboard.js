@@ -436,12 +436,17 @@ function update() {
   const curDay = window.MANUALLY_TEST ? window.TEST_DAY : now.getDay();
   const week = getWeekType();
 
-  // A blank Saturday/Sunday should never be the day we land on by default -
-  // point at Monday (or whichever day actually has classes) instead. This
+  // A day with no classes (weekend or otherwise - the nav bar itself no
+  // longer shows a tab for one) should never be the day we land on by
+  // default: point at whichever day actually has classes instead. This
   // covers both the very first render and Test Mode restoring a simulated
-  // Sat/Sun straight into state.viewDay, bypassing state.js's own initial
-  // Sat/Sun -> Monday fallback.
-  if ((state.viewDay === 0 || state.viewDay === 6) && !(state.runtimeSchedule[state.viewDay] || []).length) {
+  // empty day straight into state.viewDay, bypassing state.js's own initial
+  // Sat/Sun -> Monday fallback. Guarded on at least one day having classes
+  // at all, so a totally empty schedule (nothing scheduled yet) doesn't spin
+  // getNextSchoolDay()'s no-match fallback into a different empty day every
+  // single tick.
+  const hasAnyClasses = Object.values(state.runtimeSchedule).some(rows => (rows || []).length > 0);
+  if (hasAnyClasses && !(state.runtimeSchedule[state.viewDay] || []).length) {
     state.viewDay = getNextSchoolDay(state.viewDay);
   }
 
