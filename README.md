@@ -158,7 +158,9 @@ npm run format       # Prettier 格式化（不含 index.html／css/styles.css�
 
 選用功能，把課表自動同步到多台裝置，不用每次手動匯出/匯入。編輯器裡「同步 / 匯入匯出」面板打開後，同步是**預設看到的第一個選項**；手動備份流程還在，收進同個面板裡一個預設收合的「手動備份（舊版）」子項目。
 
-沒有自己的伺服器：同步用共用 Firebase 專案，透過 Firestore REST API 直接 `fetch`（沒有 Firebase SDK）。裝置數量沒有上限，拿到同一組配對代碼就會加入同一份共享文件。
+一般使用者**完全不需要**自己申請或設定任何東西。部署站台已設定好伺服器端代理（`cloudflare-worker/orbit-worker.js` 的 `/sync` 路徑——這支 Worker 同時也服務 AI 匯入的 `/gemini` 路徑，見上方〈AI 辨識課表照片〉），瀏覽器不直接碰 Firestore，全部讀寫都先經過這個會計數、擋格式錯誤代碼的 Worker，Worker 才用自己的 Firebase 服務帳戶去存取共用的 Firestore 專案。裝置數量沒有上限，拿到同一組配對代碼就會加入同一份共享文件。
+
+沒有部署這個 Worker（`VITE_ORBIT_SYNC_PROXY_URL` 留空，例如自建 fork）的話，跨裝置同步整個功能不可用——編輯器會顯示「跨裝置同步功能尚未設定」，不會退回成直連 Firestore 的舊流程，課表其他功能完全不受影響。
 
 **一般使用者**：只需要輸入一組配對代碼。裝置 A 按「建立新同步」拿代碼，裝置 B 貼上同一組代碼按「加入同步」。配對/解除配對後畫面立刻切換，不用重新整理。按下「加入同步」時系統會先確認代碼真的存在：代碼打錯或對方根本沒建立過的話，直接顯示找不到代碼並中止，不會誤報成功、也不會把這台裝置留在「已配對但其實沒東西可收」的狀態；確認代碼存在後才會跳出警告——加入會立刻用該代碼下的課表取代這台裝置目前的課表且無法復原（建立同步的裝置不受影響）。
 
@@ -184,56 +186,29 @@ npm run format       # Prettier 格式化（不含 index.html／css/styles.css�
 
 ### 安全性：多開放、多脆弱
 
-配對代碼是唯一的門檻，不管走哪種部署方式：
+配對代碼是唯一的門檻：
 
 - 拿到代碼的人可以永久讀寫該份課表，直到手動建立新同步棄用舊代碼——目前沒有「換代碼」功能。
 - 管理者／僅接收身份只存在裝置本機（`localStorage`），伺服器端完全不認識這個概念。任何人只要有代碼，繞過 UI 直接發 HTTP 請求，就能寫入資料，而且不管是管理者還是僅接收裝置的瀏覽器都會照樣把這筆資料拉回來套用——這層身分鎖定不了惡意第三方，只防得住自己人手滑誤觸。
 - 建立同步後沒有自動過期或清除：不再使用的配對代碼會永遠留在資料庫裡（見〈限制〉）。
 
-不透過 Cloudflare Worker（下方「基本設定」）：Firestore 規則本身已加上欄位與大小限制、並關閉整個集合的列表查詢（Firestore 對 wildcard 規則預設 `allow read` 會連 `list` 一起放行，等於任何人能撈出全部班級的同步文件），但規則沒辦法計數請求次數——**沒有真正的流量限制**，一支腳本可以無限制地灌讀寫請求，直到撞上 Firestore 自己的配額。
+瀏覽器不直接碰 Firestore：全部請求先經過會計數、擋格式錯誤代碼、擋超大 payload 的 Worker，Worker 才用自己的服務帳戶去存取 Firestore；Firestore 規則則整個設成拒絕直接存取，關掉原本任何人都能直接打的那道門。這樣才有真正跨請求的流量上限（見 Worker 檔案裡的數字），但**身分驗證依然不存在**——代碼還是唯一門檻，上面三點風險原封不動。
 
-透過 Cloudflare Worker（下方「進階設定」）：瀏覽器不再直接碰 Firestore，全部請求先經過一個會計數、擋格式錯誤代碼、擋超大 payload 的 Worker，Worker 才用自己的服務帳戶去存取 Firestore；同時把 Firestore 規則改成完全拒絕直接存取，等於關掉了原本那條任何人都能直接打的門。這樣才有真正跨請求的流量上限（見 Worker 檔案裡的數字），但**身分驗證依然不存在**——代碼還是唯一門檻，上面三點風險原封不動。
-
-在意這個風險就不建議開啟跨裝置同步；接受風險才繼續下面的部署設定，兩種都做才是最完整的保護。
+在意這個風險就不建議開啟跨裝置同步；接受風險才繼續下面的部署設定。
 
 ### 部署者一次性設定
 
-#### 基本設定（純 Firestore，任何人都能做到）
+跟 AI 匯入用的是**同一支** `cloudflare-worker/orbit-worker.js`（見上方〈AI 辨識課表照片〉的部署設定）——兩個功能各自獨立設定 Secret、互不影響，已經因為 AI 匯入部署過這支 Worker 的話，從第 2 步直接接著做，不用再建一個新 Worker：
 
 1. 到 [Firebase Console](https://console.firebase.google.com/) 建立新專案，啟用 Firestore。
-2. 「規則」分頁貼上：
-   ```
-   rules_version = '2';
-   service cloud.firestore {
-     match /databases/{database}/documents {
-       match /orbit-schedules/{code} {
-         allow get: if code.matches('^[2-9A-HJ-NP-Z]{8}$');
-         allow list: if false;
-         allow write: if code.matches('^[2-9A-HJ-NP-Z]{8}$')
-                      && request.resource.data.keys().hasOnly(['payload'])
-                      && request.resource.data.payload is string
-                      && request.resource.data.payload.size() < 20000;
-       }
-     }
-   }
-   ```
-   限制文件只能是 8 碼配對代碼格式、只能有 `payload` 一個欄位、內容是不超過 20KB 的字串——擋掉亂寫其他欄位、塞垃圾大檔案、列出整個集合，但**依然不驗證是誰在寫、也不限流量**，代碼還是唯一門檻。**如果接著做下面的進階設定，這條規則最後要整個換成 `allow read, write: if false`（見下）**，這裡先貼上是為了在還沒設定 Worker 前，基本設定也能獨立跑起來。
-3. GitHub 專案 Settings → Secrets and variables → Actions → **Variables**（不是 Secrets），新增 `VITE_ORBIT_SYNC_PROJECT_ID`，值是這個 Firebase 專案的 Project ID。推送到 `main` 後站台建置時內建進去。
-
-沒設定 `VITE_ORBIT_SYNC_PROJECT_ID`（例如自建 fork）會退回原本流程：編輯器多顯示一個「Firebase 專案 ID」欄位，使用者自己建專案輸入。
-
-#### 進階設定：Cloudflare Worker 加上真正的流量限制（建議正式站台使用）
-
-延續上面的 Firebase 專案，額外做這幾步，把 Firestore 完全鎖起來、只讓 Worker 能碰。跟 AI 匯入用的是**同一支** `cloudflare-worker/orbit-worker.js`（見上方〈AI 辨識課表照片〉的部署設定）——兩個功能各自獨立設定 Secret、互不影響，已經因為 AI 匯入部署過這支 Worker 的話，從第 1 步直接接著做，不用再建一個新 Worker：
-
-1. Firebase Console → 專案設定 → 服務帳戶 → 產生新的私密金鑰，下載 JSON。這把金鑰形同該 Firebase 專案的完整讀寫權限，跟密碼一樣保管，不要放進任何會被推送到 GitHub 的檔案。
 2. 還沒部署過 `orbit-worker.js` 的話：[Cloudflare Dashboard](https://dash.cloudflare.com/) → Workers & Pages → Create → 貼上 `cloudflare-worker/orbit-worker.js` 的內容，部署。已經部署過的話，直接用同一個 Worker，跳過這步。
-3. 這個 Worker 的 Settings → Variables and Secrets，新增：
+3. Firebase Console → 專案設定 → 服務帳戶 → 產生新的私密金鑰，下載 JSON。這把金鑰形同該 Firebase 專案的完整讀寫權限，跟密碼一樣保管，不要放進任何會被推送到 GitHub 的檔案。**如果你的 Firebase 專案是由學校／公司 Google Workspace 帳號管理，這個下載按鈕可能被組織政策關閉**——去 [Google Cloud Console](https://console.cloud.google.com/) 同一個專案的 IAM & Admin → Service Accounts → 選 `firebase-adminsdk-...` 帳號 → Keys 分頁 → Add Key → Create new key → JSON 再試一次；如果那裡也顯示政策封鎖，代表這個 Google 帳號完全無法產生金鑰，只能改用個人 Google 帳號建立 Firebase 專案。
+4. 這個 Worker 的 Settings → Variables and Secrets，新增：
    - `FIREBASE_PROJECT_ID`（一般變數）：Firebase 專案的 Project ID。
    - `FIREBASE_CLIENT_EMAIL`（Secret）：下載的 JSON 裡的 `client_email`。
-   - `FIREBASE_PRIVATE_KEY`（Secret）：下載的 JSON 裡的 `private_key`（含 `-----BEGIN PRIVATE KEY-----`／`-----END PRIVATE KEY-----`，保留原本的換行）。
-4. （可選但建議）Workers & Pages → KV → Create namespace → 任意命名 → 回到這個 Worker 的 Settings → Bindings → Add → KV Namespace → 變數名稱 `RATE_LIMIT_KV` → 選剛建立的 namespace。這個 Worker 內兩個功能的計數器鍵值前綴不同，共用同一個 KV namespace 完全沒問題。設定完 Bindings 後記得回「Edit code」畫面按一次 Deploy——只加 Binding 不會自動讓正在跑的版本套用它，一定要重新部署一次。
-5. 回到 Firebase Console「規則」分頁，把規則整個換成：
+   - `FIREBASE_PRIVATE_KEY`（Secret）：下載的 JSON 裡的 `private_key`。貼的時候用實際換行（貼上 PEM 檔案本身的內容），不要貼 JSON 字串裡逐字的 `\n` 跳脫符號——兩種格式 Worker 都認得，但貼錯格式是最容易出錯的一步。
+5. （可選但建議）Workers & Pages → KV → Create namespace → 任意命名 → 回到這個 Worker 的 Settings → Bindings → Add → KV Namespace → 變數名稱 `RATE_LIMIT_KV` → 選剛建立的 namespace。這個 Worker 內兩個功能的計數器鍵值前綴不同，共用同一個 KV namespace 完全沒問題。設定完 Bindings 後記得回「Edit code」畫面按一次 Deploy——只加 Binding 不會自動讓正在跑的版本套用它，一定要重新部署一次。
+6. 回到 Firebase Console「規則」分頁，貼上：
    ```
    rules_version = '2';
    service cloud.firestore {
@@ -245,9 +220,9 @@ npm run format       # Prettier 格式化（不含 index.html／css/styles.css�
    }
    ```
    服務帳戶的存取本來就不受 Firestore 規則限制（跟 Admin SDK 一樣），所以這條規則只影響「繞過 Worker、直接打 Firestore」的請求——把它整個關掉，才是這個 Worker 真正的意義：不是多一層檢查，是拿掉原本永遠開著的那道門。
-6. 複製 Worker 網址，**加上 `/sync`**。GitHub 專案 Settings → Secrets and variables → Actions → **Variables**，新增 `VITE_ORBIT_SYNC_PROXY_URL`，值是這個含 `/sync` 的完整網址。推送到 `main` 後站台建置時內建進去；設定了這個變數的話，`VITE_ORBIT_SYNC_PROJECT_ID` 就不會再被使用（Project ID 已經只存在 Worker 的環境變數裡，不再進到瀏覽器端的程式碼）。
+7. 複製 Worker 網址，**加上 `/sync`**。GitHub 專案 Settings → Secrets and variables → Actions → **Variables**，新增 `VITE_ORBIT_SYNC_PROXY_URL`，值是這個含 `/sync` 的完整網址。推送到 `main` 後站台建置時內建進去。
 
-沒設定 `VITE_ORBIT_SYNC_PROXY_URL` 就是退回「基本設定」的直連 Firestore 模式——這個 Worker 完全是加分項，不是跨裝置同步能不能用的必要條件。
+沒做這套設定（`VITE_ORBIT_SYNC_PROXY_URL` 留空，例如自建 fork）的話，跨裝置同步這整個功能就不可用——不會退回成直連 Firestore 的舊模式（那個模式已經移除：Firestore 規則沒辦法計數請求次數，等於形同虛設的流量限制）。
 
 ---
 
@@ -271,7 +246,7 @@ npm run format       # Prettier 格式化（不含 index.html／css/styles.css�
 
 其他獨立的鍵：
 
-- `orbitSyncProjectId` / `orbitSyncCode` / `orbitSyncRole`（`manager` 或 `viewer`）/ `orbitSyncLastUpdateTime`——跨裝置同步配對資訊，沒開同步就不存在；沒有 `orbitSyncRole` 視同管理者（相容舊配對）。
+- `orbitSyncCode` / `orbitSyncRole`（`manager` 或 `viewer`）/ `orbitSyncLastUpdateTime`——跨裝置同步配對資訊，沒開同步就不存在；沒有 `orbitSyncRole` 視同管理者（相容舊配對）。舊版直連 Firestore 模式留下的 `orbitSyncProjectId` 一律在下次配對/解除配對時清掉。
 - `orbitOnboardingSeen`——是否看過第一次使用提示，值只會是 `1` 或不存在。
 
 ---
@@ -292,7 +267,7 @@ src/editor-teachers.js 教師／課程清單編輯
 src/editor-schedule.js 每週排課介面
 src/dashboard-render.js 主畫面實際的 DOM 渲染
 src/gemini-ocr.js      圖片前處理與 Gemini 代理呼叫
-src/sync.js            跨裝置同步：直連 Firestore 或透過 Worker 代理、輪詢
+src/sync.js            跨裝置同步：透過 Worker 代理讀寫、輪詢
 src/onboarding.js      第一次使用的提示流程
 src/bootstrap.js       啟動流程：讀資料、建課表、開每秒計時器
 src/testsim-runtime.js 時間模擬狀態機
@@ -301,7 +276,7 @@ src/strings.js         畫面文字對照表
 src/main.js            進入點，依序 import 以上每個模組
 ```
 
-`cloudflare-worker/orbit-worker.js` 獨立部署到 Cloudflare Workers，不屬於 `src/` 的相依圖，不會被 Vite 打包——是唯一跑在伺服器端的程式碼。同一支檔案用路徑（`/gemini`、`/sync`）服務兩個各自可選的功能：都沒部署/設定就分別退回「AI 匯入功能尚未設定」和直連 Firestore。
+`cloudflare-worker/orbit-worker.js` 獨立部署到 Cloudflare Workers，不屬於 `src/` 的相依圖，不會被 Vite 打包——是唯一跑在伺服器端的程式碼。同一支檔案用路徑（`/gemini`、`/sync`）服務兩個各自可選的功能：沒部署/沒設定對應環境變數，該功能就直接不可用，不會有退回模式。
 
 每個檔案開頭有一行註解說明職責。改程式碼前值得知道的幾個約定：
 
@@ -345,7 +320,7 @@ src/main.js            進入點，依序 import 以上每個模組
 - **AI 辨識**：選的照片會送到代理再轉給 Gemini（代理不保存照片，但照片內容確實離開瀏覽器）。需要選照片、按下匯入才會送出。
 - **跨裝置同步**：課表存到共用 Firebase 專案，Firestore 規則沒有身分驗證（見〈跨裝置同步〉的安全性小節）。需要自己按「建立新同步」或「加入同步」才會啟用。
 
-自建 fork 沒設定對應環境變數時：同步退回自建 Firebase 專案的舊流程；AI 辨識直接不可用，沒有退路。
+自建 fork 沒設定對應環境變數時：兩個功能都直接不可用，沒有退路。
 
 ---
 

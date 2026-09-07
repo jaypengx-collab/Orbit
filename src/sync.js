@@ -7,26 +7,22 @@
 // shared doc, auto-import it elsewhere" rather than a separate data format.
 //
 // No server of Orbit's own, in the sense that end users never run or pay
-// for anything: sync talks to a single shared Firebase project that the
-// app's owner - not each user - creates once, so a device only ever needs a
-// pairing code.
+// for anything: every read/write goes through a Cloudflare Worker (see
+// cloudflare-worker/orbit-worker.js's /sync path, VITE_ORBIT_SYNC_PROXY_URL)
+// that the app's owner - not each user - deploys once. The Worker holds its
+// own Firebase service-account credentials server-side and applies real,
+// cross-request rate limiting, then proxies to Firestore - the same
+// reasoning as gemini-ocr.js talking to the Gemini proxy instead of Gemini
+// directly. A device only ever needs a pairing code; nothing here proves
+// who the caller is, so the pairing code is the only access control on top
+// of whatever the Worker itself enforces - see README for the full design.
 //
-// Two ways this can reach Firestore, chosen at build time:
-//   - VITE_ORBIT_SYNC_PROXY_URL set: every read/write goes through a
-//     Cloudflare Worker (see cloudflare-worker/orbit-worker.js's /sync path) that
-//     holds its own Firebase service-account credentials server-side and
-//     applies real, cross-request rate limiting - the same reasoning as
-//     gemini-ocr.js talking to the Gemini proxy instead of Gemini directly.
-//     This is the recommended, hardened path for a publicly-deployed
-//     instance.
-//   - Otherwise, VITE_ORBIT_SYNC_PROJECT_ID set (or typed in by the user for
-//     a fork with neither set): Firestore's REST API is called directly
-//     with fetch (no SDK, no new dependency). A pairing code is just the
-//     Firestore document ID every paired device reads/writes; nothing here
-//     proves who the caller is, so whatever Firestore security rule is set
-//     on /orbit-schedules/{code} is the only access control - see README
-//     for the exact rule text this is designed against, including the
-//     `if false` variant meant to be paired with the proxy above.
+// This feature simply doesn't work without VITE_ORBIT_SYNC_PROXY_URL set
+// (see isSyncProxyConfigured) - same as gemini-ocr.js's AI import without
+// its own proxy URL. There's no fallback to talking to Firestore directly
+// from the browser any more: that path had no real rate limiting (Firestore
+// rules can validate a request's shape but can't count requests), so it
+// only ever made sense as a stopgap before this Worker existed.
 import { state } from './state.js';
 import {
   applyEditorSettingsData,
@@ -41,12 +37,15 @@ import {
   showEditorConfirmSheet
 } from './editor-core.js';
 
-const DEFAULT_PROJECT_ID = (import.meta.env.VITE_ORBIT_SYNC_PROJECT_ID || '').trim();
 const SYNC_PROXY_URL = (import.meta.env.VITE_ORBIT_SYNC_PROXY_URL || '').trim();
-const PROJECT_ID_KEY = 'orbitSyncProjectId';
 const CODE_KEY = 'orbitSyncCode';
 const ROLE_KEY = 'orbitSyncRole';
 const LAST_UPDATE_TIME_KEY = 'orbitSyncLastUpdateTime';
+// Left over from before this feature required the proxy Worker, when a
+// device could pair against a self-typed Firebase project id - cleared
+// opportunistically below so an old pairing doesn't leave a stale value
+// sitting in localStorage forever.
+const LEGACY_PROJECT_ID_KEY = 'orbitSyncProjectId';
 const POLL_INTERVAL_MS = 8000;
 const MANAGER_ROLE = 'manager';
 const VIEWER_ROLE = 'viewer';
@@ -70,32 +69,14 @@ function writeLocal(key, value) {
   }
 }
 
-function hasDefaultSyncProjectId() {
-  return !!DEFAULT_PROJECT_ID;
-}
-// When set, every read/write goes through cloudflare-worker/sync-proxy-
-// worker.js instead of straight to Firestore - see the top-of-file comment.
-// The proxy holds its own Firebase project ID server-side, so unlike the
-// direct-Firestore path, a proxied build needs no project ID from the
-// client at all.
-function hasSyncProxy() {
+function isSyncProxyConfigured() {
   return !!SYNC_PROXY_URL;
-}
-// True for any build where the app's owner has already set up a shared
-// backend (either path) - used purely for UI decisions like hiding the
-// manual "Firebase 專案 ID" field, which only ever makes sense for a fork
-// running with neither configured.
-function isManagedSyncDeployment() {
-  return hasSyncProxy() || hasDefaultSyncProjectId();
-}
-function getSyncProjectId() {
-  return readLocal(PROJECT_ID_KEY).trim() || DEFAULT_PROJECT_ID;
 }
 function getSyncCode() {
   return readLocal(CODE_KEY).trim();
 }
 function isSyncConfigured() {
-  return !!((hasSyncProxy() || getSyncProjectId()) && getSyncCode());
+  return !!getSyncCode();
 }
 // Devices that created or explicitly joined-as-manager a sync can edit and
 // publish changes; every other paired device defaults to (and can only
@@ -116,8 +97,7 @@ function generateSyncCode() {
   crypto.getRandomValues(bytes);
   return Array.from(bytes, byte => CODE_ALPHABET[byte % CODE_ALPHABET.length]).join('');
 }
-function setSyncPairing(projectId, code, role = MANAGER_ROLE) {
-  writeLocal(PROJECT_ID_KEY, String(projectId || '').trim());
+function setSyncPairing(code, role = MANAGER_ROLE) {
   writeLocal(
     CODE_KEY,
     String(code || '')
@@ -126,95 +106,56 @@ function setSyncPairing(projectId, code, role = MANAGER_ROLE) {
   );
   writeLocal(ROLE_KEY, role === VIEWER_ROLE ? VIEWER_ROLE : MANAGER_ROLE);
   writeLocal(LAST_UPDATE_TIME_KEY, '');
+  writeLocal(LEGACY_PROJECT_ID_KEY, '');
   lastPushedSnapshot = null;
 }
 function clearSyncPairing() {
-  writeLocal(PROJECT_ID_KEY, '');
   writeLocal(CODE_KEY, '');
   writeLocal(ROLE_KEY, '');
   writeLocal(LAST_UPDATE_TIME_KEY, '');
+  writeLocal(LEGACY_PROJECT_ID_KEY, '');
   lastPushedSnapshot = null;
-}
-function docUrl(projectId, code) {
-  return `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/(default)/documents/orbit-schedules/${encodeURIComponent(code)}`;
 }
 function proxyUrl(code) {
   return `${SYNC_PROXY_URL}?code=${encodeURIComponent(code)}`;
 }
-async function firestoreErrorMessage(response) {
+// The proxy's errors (rate limit, bad code, upstream failure) come back as
+// `{error:{message}}` - a 429 gets its own friendlier text here rather than
+// whatever the Worker's own (already-friendly, but sync-context-less)
+// message says.
+async function proxyErrorMessage(response) {
+  if (response.status === 429) return '請求過於頻繁，請稍後再試。';
   const errorJson = await response.json().catch(() => ({}));
   return errorJson.error?.message || response.statusText || `HTTP ${response.status}`;
 }
-// The proxy's own errors (rate limit, bad code, upstream failure) come back
-// as the same `{error:{message}}` shape as orbit-worker.js's /gemini path, but a 429
-// gets its own friendlier text here rather than whatever the Worker's own
-// (already-friendly, but sync-context-less) message says.
-async function proxyErrorMessage(response) {
-  if (response.status === 429) return '請求過於頻繁，請稍後再試。';
-  return firestoreErrorMessage(response);
-}
 
-// A GET Firestore rejects with 403 for a code that doesn't match the
-// expected shape (see README's recommended rule: `allow get: if
-// code.matches(...)`) - that check runs before Firestore ever looks for a
-// document, so from the app's perspective it's indistinguishable from "not
-// found": a real, generated code always matches that shape, so a 403 here
-// only ever means a mistyped/bogus code, never a genuine permissions
-// problem with an otherwise-valid one. Treated the same as 404 everywhere
-// "does this code exist" is asked, so the user sees "找不到這組配對代碼"
-// instead of a raw, confusing "Missing or insufficient permissions".
-function isCodeNotFoundStatus(status) {
-  return status === 404 || status === 403;
-}
-
-// Normalizes the two possible read paths - the proxy Worker or direct
-// Firestore - into one shape, so every caller below can stay agnostic about
-// which one is active. `projectId` is ignored entirely when the proxy is
-// configured (it never leaves the client in that mode - see hasSyncProxy).
-async function fetchSyncDoc(projectId, code) {
-  if (hasSyncProxy()) {
-    const response = await fetch(proxyUrl(code));
-    if (!response.ok) return { ok: false, error: await proxyErrorMessage(response) };
-    const data = await response.json();
-    return {
-      ok: true,
-      exists: !!data.exists,
-      updateTime: data.updateTime || '',
-      payload: data.payload || ''
-    };
-  }
-  const response = await fetch(docUrl(projectId, code));
-  if (isCodeNotFoundStatus(response.status)) {
-    return { ok: true, exists: false, updateTime: '', payload: '' };
-  }
-  if (!response.ok) return { ok: false, error: await firestoreErrorMessage(response) };
-  const doc = await response.json();
+async function fetchSyncDoc(code) {
+  const response = await fetch(proxyUrl(code));
+  // The Worker rejects a code that doesn't match the expected 8-character
+  // shape with 400, before it ever asks Firestore about it - a real,
+  // generated code always matches that shape, so from here a 400 only ever
+  // means a mistyped/bogus code, never a genuine failure. Treated the same
+  // as "not found" (a real code that just has nothing published under it
+  // yet) so the user sees the same friendly "找不到這組配對代碼" either way,
+  // instead of a raw "Invalid pairing code".
+  if (response.status === 400) return { ok: true, exists: false, updateTime: '', payload: '' };
+  if (!response.ok) return { ok: false, error: await proxyErrorMessage(response) };
+  const data = await response.json();
   return {
     ok: true,
-    exists: true,
-    updateTime: doc.updateTime || '',
-    payload: doc.fields?.payload?.stringValue || ''
+    exists: !!data.exists,
+    updateTime: data.updateTime || '',
+    payload: data.payload || ''
   };
 }
 
-// Same normalization as fetchSyncDoc, for the write side.
-async function writeSyncDoc(projectId, code, payload) {
-  if (hasSyncProxy()) {
-    const response = await fetch(proxyUrl(code), {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ payload })
-    });
-    if (!response.ok) return { ok: false, error: await proxyErrorMessage(response) };
-    const doc = await response.json();
-    return { ok: true, updateTime: doc.updateTime || '' };
-  }
-  const response = await fetch(`${docUrl(projectId, code)}?updateMask.fieldPaths=payload`, {
+async function writeSyncDoc(code, payload) {
+  const response = await fetch(proxyUrl(code), {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fields: { payload: { stringValue: payload } } })
+    body: JSON.stringify({ payload })
   });
-  if (!response.ok) return { ok: false, error: await firestoreErrorMessage(response) };
+  if (!response.ok) return { ok: false, error: await proxyErrorMessage(response) };
   const doc = await response.json();
   return { ok: true, updateTime: doc.updateTime || '' };
 }
@@ -222,12 +163,11 @@ async function writeSyncDoc(projectId, code, payload) {
 // Uploads the currently-saved schedule as-is (never the live, possibly
 // unsaved editor form) so sync can never publish a half-edited draft.
 async function pushSyncSnapshot() {
-  const projectId = getSyncProjectId();
   const code = getSyncCode();
-  if ((!hasSyncProxy() && !projectId) || !code) return { ok: false, error: '尚未設定同步。' };
+  if (!isSyncProxyConfigured() || !code) return { ok: false, error: '尚未設定同步。' };
   try {
     const payload = await encodeTransferData(state.applicationData);
-    const result = await writeSyncDoc(projectId, code, payload);
+    const result = await writeSyncDoc(code, payload);
     if (!result.ok) throw new Error(result.error);
     writeLocal(LAST_UPDATE_TIME_KEY, result.updateTime);
     return { ok: true };
@@ -245,11 +185,10 @@ async function pushSyncSnapshot() {
 // refuse joining a code nobody has actually created yet, which callers
 // that only care about `applied` (syncTick's regular polling) can ignore.
 async function pullSyncSnapshot({ force = false } = {}) {
-  const projectId = getSyncProjectId();
   const code = getSyncCode();
-  if ((!hasSyncProxy() && !projectId) || !code) return { ok: false, error: '尚未設定同步。' };
+  if (!isSyncProxyConfigured() || !code) return { ok: false, error: '尚未設定同步。' };
   try {
-    const doc = await fetchSyncDoc(projectId, code);
+    const doc = await fetchSyncDoc(code);
     if (!doc.ok) throw new Error(doc.error);
     if (!doc.exists) return { ok: true, applied: false, exists: false };
     if (!doc.payload) return { ok: true, applied: false, exists: true };
@@ -330,8 +269,6 @@ function renderSyncPanel() {
   const activeBox = document.getElementById('sync-active-box');
   const activeCode = document.getElementById('sync-active-code');
   const roleLabel = document.getElementById('sync-role-label');
-  const projectIdField = document.getElementById('sync-project-id');
-  const setupHint = document.getElementById('sync-setup-hint');
   if (!setupBox || !activeBox) return;
   const configured = isSyncConfigured();
   setupBox.hidden = configured;
@@ -344,11 +281,6 @@ function renderSyncPanel() {
       : '身份：管理者 — 可以編輯課表，變更會同步到其他裝置。';
     roleLabel.classList.toggle('is-viewer', viewer);
   }
-  if (projectIdField) projectIdField.hidden = isManagedSyncDeployment();
-  if (setupHint)
-    setupHint.textContent = isManagedSyncDeployment()
-      ? '同步會把課表存到 Orbit AI 內建的同步伺服器，讓多台裝置自動保持一致，不需要自己申請任何帳號。'
-      : '同步會把課表存到你自己的 Firebase 專案（Firestore），讓多台裝置自動保持一致。需要一個免費的 Firebase 專案。';
   applyEditorRoleLock();
 }
 
@@ -356,7 +288,7 @@ function renderSyncPanel() {
 // everything except the always-visible "同步 / 匯入匯出" panel itself (where
 // the unlink button that gets a viewer back to full local editing lives).
 // This is a UX guardrail, not a real access-control boundary - same as the
-// rest of sync's fully-open Firestore rules (see README) - so it's plain
+// rest of sync's design (see README's security section) - so it's plain
 // CSS (.sync-viewer-locked, see styles.css) rather than anything that
 // actually removes the underlying form controls.
 function applyEditorRoleLock() {
@@ -366,14 +298,11 @@ function applyEditorRoleLock() {
 
 // ---- UI entry points, exposed on window for index.html's onclick="..." ----
 async function orbitSyncCreate() {
-  const projectId = hasSyncProxy()
-    ? ''
-    : DEFAULT_PROJECT_ID || document.getElementById('sync-project-id')?.value.trim();
-  if (!hasSyncProxy() && !projectId) {
-    setSyncStatusUi('請先輸入 Firebase 專案 ID。', true);
+  if (!isSyncProxyConfigured()) {
+    setSyncStatusUi('跨裝置同步功能尚未設定，請聯絡課表管理者。', true);
     return;
   }
-  setSyncPairing(projectId, generateSyncCode());
+  setSyncPairing(generateSyncCode());
   setSyncStatusUi('正在建立同步…');
   const result = await pushSyncSnapshot();
   if (!result.ok) {
@@ -386,13 +315,13 @@ async function orbitSyncCreate() {
   startSyncLoop();
 }
 // A lightweight existence check, deliberately not going through
-// setSyncPairing/pullSyncSnapshot - those read the *currently paired*
-// project/code from localStorage, but orbitSyncJoin needs to check a code
-// before committing to anything (or showing a warning that only makes
-// sense if the code actually has data to overwrite with).
-async function checkSyncCodeExists(projectId, code) {
+// setSyncPairing/pullSyncSnapshot - those read the *currently paired* code
+// from localStorage, but orbitSyncJoin needs to check a code before
+// committing to anything (or showing a warning that only makes sense if the
+// code actually has data to overwrite with).
+async function checkSyncCodeExists(code) {
   try {
-    const doc = await fetchSyncDoc(projectId, code);
+    const doc = await fetchSyncDoc(code);
     if (!doc.ok) return { ok: false, error: `同步檢查失敗：${doc.error}` };
     return { ok: true, exists: doc.exists };
   } catch (error) {
@@ -401,14 +330,11 @@ async function checkSyncCodeExists(projectId, code) {
 }
 
 async function orbitSyncJoin() {
-  const projectId = hasSyncProxy()
-    ? ''
-    : DEFAULT_PROJECT_ID || document.getElementById('sync-project-id')?.value.trim();
-  const code = document.getElementById('sync-join-code')?.value.trim();
-  if (!hasSyncProxy() && !projectId) {
-    setSyncStatusUi('請先輸入 Firebase 專案 ID。', true);
+  if (!isSyncProxyConfigured()) {
+    setSyncStatusUi('跨裝置同步功能尚未設定，請聯絡課表管理者。', true);
     return;
   }
+  const code = document.getElementById('sync-join-code')?.value.trim();
   if (!code) {
     setSyncStatusUi('請輸入配對代碼。', true);
     return;
@@ -428,7 +354,7 @@ async function orbitSyncJoin() {
   // just a confusing, pointless extra step. Fail fast with the real error
   // instead.
   setSyncStatusUi('正在檢查配對代碼…');
-  const check = await checkSyncCodeExists(projectId, normalizedCode);
+  const check = await checkSyncCodeExists(normalizedCode);
   if (!check.ok) {
     setSyncStatusUi(check.error, true);
     return;
@@ -450,15 +376,15 @@ async function orbitSyncJoin() {
     '仍要加入',
     () => {
       hideEditorDiscardConfirm();
-      performSyncJoin(projectId, normalizedCode, asManager);
+      performSyncJoin(normalizedCode, asManager);
     },
     '取消'
   );
   showEditorConfirmSheet();
 }
 
-async function performSyncJoin(projectId, code, asManager) {
-  setSyncPairing(projectId, code, asManager ? MANAGER_ROLE : VIEWER_ROLE);
+async function performSyncJoin(code, asManager) {
+  setSyncPairing(code, asManager ? MANAGER_ROLE : VIEWER_ROLE);
   setSyncStatusUi('正在加入同步…');
   const result = await pullSyncSnapshot({ force: true });
   if (!result.ok) {
@@ -468,10 +394,10 @@ async function performSyncJoin(projectId, code, asManager) {
   }
   // "加入同步" only ever joins a sync someone already created (with
   // "建立新同步", which auto-generates its own code and immediately
-  // publishes) - a 404 here means this code was mistyped or never created,
-  // not "an empty sync to adopt." Bug this used to have: this case reported
-  // success and paired the device anyway (worse for a viewer, who'd then
-  // just sit there forever receiving nothing, thinking it was synced).
+  // publishes) - "not found" here means this code was mistyped or never
+  // created, not "an empty sync to adopt." Bug this used to have: this case
+  // reported success and paired the device anyway (worse for a viewer, who'd
+  // then just sit there forever receiving nothing, thinking it was synced).
   // Refusing outright, for both roles, also removes the old "join as
   // manager silently creates/publishes under whatever code you typed"
   // fallback - that's what "建立新同步" is for.
@@ -499,12 +425,9 @@ export {
   clearSyncPairing,
   generateSyncCode,
   getSyncCode,
-  getSyncProjectId,
   getSyncRole,
-  hasDefaultSyncProjectId,
-  hasSyncProxy,
-  isManagedSyncDeployment,
   isSyncConfigured,
+  isSyncProxyConfigured,
   isSyncViewer,
   orbitSyncCreate,
   orbitSyncJoin,

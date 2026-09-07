@@ -6,10 +6,12 @@ import { seedLocalStorage } from './helpers/fixtureData.js';
 // - see loadApp.js's comment) so sync.js's module-scope
 // `import.meta.env.VITE_ORBIT_SYNC_PROXY_URL` read picks up this stub: it's
 // only read once, at import time, so it must be set before loadApp() first
-// pulls sync.js in via main.js -> bootstrap.js.
+// pulls sync.js in via main.js -> bootstrap.js. Every push/pull/join/create
+// test lives here, since none of that can run without the proxy configured
+// - see sync.test.js for the "not configured" gate itself.
 let sync;
 let state;
-const PROXY_URL = 'https://sync-proxy.example.workers.dev/';
+const PROXY_URL = 'https://sync-proxy.example.workers.dev/sync';
 
 beforeAll(async () => {
   vi.stubEnv('VITE_ORBIT_SYNC_PROXY_URL', PROXY_URL);
@@ -26,41 +28,73 @@ afterAll(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   sync.clearSyncPairing();
+  document.getElementById('sync-join-code').value = '';
+  document.getElementById('sync-join-as-manager').checked = false;
 });
 
-describe('sync with a build-time proxy URL configured', () => {
-  it('reports a managed deployment with no project id needed', () => {
-    expect(sync.hasSyncProxy()).toBe(true);
-    expect(sync.isManagedSyncDeployment()).toBe(true);
+describe('sync with a proxy Worker configured', () => {
+  it('reports the proxy as configured', () => {
+    expect(sync.isSyncProxyConfigured()).toBe(true);
   });
+});
 
-  it('hides the manual project-id field and shows the zero-setup hint', () => {
-    sync.renderSyncPanel();
-    expect(document.getElementById('sync-project-id').hidden).toBe(true);
-    expect(document.getElementById('sync-setup-hint').textContent).toMatch(
-      /不需要自己申請任何帳號/
-    );
-  });
-
-  it('orbitSyncCreate pairs with no project-id input filled in, PATCHing the proxy with a plain {payload} body', async () => {
-    document.getElementById('sync-project-id').value = '';
-    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ updateTime: 'now' }) }));
+describe('pushSyncSnapshot', () => {
+  it('PATCHes the proxy for the paired code with the compressed backup as payload', async () => {
+    sync.setSyncPairing('CODE1234');
+    const fetchMock = vi.fn(async (url, options) => {
+      expect(url).toBe(`${PROXY_URL}?code=CODE1234`);
+      expect(options.method).toBe('PATCH');
+      const body = JSON.parse(options.body);
+      expect(body.payload.startsWith('[ORBIT]')).toBe(true);
+      return { ok: true, json: async () => ({ updateTime: '2024-01-15T00:00:00.000000Z' }) };
+    });
     vi.stubGlobal('fetch', fetchMock);
 
-    await sync.orbitSyncCreate();
-
-    expect(sync.isSyncConfigured()).toBe(true);
-    const [url, options] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${PROXY_URL}?code=${sync.getSyncCode()}`);
-    expect(options.method).toBe('PATCH');
-    const body = JSON.parse(options.body);
-    expect(typeof body.payload).toBe('string');
-    expect(body.payload.startsWith('[ORBIT]')).toBe(true);
-    expect(document.getElementById('sync-active-box').hidden).toBe(false);
+    const result = await sync.pushSyncSnapshot();
+    expect(result.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('pullSyncSnapshot treats {exists:false} from the proxy as nothing to apply yet', async () => {
-    sync.setSyncPairing('', 'CODE1234');
+  it('reports an error when not paired', async () => {
+    const result = await sync.pushSyncSnapshot();
+    expect(result.ok).toBe(false);
+  });
+
+  it('surfaces the proxy error message on a failed request', async () => {
+    sync.setSyncPairing('CODE1234');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+        json: async () => ({ error: { message: 'Worker 尚未設定 Firebase 服務帳戶。' } })
+      }))
+    );
+    const result = await sync.pushSyncSnapshot();
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/服務帳戶/);
+  });
+
+  it('a 429 from the proxy surfaces as the same friendly rate-limit message', async () => {
+    sync.setSyncPairing('CODE1234');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: false,
+        status: 429,
+        json: async () => ({ error: { message: '請求過於頻繁，請稍後再試。' } })
+      }))
+    );
+    const result = await sync.pushSyncSnapshot();
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/請求過於頻繁/);
+  });
+});
+
+describe('pullSyncSnapshot', () => {
+  it('treats {exists:false} from the proxy as nothing to apply yet', async () => {
+    sync.setSyncPairing('CODE1234');
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({ ok: true, json: async () => ({ exists: false }) }))
@@ -69,8 +103,22 @@ describe('sync with a build-time proxy URL configured', () => {
     expect(result).toEqual({ ok: true, applied: false, exists: false });
   });
 
-  it('pullSyncSnapshot applies a remote payload the proxy reports as existing', async () => {
-    sync.setSyncPairing('', 'CODE1234');
+  it('also treats a 400 (the Worker rejecting a malformed code) as not found, not an error', async () => {
+    sync.setSyncPairing('CODE1234');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        status: 400,
+        ok: false,
+        json: async () => ({ error: { message: 'Invalid pairing code' } })
+      }))
+    );
+    const result = await sync.pullSyncSnapshot();
+    expect(result).toEqual({ ok: true, applied: false, exists: false });
+  });
+
+  it('applies a remote payload that differs from the current schedule', async () => {
+    sync.setSyncPairing('CODE1234');
     const { encodeTransferData, normalizeSettingsData } = await import('../src/editor-backup.js');
     const remoteData = normalizeSettingsData({
       ...state.applicationData,
@@ -89,39 +137,133 @@ describe('sync with a build-time proxy URL configured', () => {
     expect(state.applicationData.teacherDB.Z).toEqual(['地理', '新老師', '']);
   });
 
-  it('a 429 from the proxy surfaces as the same friendly rate-limit message on push', async () => {
-    sync.setSyncPairing('', 'CODE1234');
+  it('does not apply when the remote updateTime matches what was already synced', async () => {
+    sync.setSyncPairing('CODE1234');
+    const { encodeTransferData } = await import('../src/editor-backup.js');
+    const payload = await encodeTransferData(state.applicationData);
+    localStorage.setItem('orbitSyncLastUpdateTime', '2024-02-01T00:00:00.000000Z');
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ exists: true, updateTime: '2024-02-01T00:00:00.000000Z', payload })
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const result = await sync.pullSyncSnapshot();
+    expect(result).toEqual({ ok: true, applied: false, exists: true });
+  });
+});
+
+describe('orbitSyncCreate / orbitSyncUnlink UI wiring', () => {
+  it('orbitSyncCreate pairs with no manual input, PATCHing the proxy immediately', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ updateTime: 'now' }) }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await sync.orbitSyncCreate();
+
+    expect(sync.isSyncConfigured()).toBe(true);
+    expect(document.getElementById('sync-active-box').hidden).toBe(false);
+    expect(document.getElementById('sync-active-code').textContent).toBe(sync.getSyncCode());
+    const [url, options] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${PROXY_URL}?code=${sync.getSyncCode()}`);
+    expect(options.method).toBe('PATCH');
+  });
+
+  it('orbitSyncUnlink clears pairing and restores the setup panel', () => {
+    sync.setSyncPairing('CODE1234');
+    sync.renderSyncPanel();
+    sync.orbitSyncUnlink();
+    expect(sync.isSyncConfigured()).toBe(false);
+    expect(document.getElementById('sync-setup-box').hidden).toBe(false);
+    expect(document.getElementById('sync-active-box').hidden).toBe(true);
+  });
+});
+
+describe('manager/viewer roles', () => {
+  it('orbitSyncCreate always pairs this device as manager', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, json: async () => ({ updateTime: 'now' }) }))
+    );
+    await sync.orbitSyncCreate();
+    expect(sync.getSyncRole()).toBe('manager');
+    expect(sync.isSyncViewer()).toBe(false);
+  });
+
+  // These exercise performSyncJoin directly - the actual pairing/pull/push
+  // logic - rather than orbitSyncJoin's confirm-sheet wrapper (see the
+  // "orbitSyncJoin warns before wiping local data" suite below for that).
+  it('performSyncJoin refuses a code nothing has been published under yet, for either role', async () => {
+    const fetchMock = vi.fn(async (url, options) => {
+      // {exists:false} must never lead to a PATCH, for either role -
+      // "加入" only ever joins an existing sync; a fresh/nonexistent code is
+      // a bug report ("joining a non-existent sync works"), not a valid join.
+      expect(options?.method).not.toBe('PATCH');
+      return { ok: true, json: async () => ({ exists: false }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await sync.performSyncJoin('EMPTY123', false);
+    expect(sync.isSyncConfigured()).toBe(false);
+    expect(document.getElementById('sync-status').textContent).toMatch(/找不到這組配對代碼/);
+
+    await sync.performSyncJoin('EMPTY123', true);
+    expect(sync.isSyncConfigured()).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('performSyncJoin pairs as viewer or manager when the code actually has a published schedule', async () => {
+    const { encodeTransferData } = await import('../src/editor-backup.js');
+    const payload = await encodeTransferData(state.applicationData);
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({
-        ok: false,
-        status: 429,
-        json: async () => ({ error: { message: '請求過於頻繁，請稍後再試。' } })
+        ok: true,
+        json: async () => ({ exists: true, updateTime: 'now', payload })
       }))
     );
-    const result = await sync.pushSyncSnapshot();
-    expect(result.ok).toBe(false);
-    expect(result.error).toMatch(/請求過於頻繁/);
+
+    await sync.performSyncJoin('CODE1234', false);
+    expect(sync.isSyncConfigured()).toBe(true);
+    expect(sync.isSyncViewer()).toBe(true);
+
+    sync.clearSyncPairing();
+    await sync.performSyncJoin('CODE1234', true);
+    expect(sync.isSyncConfigured()).toBe(true);
+    expect(sync.isSyncViewer()).toBe(false);
   });
 
-  it('orbitSyncJoin checks existence via the proxy before ever showing the overwrite confirmation', async () => {
+  it('syncTick only pulls for a viewer, even when the local schedule has "changed"', async () => {
+    sync.setSyncPairing('CODE1234', 'viewer');
+    const fetchMock = vi.fn(async (url, options) => {
+      expect(options?.method).not.toBe('PATCH');
+      return { ok: true, json: async () => ({ exists: false }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    await sync.syncTick();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('orbitSyncJoin checks the code exists before ever warning about overwriting data', () => {
+  it('shows the confirm sheet (and pairs nothing yet) only once the code is confirmed to exist', async () => {
     document.getElementById('sync-join-code').value = 'CODE1234';
+    const { encodeTransferData } = await import('../src/editor-backup.js');
+    const payload = await encodeTransferData(state.applicationData);
     const fetchMock = vi.fn(async () => ({
       ok: true,
-      json: async () => ({ exists: false })
+      json: async () => ({ exists: true, updateTime: 'now', payload })
     }));
     vi.stubGlobal('fetch', fetchMock);
 
     await sync.orbitSyncJoin();
 
     expect(sync.isSyncConfigured()).toBe(false);
-    expect(document.getElementById('sync-status').textContent).toMatch(/找不到這組配對代碼/);
-    expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(false);
-    const [url] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${PROXY_URL}?code=CODE1234`);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(true);
+    expect(document.getElementById('editor-confirm-title').textContent).toMatch(/加入同步/);
+    expect(document.getElementById('editor-confirm-msg').textContent).toMatch(/取代/);
   });
 
-  it('orbitSyncJoin pairs once the proxy confirms the code exists and the confirm button is clicked', async () => {
+  it('joins only once the confirm button is actually clicked', async () => {
     document.getElementById('sync-join-code').value = 'CODE1234';
     const { encodeTransferData } = await import('../src/editor-backup.js');
     const payload = await encodeTransferData(state.applicationData);
@@ -134,12 +276,77 @@ describe('sync with a build-time proxy URL configured', () => {
     );
 
     await sync.orbitSyncJoin();
-    expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(true);
     const confirmBtn = document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[1];
     confirmBtn.onclick();
+    // performSyncJoin is async and fire-and-forget from the click handler -
+    // flush microtasks so its fetch/pairing has actually settled.
     await Promise.resolve();
     await Promise.resolve();
 
     expect(sync.isSyncConfigured()).toBe(true);
+    expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(false);
+  });
+
+  it('cancelling leaves the device unpaired', async () => {
+    document.getElementById('sync-join-code').value = 'CODE1234';
+    const { encodeTransferData } = await import('../src/editor-backup.js');
+    const payload = await encodeTransferData(state.applicationData);
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ exists: true, updateTime: 'now', payload })
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await sync.orbitSyncJoin();
+    const cancelBtn = document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[0];
+    cancelBtn.onclick();
+
+    expect(sync.isSyncConfigured()).toBe(false);
+    // Only the existence check should have fired - cancelling never pulls/pairs.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(false);
+  });
+
+  // The bug report this fold is named for: entering a code nobody created
+  // used to still pop the "this will overwrite your data" confirmation,
+  // which was both misleading (there was never anything to overwrite with)
+  // and pointless (performSyncJoin's own check would have rejected it
+  // anyway after the user clicked through the warning). Now the existence
+  // check happens first, so a bad code fails immediately with a clear
+  // error and the overwrite confirmation never appears at all.
+  it('a nonexistent code rejects immediately with a clear error - no overwrite confirmation ever shown', async () => {
+    document.getElementById('sync-join-code').value = 'NOBODY99';
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ exists: false }) }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await sync.orbitSyncJoin();
+
+    expect(sync.isSyncConfigured()).toBe(false);
+    expect(document.getElementById('sync-status').textContent).toMatch(/找不到這組配對代碼/);
+    expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  // A second bug found right after the first: a mistyped code that doesn't
+  // even match the expected 8-character shape gets rejected by the Worker
+  // with 400 "Invalid pairing code" - checked before it ever asks Firestore
+  // - not the {exists:false} shape a genuinely nonexistent-but-well-formed
+  // code gets. Both mean the same thing to the user (this code isn't a
+  // real, joinable sync), so they should look the same.
+  it('a malformed code (400 from the Worker, not {exists:false}) shows the same friendly "not found" error', async () => {
+    document.getElementById('sync-join-code').value = 'not-a-real-code';
+    const fetchMock = vi.fn(async () => ({
+      status: 400,
+      ok: false,
+      json: async () => ({ error: { message: 'Invalid pairing code' } })
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await sync.orbitSyncJoin();
+
+    expect(sync.isSyncConfigured()).toBe(false);
+    expect(document.getElementById('sync-status').textContent).toMatch(/找不到這組配對代碼/);
+    expect(document.getElementById('sync-status').textContent).not.toMatch(/Invalid pairing code/i);
+    expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(false);
   });
 });
