@@ -141,6 +141,33 @@ describe('pullSyncSnapshot', () => {
   });
 });
 
+describe('editor navigation reaches the sync panel', () => {
+  // jsdom's inline onclick="..." attributes don't resolve bare identifiers
+  // against window the way a real browser does (no existing test in this
+  // suite relies on .click() for that reason - see README's note that
+  // editor UI flows are otherwise only verified manually). So this checks
+  // the two things that actually matter: the drill button's markup really
+  // targets editor-fold-sync, and calling the handler it names actually
+  // reveals that fold - together they cover what .click() would exercise
+  // in a real browser.
+  it('the "同步" drill button on the schedule page targets editor-fold-sync', () => {
+    window.openEditor();
+    const drillBtn = [...document.querySelectorAll('.editor-drill-btn')].find(
+      button => button.textContent.trim() === '同步'
+    );
+    expect(drillBtn).toBeTruthy();
+    expect(drillBtn.getAttribute('onclick')).toBe("openEditorFold('editor-fold-sync')");
+  });
+
+  it("openEditorFold('editor-fold-sync') reveals the sync panel", () => {
+    window.openEditor();
+    window.openEditorFold('editor-fold-sync');
+    const fold = document.getElementById('editor-fold-sync');
+    expect(fold.classList.contains('active')).toBe(true);
+    expect(fold.querySelector('#sync-setup-box')).toBeTruthy();
+  });
+});
+
 describe('orbitSyncCreate / orbitSyncJoin / orbitSyncUnlink UI wiring', () => {
   it('orbitSyncCreate requires a project id before pairing', async () => {
     await sync.orbitSyncCreate();
