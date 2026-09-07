@@ -4,7 +4,13 @@
 // the toolbar/modal/countdown-card UI around it.
 import { state } from './state.js';
 import { closeStylePanel } from './appearance.js';
-import { fitNowTitleText, getClassColor, renderList, shrinkFontToFit } from './dashboard-render.js';
+import {
+  fitNextMetaText,
+  fitNowTitleText,
+  getClassColor,
+  renderList,
+  shrinkFontToFit
+} from './dashboard-render.js';
 import { dayNames, formatCountdownEventDate, normalizeCountdownEvents } from './data.js';
 import { isEditorDirty } from './editor-backup.js';
 import {
@@ -425,7 +431,10 @@ function renderDashboard(viewModel, week) {
   // calling again when something that could change the fit actually did.
   if (titleTextChanged) fitNowTitleText();
   if (changed('nextText', viewModel.nextText)) dom.nextName.innerText = viewModel.nextText;
-  if (changed('nextMeta', viewModel.nextMeta)) dom.nextMetaText.innerText = viewModel.nextMeta;
+  if (changed('nextMeta', viewModel.nextMeta)) {
+    dom.nextMetaText.innerText = viewModel.nextMeta;
+    fitNextMetaText();
+  }
 
   lastRendered = { week, ...viewModel };
 }

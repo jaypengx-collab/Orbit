@@ -179,6 +179,36 @@ function fitNowTitleText(force = false) {
     shrinkFontToFit(title, available, defaultSize, minSize);
   });
 }
+// A single line reads better than two, so try shrinking the "10:10 · 徐蓉莉
+// · 第三會議室" line to fit before ever wrapping it - only fall back to a
+// real (balanced, keep-all) two-line wrap when even the smallest legible
+// size still can't fit it, so long teacher/room names never get clipped or
+// shrunk into illegibility.
+let nextMetaFitState = { key: '', raf: 0 };
+function fitNextMetaText(force = false) {
+  const el = document.getElementById('next-meta-text');
+  if (!el) return;
+  const raw = (el.textContent || '').trim();
+  if (!raw) return;
+  const key = raw + '|' + Math.round(el.parentElement?.getBoundingClientRect().width || 0);
+  if (!force && nextMetaFitState.key === key) return;
+  nextMetaFitState.key = key;
+  if (nextMetaFitState.raf) cancelAnimationFrame(nextMetaFitState.raf);
+
+  nextMetaFitState.raf = requestAnimationFrame(() => {
+    el.classList.remove('wrap-2l');
+    el.style.fontSize = '';
+    const defaultSize = parseFloat(getComputedStyle(el).fontSize) || 15;
+    const minSize = Math.max(9, Math.round(defaultSize * 0.62));
+    const available = Math.floor(el.clientWidth);
+    if (!available) return;
+    shrinkFontToFit(el, available, defaultSize, minSize);
+    if (el.scrollWidth > available + 1) {
+      el.style.fontSize = defaultSize + 'px';
+      el.classList.add('wrap-2l');
+    }
+  });
+}
 function createMetaChip(text, cls = '') {
   const span = document.createElement('span');
   span.className = 'meta-chip ' + cls;
@@ -277,9 +307,20 @@ function renderList(week, curIdx, nxtIdx, curDay, isDayFinished) {
     `${state.viewDay}-${curIdx}-${nxtIdx}-${isDayFinished}`
   );
 }
-window.addEventListener('resize', () => fitNowTitleText(true));
-window.addEventListener('orientationchange', () => setTimeout(() => fitNowTitleText(true), 120));
-window.addEventListener('load', () => fitNowTitleText(true));
+window.addEventListener('resize', () => {
+  fitNowTitleText(true);
+  fitNextMetaText(true);
+});
+window.addEventListener('orientationchange', () =>
+  setTimeout(() => {
+    fitNowTitleText(true);
+    fitNextMetaText(true);
+  }, 120)
+);
+window.addEventListener('load', () => {
+  fitNowTitleText(true);
+  fitNextMetaText(true);
+});
 
 /* Test mode advances from one clock tick; the consolidated controller handles input changes. */
 function mainClockTick() {
@@ -292,6 +333,7 @@ function mainClockTick() {
 }
 
 export {
+  fitNextMetaText,
   fitNowTitleText,
   getClassColor,
   mainClockTick,

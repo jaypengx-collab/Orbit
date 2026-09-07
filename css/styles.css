@@ -296,8 +296,9 @@ body.editor-open .top-actions{opacity:0;visibility:hidden;pointer-events:none;tr
 .time-card.v3-11-next-module .next-content > .label{display:block;text-align:center;opacity:.78;margin-bottom:5px;letter-spacing:.35px;font-size:10.5px}
 .time-card.v3-11-next-module .title-next{font-weight:850;line-height:1.08;letter-spacing:0;text-overflow:clip;white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;text-wrap:balance;overflow-wrap:normal;word-break:normal;font-size:clamp(21px,6.1vw,29px);color:var(--pro-accent)}
 .time-card.v3-11-next-module .next-box .next-meta{width:100%;max-width:100%;flex:0 0 auto;display:flex;flex-direction:row;flex-wrap:wrap;justify-content:center;align-items:baseline;gap:2px 8px;overflow:visible}
-.time-card.v3-11-next-module .next-meta > div{max-width:100%;min-width:0;overflow:visible;text-overflow:clip;white-space:normal;overflow-wrap:anywhere;word-break:break-word;text-align:center;line-height:1.2}
+.time-card.v3-11-next-module .next-meta > div{max-width:100%;min-width:0;overflow:visible;text-overflow:clip;white-space:nowrap;overflow-wrap:normal;word-break:keep-all;text-align:center;line-height:1.2}
 .time-card.v3-11-next-module .next-box .next-meta #next-meta-text{font:500 clamp(13px,3.6vw,15px)/1.2 inherit;text-align:center;display:block;width:100%;color:var(--sub)}
+.time-card.v3-11-next-module .next-box .next-meta #next-meta-text.wrap-2l{white-space:normal;text-wrap:balance}
 @media (max-width:360px){.time-card.v3-11-next-module{grid-template-columns:minmax(0,1fr) 92px;column-gap:9px}.time-card.v3-11-next-module .timer-container{padding:5px 6px;width:92px;min-width:92px}.time-card.v3-11-next-module #timer-val.timer-badge{min-width:78px}.time-card.v3-11-next-module .title-next{font-size:clamp(20px,6vw,27px)}}
 @media (max-height:700px){.time-card{padding-block:7px}.time-card.v3-11-next-module .title-next{font-size:clamp(19px,5.7vw,25px)}.time-card.v3-11-next-module .timer-badge{padding:5px 8px}}
 
