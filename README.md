@@ -194,7 +194,7 @@ Worker 內建一個很陽春的每小時請求數量限制（同一個執行個�
 | `proAccent` / `proSecondary` / `proTertiary` | 外觀主色與衍生色                                                             |
 | `styleSlots`                                 | 自訂樣式儲存槽                                                               |
 
-每筆存檔還會夾帶一個內部的 schema 版本標記，程式啟動讀取資料時會先檢查這個標記，資料格式跟目前版本對不上的話會先做相容性處理，避免舊資料讓程式壞掉。
+每筆存檔還會夾帶一個內部的 schema 版本標記，程式啟動讀取資料時會先檢查這個標記，資料格式跟目前版本對不上的話會先做相容性處理，避免舊資料讓程式壞掉。萬一存檔本身壞掉（不是合法 JSON、缺欄位、欄位型別不對等各種讀取失敗的情況），程式會直接清掉 `classFocusData` 這把鍵、改用預設課表繼續啟動，而不是把壞掉的資料留著讓下次開啟又失敗一次。
 
 跨裝置同步的配對資訊也存在獨立的鍵：`orbitSyncProjectId`（Firebase 專案 ID）、`orbitSyncCode`（配對代碼）、`orbitSyncRole`（`manager` 或 `viewer`，決定這台裝置能不能編輯——見〈跨裝置同步〉）、`orbitSyncLastUpdateTime`（最後一次同步到的 Firestore `updateTime`，用來判斷遠端是否有更新）。沒有設定同步的話，這幾把鍵不會存在；沒有 `orbitSyncRole` 但其他兩把鍵存在的話（配對於這個身份區分功能上線前建立），視同管理者，不會回溯鎖住既有裝置。
 

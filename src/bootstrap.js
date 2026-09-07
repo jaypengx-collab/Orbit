@@ -5,7 +5,7 @@
 import { setStyleMode } from './appearance.js';
 import { syncTestToolbar } from './dashboard.js';
 import { mainClockTick, syncTestPlayPauseUi } from './dashboard-render.js';
-import { getDefaultData, loadData, saveData } from './data.js';
+import { loadData } from './data.js';
 import { buildSchedule } from './schedule.js';
 import { state } from './state.js';
 import { renderSyncPanel, startSyncLoop } from './sync.js';
@@ -16,29 +16,12 @@ import { renderSyncPanel, startSyncLoop } from './sync.js';
 // starts the live clock that drives the dashboard.
 // (state.applicationData is set here, not in state.js's own initial value -
 // see the comment on state.js for why.)
+// loadData() (data.js) is what actually guards against a corrupt/unexpected
+// saved schedule - any failure there clears the stored key and returns a
+// clean default schedule, so buildSchedule() below always has valid data to
+// work with.
 state.applicationData = loadData();
-// Every step below is guarded: main.js imports this module before
-// testsim-runtime.js, whose init() is what actually clears the boot spinner
-// (see its finishBoot()). Since these run as plain top-level statements, an
-// uncaught throw in any one of them would abort this module's evaluation and,
-// with it, the rest of the static import chain - testsim-runtime.js would
-// simply never run, leaving the app stuck behind the spinner forever. A
-// malformed/unexpectedly-shaped saved schedule (e.g. carried over from an
-// older version of the app) is exactly the kind of thing that could trip up
-// buildSchedule() or the dashboard's first render in a way loadData()'s own
-// validation didn't anticipate, so this falls back to a clean default
-// schedule rather than ever letting that happen.
-try {
-  buildSchedule();
-} catch (error) {
-  console.error(
-    'Orbit AI: buildSchedule() failed on the saved schedule, resetting to defaults.',
-    error
-  );
-  state.applicationData = getDefaultData();
-  saveData(state.applicationData);
-  buildSchedule();
-}
+buildSchedule();
 try {
   setStyleMode();
 } catch {
@@ -47,17 +30,9 @@ try {
 setInterval(mainClockTick, 1000);
 syncTestPlayPauseUi();
 syncTestToolbar();
-try {
-  window.update();
-} catch (error) {
-  console.error('Orbit AI: the initial dashboard render failed.', error);
-}
-try {
-  renderSyncPanel();
-  startSyncLoop();
-} catch (error) {
-  console.error('Orbit AI: cross-device sync failed to initialize.', error);
-}
+window.update();
+renderSyncPanel();
+startSyncLoop();
 
 // Caches the whole app shell so a return visit can load almost entirely
 // from disk instead of the network - see public/sw.js for the actual

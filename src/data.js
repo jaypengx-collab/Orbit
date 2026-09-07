@@ -205,40 +205,57 @@ function sanitizeBreakTimes(bellTimes, breakTimes = []) {
   return validBreaks;
 }
 
+// If localStorage's saved schedule fails to load for any reason - it isn't
+// valid JSON, it's missing required fields, a field is the wrong shape, or
+// something later on chokes while reading it - this clears the stored key
+// outright rather than leaving corrupt data sitting there to fail the same
+// way on every future load. loadData() falls back to a clean default
+// schedule either way; clearing it here just means that's a one-time thing,
+// not a repeat failure on the next visit too.
+function clearStoredData() {
+  try {
+    localStorage.removeItem('classFocusData');
+  } catch {
+    /* localStorage unavailable (private browsing, etc.) - nothing to clear. */
+  }
+}
+
 function loadData() {
   try {
     const raw = localStorage.getItem('classFocusData');
     if (!raw) return getDefaultData();
 
     const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return getDefaultData();
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+      throw new Error('saved schedule is not an object');
 
     const required = ['teacherDB', 'locationDB', 'weeklySchedule', 'bellTimes'];
     if (!required.every(key => Object.prototype.hasOwnProperty.call(parsed, key)))
-      return getDefaultData();
+      throw new Error('saved schedule is missing required fields');
     if (
       !parsed.teacherDB ||
       typeof parsed.teacherDB !== 'object' ||
       Array.isArray(parsed.teacherDB)
     )
-      return getDefaultData();
+      throw new Error('saved schedule has an invalid teacherDB');
     if (
       !parsed.locationDB ||
       typeof parsed.locationDB !== 'object' ||
       Array.isArray(parsed.locationDB)
     )
-      return getDefaultData();
+      throw new Error('saved schedule has an invalid locationDB');
     if (
       !parsed.weeklySchedule ||
       typeof parsed.weeklySchedule !== 'object' ||
       Array.isArray(parsed.weeklySchedule)
     )
-      return getDefaultData();
-    if (!Array.isArray(parsed.bellTimes)) return getDefaultData();
+      throw new Error('saved schedule has an invalid weeklySchedule');
+    if (!Array.isArray(parsed.bellTimes))
+      throw new Error('saved schedule has an invalid bellTimes');
     if (Object.values(parsed.teacherDB).some(value => !Array.isArray(value)))
-      return getDefaultData();
+      throw new Error('saved schedule has an invalid teacherDB entry');
     if (Object.values(parsed.weeklySchedule).some(value => !Array.isArray(value)))
-      return getDefaultData();
+      throw new Error('saved schedule has an invalid weeklySchedule entry');
     if (
       !parsed.bellTimes.every(
         item =>
@@ -247,7 +264,7 @@ function loadData() {
           isValidTimeRange(String(item[0] || ''), String(item[1] || ''))
       )
     )
-      return getDefaultData();
+      throw new Error('saved schedule has an invalid bellTimes entry');
 
     const bellTimes = parsed.bellTimes.map(item => [String(item[0]), String(item[1])]);
     const normalized = {
@@ -291,6 +308,7 @@ function loadData() {
 
     return normalized;
   } catch {
+    clearStoredData();
     return getDefaultData();
   }
 }
