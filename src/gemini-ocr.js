@@ -79,51 +79,6 @@ class AIVisionProcessor {
     ];
   }
 
-  buildPrompt() {
-    return `Extract the class timetable from this photo and return it as a single JSON object. Focus on the timetable only — ignore background, margins, decorations, and unrelated content; it may only occupy part of the frame.
-
-Return valid JSON only, matching this exact schema:
-{
-  "bellTimes": [],
-  "breakTimes": [{"name":"午休","start":"12:00","end":"13:00"}],
-  "teacherDB": {"國文": ["國文", "陳老師", "A101"], "英文": ["英文", "王老師", "B202"]},
-  "locationDB": {"國文":"A101", "英文":"B202"},
-  "weeklySchedule": {"1": ["國文","英文",null], "2": [], "3": [], "4": [], "5": []},
-  "reverseWeek": false,
-  "countdownEvents": [{"name":"116 學測","startDate":"2027-01-22","endDate":"2027-01-24"}]
-}
-
-Interpret the timetable visually and use your best judgment to reconstruct its structure. Rules:
-- Read class period times from the image when available. Use 24-hour "HH:MM" strings, one entry per period in order, exactly as shown (either ["08:10","09:00"] or {"start":"08:10","end":"09:00"} is acceptable). Preserve the actual times; never invent, guess, or fall back to standard/default school times. If no class times are visible anywhere, return an empty bellTimes array.
-- Identify visible subjects, teachers, classrooms, breaks, and other timetable information.
-- teacherDB: one entry per distinct subject actually visible in the photo — do not invent subjects that aren't shown. Use the subject's Chinese name as its own key in this object; if two subjects share the same name, make the keys distinct (e.g. append the teacher's name). Value is [full subject name, teacher name, classroom]. Use "" for teacher/location when that information is not readable.
-- locationDB maps each subject key to its visible classroom/location; use "" when not visible.
-- weeklySchedule: keys "1" through "5" (Monday–Friday) are REQUIRED and must all be present, even as an empty array — never omit or truncate "5" (Friday) even if it is partially cut off in the photo. Add "6" (Saturday) and/or "0" (Sunday) ONLY if the photo actually shows a column for that day; otherwise omit them entirely. Keep each day's array aligned with the detected periods (one entry per bellTimes index). Use null when a slot is genuinely empty or cannot be identified; every non-null entry must be a key that exists in teacherDB.
-- If odd/even weeks contain alternatives in the same slot, combine them with "/" (e.g. "國文/公民") and do the same for the corresponding teacher names, using one shared key for that slot.
-- Set reverseWeek to true only when the photo clearly indicates a reversed odd/even week orientation; otherwise false.
-- Add breakTimes only for explicitly shown non-class periods such as lunch or cleaning — not empty/free periods.
-- Add countdownEvents only for clearly visible events/exams with a readable calendar date, formatted as "YYYY-MM-DD". Set startDate and endDate to the same date for a single-day event; use the visible first and last dates for a multi-day event/exam period. Only include dates you can actually read; otherwise return an empty array.
-- Do not invent information. When uncertain, prefer an empty value or null.
-- Keep all fields internally consistent.
-- Return ONLY the raw JSON object — no markdown fences, no comments, no extra text.`;
-  }
-
-  // This is plain structured extraction (read the photo, fill in a fixed schema) — it gets
-  // no benefit from the models' default "thinking" pass, which only adds latency. Gemini 2.5
-  // models take a thinkingBudget (0 disables it); Gemini 3 models replaced that with
-  // thinkingLevel and don't support turning thinking fully off, so "low" is the fastest they offer.
-  buildGenerationConfig(model) {
-    const base = {
-      response_mime_type: 'application/json',
-      temperature: 0.1,
-      maxOutputTokens: 8192
-    };
-    base.thinkingConfig = /^gemini-2\./.test(model)
-      ? { thinkingBudget: 0 }
-      : { thinkingLevel: 'low' };
-    return base;
-  }
-
   async recognizeSchedule(canvas, onProgress) {
     const report = message => {
       try {
@@ -136,16 +91,20 @@ Interpret the timetable visually and use your best judgment to reconstruct its s
 
     report('正在壓縮並編碼圖片…');
     const base64Data = canvas.toDataURL('image/jpeg', 0.9).replace(/^data:image\/jpeg;base64,/, '');
-    const promptPart = { text: this.buildPrompt() };
-    const imagePart = { inline_data: { mime_type: 'image/jpeg', data: base64Data } };
 
+    // The prompt text and generation config are NOT sent from here - the
+    // proxy (cloudflare-worker/gemini-proxy-worker.js) owns both and builds
+    // the full Gemini request itself from just {model, image}. That's
+    // deliberate: it means the proxy can only ever be used to run this
+    // app's own fixed timetable-extraction prompt against a submitted
+    // image, never as a generic pass-through for arbitrary prompts - see
+    // README's security notes on the AI proxy.
     let lastError = null;
     for (const model of this.geminiModels) {
       report(`正在請求 AI 模型（${model}）分析課表…`);
       const requestBody = JSON.stringify({
         model,
-        contents: [{ parts: [promptPart, imagePart] }],
-        generationConfig: this.buildGenerationConfig(model)
+        image: { mime_type: 'image/jpeg', data: base64Data }
       });
       let response;
       try {

@@ -52,13 +52,16 @@ describe('AIVisionProcessor.recognizeSchedule with a configured proxy', () => {
     vi.unstubAllGlobals();
   });
 
-  it('calls the proxy URL with the model named in the request body instead of a key in the URL', async () => {
+  it("sends only {model, image} - the prompt and generation config are the proxy's job, not the client's", async () => {
     const processor = new AIVisionProcessor();
     const fetchMock = vi.fn(async (url, options) => {
       expect(url).toBe(PROXY_URL);
       const body = JSON.parse(options.body);
       expect(body.model).toBe('gemini-3.6-flash');
-      expect(body.contents).toBeTruthy();
+      expect(body.image).toMatchObject({ mime_type: 'image/jpeg' });
+      expect(typeof body.image.data).toBe('string');
+      expect(body.contents).toBeUndefined();
+      expect(body.generationConfig).toBeUndefined();
       return fakeGeminiResponse({ teacherDB: {}, weeklySchedule: {} });
     });
     vi.stubGlobal('fetch', fetchMock);
