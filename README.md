@@ -122,7 +122,7 @@ npm run format       # Prettier 格式化（不含 index.html／css/styles.css�
 
 ### 金鑰在哪、安全性怎麼樣
 
-一般使用者**完全不需要**自己申請或輸入 Gemini API Key。部署站台已設定好伺服器端代理（`cloudflare-worker/gemini-proxy-worker.js`），真正的 Key 只存成該 Worker 的加密 Secret，永遠不進客戶端程式碼。
+一般使用者**完全不需要**自己申請或輸入 Gemini API Key。部署站台已設定好伺服器端代理（`cloudflare-worker/orbit-worker.js` 的 `/gemini` 路徑——這支 Worker 同時也服務跨裝置同步的 `/sync` 路徑，見下方〈跨裝置同步〉），真正的 Key 只存成該 Worker 的加密 Secret，永遠不進客戶端程式碼。
 
 代理不是單純的轉發水管，客戶端只能傳 `{model, image}`，實際送去 Gemini 的提示詞與生成參數是 Worker 自己寫死的——即使有人挖出 Worker 網址（它本來就在公開的前端程式碼裡）直接發請求，也只能拿它跑「辨識這張圖裡的課表」，沒辦法把它當成通用的免費 AI 代理去問別的問題。這是刻意設計成這樣，因為 Worker 網址從來就不是秘密。
 
@@ -138,13 +138,13 @@ npm run format       # Prettier 格式化（不含 index.html／css/styles.css�
 
 1. 到 [Cloudflare 註冊免費帳號](https://dash.cloudflare.com/sign-up)（只需 email，不需信用卡）。
 2. Workers & Pages → Create → Create Worker，取個名字 → Deploy。
-3. 「Edit code」貼上 `cloudflare-worker/gemini-proxy-worker.js` 全部內容，儲存並部署。
+3. 「Edit code」貼上 `cloudflare-worker/orbit-worker.js` 全部內容，儲存並部署。這支檔案同時服務 AI 匯入（`/gemini`）跟跨裝置同步（`/sync`，見下方），只設定其中一個功能的 Secret 也沒問題，另一個路徑會回報「尚未設定」但不影響已設定的那個。
 4. Settings → Variables and Secrets → 新增 `GEMINI_API_KEY`（[到這裡申請](https://aistudio.google.com/apikey)），類型選 **Secret** → 儲存並部署。
-5. 複製 Worker 網址（`https://<worker 名稱>.<子網域>.workers.dev`）。
-6. GitHub 專案 Settings → Secrets and variables → Actions → **Variables**（不是 Secrets，這個值本來就會進公開前端程式碼），新增 `VITE_ORBIT_GEMINI_PROXY_URL`，值是上一步的網址。下次推送到 `main`，站台就會改用代理。
-7. **建議但非必要**：Cloudflare 左側選單 Workers & Pages → KV → Create namespace（名稱隨意）；回到這個 Worker 的 Settings → Bindings → Add → KV Namespace，變數名稱填 `RATE_LIMIT_KV`，選剛建立的命名空間 → Deploy。這一步讓每小時請求限制變成跨邊緣節點的真計數器（見上方安全性小節），跳過的話功能一樣能用，只是這層限制比較弱。
+5. 複製 Worker 網址（`https://<worker 名稱>.<子網域>.workers.dev`），**加上 `/gemini`**。
+6. GitHub 專案 Settings → Secrets and variables → Actions → **Variables**（不是 Secrets，這個值本來就會進公開前端程式碼），新增 `VITE_ORBIT_GEMINI_PROXY_URL`，值是上一步含 `/gemini` 的完整網址。下次推送到 `main`，站台就會改用代理。
+7. **建議但非必要**：Cloudflare 左側選單 Workers & Pages → KV → Create namespace（名稱隨意）；回到這個 Worker 的 Settings → Bindings → Add → KV Namespace，變數名稱填 `RATE_LIMIT_KV`，選剛建立的命名空間 → Deploy。這一步讓每小時請求限制變成跨邊緣節點的真計數器（見上方安全性小節），跳過的話功能一樣能用，只是這層限制比較弱。如果下方跨裝置同步的進階設定也會用到，同一個 KV 命名空間可以兩邊共用（兩個功能的計數器鍵值前綴不同，不會互相干擾）。
 
-也可以用 Wrangler CLI 部署（見 `cloudflare-worker/wrangler.toml` 開頭註解，含 KV 命名空間的 CLI 建立指令），效果相同。想調整每小時限制次數，改 `gemini-proxy-worker.js` 裡的 `RATE_LIMIT` 常數即可。
+也可以用 Wrangler CLI 部署（見 `cloudflare-worker/wrangler.toml` 開頭註解，含 KV 命名空間的 CLI 建立指令），效果相同。想調整每小時限制次數，改 `orbit-worker.js` 裡的 `GEMINI_RATE_LIMIT` 常數即可。
 
 ---
 
@@ -224,15 +224,15 @@ npm run format       # Prettier 格式化（不含 index.html／css/styles.css�
 
 #### 進階設定：Cloudflare Worker 加上真正的流量限制（建議正式站台使用）
 
-延續上面的 Firebase 專案，額外做這幾步，把 Firestore 完全鎖起來、只讓這支 Worker 能碰：
+延續上面的 Firebase 專案，額外做這幾步，把 Firestore 完全鎖起來、只讓 Worker 能碰。跟 AI 匯入用的是**同一支** `cloudflare-worker/orbit-worker.js`（見上方〈AI 辨識課表照片〉的部署設定）——兩個功能各自獨立設定 Secret、互不影響，已經因為 AI 匯入部署過這支 Worker 的話，從第 1 步直接接著做，不用再建一個新 Worker：
 
 1. Firebase Console → 專案設定 → 服務帳戶 → 產生新的私密金鑰，下載 JSON。這把金鑰形同該 Firebase 專案的完整讀寫權限，跟密碼一樣保管，不要放進任何會被推送到 GitHub 的檔案。
-2. [Cloudflare Dashboard](https://dash.cloudflare.com/) → Workers & Pages → Create → 貼上 `cloudflare-worker/sync-proxy-worker.js` 的內容，部署。
+2. 還沒部署過 `orbit-worker.js` 的話：[Cloudflare Dashboard](https://dash.cloudflare.com/) → Workers & Pages → Create → 貼上 `cloudflare-worker/orbit-worker.js` 的內容，部署。已經部署過的話，直接用同一個 Worker，跳過這步。
 3. 這個 Worker 的 Settings → Variables and Secrets，新增：
    - `FIREBASE_PROJECT_ID`（一般變數）：Firebase 專案的 Project ID。
    - `FIREBASE_CLIENT_EMAIL`（Secret）：下載的 JSON 裡的 `client_email`。
    - `FIREBASE_PRIVATE_KEY`（Secret）：下載的 JSON 裡的 `private_key`（含 `-----BEGIN PRIVATE KEY-----`／`-----END PRIVATE KEY-----`，保留原本的換行）。
-4. （可選但建議）Workers & Pages → KV → Create namespace → 任意命名 → 回到這個 Worker 的 Settings → Bindings → Add → KV Namespace → 變數名稱 `RATE_LIMIT_KV` → 選剛建立的 namespace。跟 AI 匯入用的 Worker 共用同一個 namespace 也可以，兩邊的鍵不會互相碰撞。設定完 Bindings 後記得回「Edit code」畫面按一次 Deploy——只加 Binding 不會自動讓正在跑的版本套用它，一定要重新部署一次。
+4. （可選但建議）Workers & Pages → KV → Create namespace → 任意命名 → 回到這個 Worker 的 Settings → Bindings → Add → KV Namespace → 變數名稱 `RATE_LIMIT_KV` → 選剛建立的 namespace。這個 Worker 內兩個功能的計數器鍵值前綴不同，共用同一個 KV namespace 完全沒問題。設定完 Bindings 後記得回「Edit code」畫面按一次 Deploy——只加 Binding 不會自動讓正在跑的版本套用它，一定要重新部署一次。
 5. 回到 Firebase Console「規則」分頁，把規則整個換成：
    ```
    rules_version = '2';
@@ -245,7 +245,7 @@ npm run format       # Prettier 格式化（不含 index.html／css/styles.css�
    }
    ```
    服務帳戶的存取本來就不受 Firestore 規則限制（跟 Admin SDK 一樣），所以這條規則只影響「繞過 Worker、直接打 Firestore」的請求——把它整個關掉，才是這個 Worker 真正的意義：不是多一層檢查，是拿掉原本永遠開著的那道門。
-6. GitHub 專案 Settings → Secrets and variables → Actions → **Variables**，新增 `VITE_ORBIT_SYNC_PROXY_URL`，值是這個 Worker 的 `*.workers.dev` 網址。推送到 `main` 後站台建置時內建進去；設定了這個變數的話，`VITE_ORBIT_SYNC_PROJECT_ID` 就不會再被使用（Project ID 已經只存在 Worker 的環境變數裡，不再進到瀏覽器端的程式碼）。
+6. 複製 Worker 網址，**加上 `/sync`**。GitHub 專案 Settings → Secrets and variables → Actions → **Variables**，新增 `VITE_ORBIT_SYNC_PROXY_URL`，值是這個含 `/sync` 的完整網址。推送到 `main` 後站台建置時內建進去；設定了這個變數的話，`VITE_ORBIT_SYNC_PROJECT_ID` 就不會再被使用（Project ID 已經只存在 Worker 的環境變數裡，不再進到瀏覽器端的程式碼）。
 
 沒設定 `VITE_ORBIT_SYNC_PROXY_URL` 就是退回「基本設定」的直連 Firestore 模式——這個 Worker 完全是加分項，不是跨裝置同步能不能用的必要條件。
 
@@ -301,7 +301,7 @@ src/strings.js         畫面文字對照表
 src/main.js            進入點，依序 import 以上每個模組
 ```
 
-`cloudflare-worker/`（`gemini-proxy-worker.js`、`sync-proxy-worker.js`）各自獨立部署到 Cloudflare Workers，不屬於 `src/` 的相依圖，不會被 Vite 打包——是唯二跑在伺服器端的程式碼，兩支都是可選的：沒部署就分別退回「AI 匯入功能尚未設定」和直連 Firestore。
+`cloudflare-worker/orbit-worker.js` 獨立部署到 Cloudflare Workers，不屬於 `src/` 的相依圖，不會被 Vite 打包——是唯一跑在伺服器端的程式碼。同一支檔案用路徑（`/gemini`、`/sync`）服務兩個各自可選的功能：都沒部署/設定就分別退回「AI 匯入功能尚未設定」和直連 Firestore。
 
 每個檔案開頭有一行註解說明職責。改程式碼前值得知道的幾個約定：
 

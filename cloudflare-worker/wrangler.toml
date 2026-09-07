@@ -1,24 +1,45 @@
 # Optional: only needed if you deploy this worker with the Wrangler CLI
-# instead of pasting gemini-proxy-worker.js into the Cloudflare dashboard's
-# online editor (the dashboard route needs no CLI or local install at all -
-# see README's "AI 辨識課表照片" section, which documents both paths).
+# instead of pasting orbit-worker.js into the Cloudflare dashboard's online
+# editor (the dashboard route needs no CLI or local install at all - see
+# README, which documents both paths for each feature).
 #
 # CLI path:
 #   npx wrangler login
 #   npx wrangler deploy
 #   npx wrangler secret put GEMINI_API_KEY
+#   npx wrangler secret put FIREBASE_CLIENT_EMAIL
+#   npx wrangler secret put FIREBASE_PRIVATE_KEY
 #   npx wrangler kv namespace create RATE_LIMIT_KV
 #     (then uncomment the [[kv_namespaces]] block below with the printed id)
-name = "orbit-ai-gemini-proxy"
-main = "gemini-proxy-worker.js"
+name = "orbit-worker"
+main = "orbit-worker.js"
 compatibility_date = "2025-01-01"
+
+# Only needed for the /sync path (see orbit-worker.js's handleSyncRequest).
+# Not a secret on its own - it's already public today in the no-proxy
+# fallback path (VITE_ORBIT_SYNC_PROJECT_ID ships inside the client JS
+# bundle) - kept as a plain var here so it's easy to see/change in the
+# dashboard without needing "reveal secret".
+[vars]
+FIREBASE_PROJECT_ID = "<your Firebase project ID, only needed for /sync>"
+
+# GEMINI_API_KEY (for /gemini) and FIREBASE_CLIENT_EMAIL / FIREBASE_PRIVATE_KEY
+# (for /sync, from Firebase Console -> Project Settings -> Service accounts
+# -> Generate new private key) are set as Secrets, not [vars] - see the CLI
+# commands above, or the dashboard's Settings -> Variables and Secrets.
+# Treat the Firebase service-account key like a password: it grants full
+# read/write access to that Firebase project, bypassing Firestore Security
+# Rules entirely (that's the whole point - see orbit-worker.js's /sync
+# comment). Either feature works independently of the other being
+# configured - see orbit-worker.js's top-of-file comment.
 
 # Optional but recommended: a real, cross-request rate limit instead of the
 # in-memory per-isolate fallback the worker uses when this isn't bound - see
-# gemini-proxy-worker.js's isRateLimited(). Free on Cloudflare's Workers KV
-# free tier (no billing account needed). Dashboard path: Workers & Pages ->
-# KV -> Create namespace -> name it anything -> back on this Worker's
-# Settings -> Bindings -> Add -> KV Namespace -> variable name
+# orbit-worker.js's isRateLimited(). Shared by both /gemini and /sync (their
+# keys are prefixed per-feature and never collide). Free on Cloudflare's
+# Workers KV free tier (no billing account needed). Dashboard path: Workers
+# & Pages -> KV -> Create namespace -> name it anything -> back on this
+# Worker's Settings -> Bindings -> Add -> KV Namespace -> variable name
 # RATE_LIMIT_KV -> pick the namespace you just created.
 # [[kv_namespaces]]
 # binding = "RATE_LIMIT_KV"

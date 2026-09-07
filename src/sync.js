@@ -13,7 +13,7 @@
 //
 // Two ways this can reach Firestore, chosen at build time:
 //   - VITE_ORBIT_SYNC_PROXY_URL set: every read/write goes through a
-//     Cloudflare Worker (see cloudflare-worker/sync-proxy-worker.js) that
+//     Cloudflare Worker (see cloudflare-worker/orbit-worker.js's /sync path) that
 //     holds its own Firebase service-account credentials server-side and
 //     applies real, cross-request rate limiting - the same reasoning as
 //     gemini-ocr.js talking to the Gemini proxy instead of Gemini directly.
@@ -146,7 +146,7 @@ async function firestoreErrorMessage(response) {
   return errorJson.error?.message || response.statusText || `HTTP ${response.status}`;
 }
 // The proxy's own errors (rate limit, bad code, upstream failure) come back
-// as the same `{error:{message}}` shape as gemini-proxy-worker.js, but a 429
+// as the same `{error:{message}}` shape as orbit-worker.js's /gemini path, but a 429
 // gets its own friendlier text here rather than whatever the Worker's own
 // (already-friendly, but sync-context-less) message says.
 async function proxyErrorMessage(response) {

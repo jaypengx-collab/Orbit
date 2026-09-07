@@ -93,7 +93,7 @@ class AIVisionProcessor {
     const base64Data = canvas.toDataURL('image/jpeg', 0.9).replace(/^data:image\/jpeg;base64,/, '');
 
     // The prompt text and generation config are NOT sent from here - the
-    // proxy (cloudflare-worker/gemini-proxy-worker.js) owns both and builds
+    // proxy (cloudflare-worker/orbit-worker.js's /gemini path) owns both and builds
     // the full Gemini request itself from just {model, image}. That's
     // deliberate: it means the proxy can only ever be used to run this
     // app's own fixed timetable-extraction prompt against a submitted
