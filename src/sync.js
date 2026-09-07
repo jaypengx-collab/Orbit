@@ -288,7 +288,24 @@ async function orbitSyncCreate() {
   setSyncStatusUi('同步已建立，可在另一台裝置輸入代碼加入。');
   startSyncLoop();
 }
-function orbitSyncJoin() {
+// A lightweight existence check, deliberately not going through
+// setSyncPairing/pullSyncSnapshot - those read the *currently paired*
+// project/code from localStorage, but orbitSyncJoin needs to check a code
+// before committing to anything (or showing a warning that only makes
+// sense if the code actually has data to overwrite with).
+async function checkSyncCodeExists(projectId, code) {
+  try {
+    const response = await fetch(docUrl(projectId, code));
+    if (response.status === 404) return { ok: true, exists: false };
+    if (!response.ok)
+      return { ok: false, error: `同步檢查失敗：${await firestoreErrorMessage(response)}` };
+    return { ok: true, exists: true };
+  } catch (error) {
+    return { ok: false, error: `同步檢查失敗：${error.message || error}` };
+  }
+}
+
+async function orbitSyncJoin() {
   const projectId = DEFAULT_PROJECT_ID || document.getElementById('sync-project-id')?.value.trim();
   const code = document.getElementById('sync-join-code')?.value.trim();
   if (!projectId) {
@@ -305,18 +322,38 @@ function orbitSyncJoin() {
   // purpose, matching "one or more devices as manager" rather than "exactly
   // one".
   const asManager = !!document.getElementById('sync-join-as-manager')?.checked;
-  // Joining pulls whatever is already published under that code (if
-  // anything) and applies it immediately - overwriting this device's
-  // current schedule - so this warns before doing anything, rather than
-  // silently replacing data the user might not have backed up.
+  const normalizedCode = code.toUpperCase();
+
+  // Check the code actually has something to join *before* ever showing
+  // the overwrite warning below - a nonexistent/mistyped code has nothing
+  // to overwrite with, so warning about data loss and then failing anyway
+  // (the bug performSyncJoin's own `exists` check already prevents) was
+  // just a confusing, pointless extra step. Fail fast with the real error
+  // instead.
+  setSyncStatusUi('正在檢查配對代碼…');
+  const check = await checkSyncCodeExists(projectId, normalizedCode);
+  if (!check.ok) {
+    setSyncStatusUi(check.error, true);
+    return;
+  }
+  if (!check.exists) {
+    setSyncStatusUi('找不到這組配對代碼，請確認代碼是否正確，或請對方先按「建立新同步」。', true);
+    return;
+  }
+
+  // Joining pulls whatever is already published under that code and
+  // applies it immediately - overwriting this device's current schedule -
+  // so this warns before doing anything, rather than silently replacing
+  // data the user might not have backed up.
+  setSyncStatusUi('');
   setEditorConfirmContent(
     '加入同步？',
-    '如果這組代碼下已經有課表，加入後會立刻用該課表取代這台裝置目前的課表，且無法復原。建立同步的裝置目前的課表不會受影響。',
+    '這組代碼下已經有課表，加入後會立刻用該課表取代這台裝置目前的課表，且無法復原。建立同步的裝置目前的課表不會受影響。',
     '',
     '仍要加入',
     () => {
       hideEditorDiscardConfirm();
-      performSyncJoin(projectId, code, asManager);
+      performSyncJoin(projectId, normalizedCode, asManager);
     },
     '取消'
   );

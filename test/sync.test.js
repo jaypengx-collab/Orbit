@@ -325,17 +325,23 @@ describe('manager/viewer roles', () => {
   });
 });
 
-describe('orbitSyncJoin warns before wiping local data', () => {
-  it('shows a confirm sheet and does not pair or fetch anything until confirmed', () => {
+describe('orbitSyncJoin checks the code exists before ever warning about overwriting data', () => {
+  it('shows the confirm sheet (and pairs nothing yet) only once the code is confirmed to exist', async () => {
     document.getElementById('sync-project-id').value = 'demo-project';
     document.getElementById('sync-join-code').value = 'CODE1234';
-    const fetchMock = vi.fn();
+    const { encodeTransferData } = await import('../src/editor-backup.js');
+    const payload = await encodeTransferData(state.applicationData);
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ updateTime: 'now', fields: { payload: { stringValue: payload } } })
+    }));
     vi.stubGlobal('fetch', fetchMock);
 
-    sync.orbitSyncJoin();
+    await sync.orbitSyncJoin();
 
     expect(sync.isSyncConfigured()).toBe(false);
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(true);
     expect(document.getElementById('editor-confirm-title').textContent).toMatch(/加入同步/);
     expect(document.getElementById('editor-confirm-msg').textContent).toMatch(/取代/);
@@ -355,7 +361,7 @@ describe('orbitSyncJoin warns before wiping local data', () => {
       }))
     );
 
-    sync.orbitSyncJoin();
+    await sync.orbitSyncJoin();
     const confirmBtn = document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[1];
     confirmBtn.onclick();
     // performSyncJoin is async and fire-and-forget from the click handler -
@@ -367,37 +373,47 @@ describe('orbitSyncJoin warns before wiping local data', () => {
     expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(false);
   });
 
-  it('cancelling leaves the device unpaired', () => {
+  it('cancelling leaves the device unpaired', async () => {
     document.getElementById('sync-project-id').value = 'demo-project';
     document.getElementById('sync-join-code').value = 'CODE1234';
-    const fetchMock = vi.fn();
+    const { encodeTransferData } = await import('../src/editor-backup.js');
+    const payload = await encodeTransferData(state.applicationData);
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ updateTime: 'now', fields: { payload: { stringValue: payload } } })
+    }));
     vi.stubGlobal('fetch', fetchMock);
 
-    sync.orbitSyncJoin();
+    await sync.orbitSyncJoin();
     const cancelBtn = document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[0];
     cancelBtn.onclick();
 
     expect(sync.isSyncConfigured()).toBe(false);
-    expect(fetchMock).not.toHaveBeenCalled();
+    // Only the existence check should have fired - cancelling never pulls/pairs.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(false);
   });
 
-  it('bug regression: confirming a join to a code nobody created does not report success', async () => {
+  // The bug report this fold is named for: entering a code nobody created
+  // used to still pop the "this will overwrite your data" confirmation,
+  // which was both misleading (there was never anything to overwrite with)
+  // and pointless (performSyncJoin's own check would have rejected it
+  // anyway after the user clicked through the warning). Now the existence
+  // check happens first, so a bad code fails immediately with a clear
+  // error and the overwrite confirmation never appears at all.
+  it('a nonexistent code rejects immediately with a clear error - no overwrite confirmation ever shown', async () => {
     document.getElementById('sync-project-id').value = 'demo-project';
     document.getElementById('sync-join-code').value = 'NOBODY99';
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => ({ status: 404, ok: false }))
-    );
+    const fetchMock = vi.fn(async () => ({ status: 404, ok: false }));
+    vi.stubGlobal('fetch', fetchMock);
 
-    sync.orbitSyncJoin();
-    const confirmBtn = document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[1];
-    confirmBtn.onclick();
-    await Promise.resolve();
-    await Promise.resolve();
+    await sync.orbitSyncJoin();
 
     expect(sync.isSyncConfigured()).toBe(false);
     expect(document.getElementById('sync-status').textContent).toMatch(/找不到這組配對代碼/);
+    expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 
