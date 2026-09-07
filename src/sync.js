@@ -143,31 +143,36 @@ async function pushSyncSnapshot() {
 // Pulls the shared document and applies it only when it's actually newer
 // than the last version this device already has, and only when the editor
 // has no unsaved changes in progress (never clobber an in-progress edit).
+// `exists` distinguishes "404, nothing was ever published under this code"
+// from every other outcome (found the document, whether or not there was
+// anything new to apply) - performSyncJoin() needs that distinction to
+// refuse joining a code nobody has actually created yet, which callers
+// that only care about `applied` (syncTick's regular polling) can ignore.
 async function pullSyncSnapshot({ force = false } = {}) {
   const projectId = getSyncProjectId();
   const code = getSyncCode();
   if (!projectId || !code) return { ok: false, error: '尚未設定同步。' };
   try {
     const response = await fetch(docUrl(projectId, code));
-    if (response.status === 404) return { ok: true, applied: false };
+    if (response.status === 404) return { ok: true, applied: false, exists: false };
     if (!response.ok) throw new Error(await firestoreErrorMessage(response));
     const doc = await response.json();
     const remoteUpdateTime = doc.updateTime || '';
     const payload = doc.fields?.payload?.stringValue || '';
-    if (!payload) return { ok: true, applied: false };
+    if (!payload) return { ok: true, applied: false, exists: true };
     if (!force && remoteUpdateTime && remoteUpdateTime === readLocal(LAST_UPDATE_TIME_KEY)) {
-      return { ok: true, applied: false };
+      return { ok: true, applied: false, exists: true };
     }
-    if (isEditorDirty()) return { ok: true, applied: false };
+    if (isEditorDirty()) return { ok: true, applied: false, exists: true };
     const next = normalizeSettingsData(await decodeTransferData(payload), { requireMarker: true });
     if (JSON.stringify(next) === JSON.stringify(state.applicationData)) {
       writeLocal(LAST_UPDATE_TIME_KEY, remoteUpdateTime);
-      return { ok: true, applied: false };
+      return { ok: true, applied: false, exists: true };
     }
     applyEditorSettingsData(next, { statusMessage: '已從其他裝置同步課表。' });
     writeLocal(LAST_UPDATE_TIME_KEY, remoteUpdateTime);
     lastPushedSnapshot = JSON.stringify(state.applicationData);
-    return { ok: true, applied: true };
+    return { ok: true, applied: true, exists: true };
   } catch (error) {
     return { ok: false, error: `同步下載失敗：${error.message || error}` };
   }
@@ -327,20 +332,19 @@ async function performSyncJoin(projectId, code, asManager) {
     setSyncStatusUi(result.error, true);
     return;
   }
-  if (!result.applied && asManager) {
-    // No document yet under this code (or it matched what we already have)
-    // - publish this device's data so the code becomes a valid pairing. A
-    // viewer must never do this - it would mean seeding the shared
-    // schedule with whatever this device happened to already have, exactly
-    // the "editing" a receive-only device isn't supposed to do. If a viewer
-    // joins a code with nothing published yet, it just waits for the next
-    // poll to pick up whatever a manager eventually pushes.
-    const pushResult = await pushSyncSnapshot();
-    if (!pushResult.ok) {
-      clearSyncPairing();
-      setSyncStatusUi(pushResult.error, true);
-      return;
-    }
+  // "加入同步" only ever joins a sync someone already created (with
+  // "建立新同步", which auto-generates its own code and immediately
+  // publishes) - a 404 here means this code was mistyped or never created,
+  // not "an empty sync to adopt." Bug this used to have: this case reported
+  // success and paired the device anyway (worse for a viewer, who'd then
+  // just sit there forever receiving nothing, thinking it was synced).
+  // Refusing outright, for both roles, also removes the old "join as
+  // manager silently creates/publishes under whatever code you typed"
+  // fallback - that's what "建立新同步" is for.
+  if (!result.exists) {
+    clearSyncPairing();
+    setSyncStatusUi('找不到這組配對代碼，請確認代碼是否正確，或請對方先按「建立新同步」。', true);
+    return;
   }
   renderSyncPanel();
   setSyncStatusUi(asManager ? '已以管理者身份加入同步。' : '已加入同步（僅接收）。');

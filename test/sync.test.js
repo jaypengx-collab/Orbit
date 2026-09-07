@@ -96,7 +96,7 @@ describe('pullSyncSnapshot', () => {
       vi.fn(async () => ({ status: 404, ok: false }))
     );
     const result = await sync.pullSyncSnapshot();
-    expect(result).toEqual({ ok: true, applied: false });
+    expect(result).toEqual({ ok: true, applied: false, exists: false });
   });
 
   it('applies a remote payload that differs from the current schedule', async () => {
@@ -119,7 +119,7 @@ describe('pullSyncSnapshot', () => {
       }))
     );
     const result = await sync.pullSyncSnapshot();
-    expect(result).toEqual({ ok: true, applied: true });
+    expect(result).toEqual({ ok: true, applied: true, exists: true });
     expect(state.applicationData.teacherDB.Z).toEqual(['地理', '新老師', '']);
   });
 
@@ -138,7 +138,7 @@ describe('pullSyncSnapshot', () => {
     }));
     vi.stubGlobal('fetch', fetchMock);
     const result = await sync.pullSyncSnapshot();
-    expect(result).toEqual({ ok: true, applied: false });
+    expect(result).toEqual({ ok: true, applied: false, exists: true });
   });
 });
 
@@ -234,29 +234,45 @@ describe('manager/viewer roles', () => {
   // These exercise performSyncJoin directly - the actual pairing/pull/push
   // logic - rather than orbitSyncJoin's confirm-sheet wrapper (see the
   // "orbitSyncJoin warns before wiping local data" suite below for that).
-  it('performSyncJoin defaults to viewer and never publishes local data to an empty code', async () => {
+  it('performSyncJoin refuses a code nothing has been published under yet, for either role', async () => {
     const fetchMock = vi.fn(async (url, options) => {
-      // Only a GET (the pull) is expected - a viewer must never PATCH.
+      // A 404 must never lead to a PATCH, for either role - "加入" only
+      // ever joins an existing sync; a fresh/nonexistent code is a bug
+      // report ("joining a non-existent sync works"), not a valid join.
       expect(options?.method).not.toBe('PATCH');
       return { ok: false, status: 404 };
     });
     vi.stubGlobal('fetch', fetchMock);
+
     await sync.performSyncJoin('demo-project', 'EMPTY123', false);
-    expect(sync.isSyncConfigured()).toBe(true);
-    expect(sync.isSyncViewer()).toBe(true);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(sync.isSyncConfigured()).toBe(false);
+    expect(document.getElementById('sync-status').textContent).toMatch(/找不到這組配對代碼/);
+
+    await sync.performSyncJoin('demo-project', 'EMPTY123', true);
+    expect(sync.isSyncConfigured()).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it('performSyncJoin pairs as manager when asked to, and may publish', async () => {
-    const fetchMock = vi.fn(async (url, options) => {
-      if (options?.method === 'PATCH')
-        return { ok: true, json: async () => ({ updateTime: 'now' }) };
-      return { ok: false, status: 404 };
-    });
-    vi.stubGlobal('fetch', fetchMock);
-    await sync.performSyncJoin('demo-project', 'EMPTY123', true);
+  it('performSyncJoin pairs as viewer or manager when the code actually has a published schedule', async () => {
+    const { encodeTransferData } = await import('../src/editor-backup.js');
+    const payload = await encodeTransferData(state.applicationData);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ updateTime: 'now', fields: { payload: { stringValue: payload } } })
+      }))
+    );
+
+    await sync.performSyncJoin('demo-project', 'CODE1234', false);
+    expect(sync.isSyncConfigured()).toBe(true);
+    expect(sync.isSyncViewer()).toBe(true);
+
+    sync.clearSyncPairing();
+    await sync.performSyncJoin('demo-project', 'CODE1234', true);
+    expect(sync.isSyncConfigured()).toBe(true);
     expect(sync.isSyncViewer()).toBe(false);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('syncTick only pulls for a viewer, even when the local schedule has "changed"', async () => {
@@ -328,9 +344,15 @@ describe('orbitSyncJoin warns before wiping local data', () => {
   it('joins only once the confirm button is actually clicked', async () => {
     document.getElementById('sync-project-id').value = 'demo-project';
     document.getElementById('sync-join-code').value = 'CODE1234';
+    const { encodeTransferData } = await import('../src/editor-backup.js');
+    const payload = await encodeTransferData(state.applicationData);
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => ({ status: 404, ok: false }))
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ updateTime: 'now', fields: { payload: { stringValue: payload } } })
+      }))
     );
 
     sync.orbitSyncJoin();
@@ -358,6 +380,24 @@ describe('orbitSyncJoin warns before wiping local data', () => {
     expect(sync.isSyncConfigured()).toBe(false);
     expect(fetchMock).not.toHaveBeenCalled();
     expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(false);
+  });
+
+  it('bug regression: confirming a join to a code nobody created does not report success', async () => {
+    document.getElementById('sync-project-id').value = 'demo-project';
+    document.getElementById('sync-join-code').value = 'NOBODY99';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ status: 404, ok: false }))
+    );
+
+    sync.orbitSyncJoin();
+    const confirmBtn = document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[1];
+    confirmBtn.onclick();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(sync.isSyncConfigured()).toBe(false);
+    expect(document.getElementById('sync-status').textContent).toMatch(/找不到這組配對代碼/);
   });
 });
 
