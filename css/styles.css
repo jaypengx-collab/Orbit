@@ -692,6 +692,10 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .settings-transfer-btn.primary:active{box-shadow:0 3px 10px color-mix(in srgb,var(--pro-accent) 20%,transparent)}
 .settings-transfer-status{min-height:18px;font-size:11px;line-height:1.35;color:var(--sub);white-space:pre-line}
 
+.sync-input{min-height:auto;height:42px;font-family:inherit;font-size:13px}
+.sync-divider{font-size:11px;color:var(--sub);text-align:center;margin:2px 0}
+.sync-active-code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:22px;font-weight:800;letter-spacing:.14em;text-align:center;padding:12px;border-radius:12px;background:rgba(0,0,0,.18);border:1px solid var(--bd);color:var(--accent);word-break:break-all}
+
 .ocr-import-box{display:flex;flex-direction:column;gap:9px;margin-top:14px;padding-top:14px;border-top:1px solid var(--bd)}
 .ocr-import-heading{font-size:10px;margin-bottom:3px;letter-spacing:.3px;font-weight:700;color:var(--sub);text-transform:uppercase}
 .ocr-import-file-input{display:none}

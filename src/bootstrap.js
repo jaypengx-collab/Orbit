@@ -8,6 +8,7 @@ import { mainClockTick, syncTestPlayPauseUi } from './dashboard-render.js';
 import { loadData } from './data.js';
 import { buildSchedule } from './schedule.js';
 import { state } from './state.js';
+import { renderSyncPanel, startSyncLoop } from './sync.js';
 
 // ---- js/bootstrap.js ----
 // Runs once every module below has finished defining its functions: loads saved
@@ -26,6 +27,8 @@ setInterval(mainClockTick, 1000);
 syncTestPlayPauseUi();
 syncTestToolbar();
 window.update();
+renderSyncPanel();
+startSyncLoop();
 
 // Caches the whole app shell so a return visit can load almost entirely
 // from disk instead of the network - see public/sw.js for the actual
