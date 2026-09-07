@@ -99,6 +99,20 @@ describe('pullSyncSnapshot', () => {
     expect(result).toEqual({ ok: true, applied: false, exists: false });
   });
 
+  it('also treats a 403 (the rule rejecting a malformed code) as not found, not an error', async () => {
+    sync.setSyncPairing('demo-project', 'CODE1234');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        status: 403,
+        ok: false,
+        json: async () => ({ error: { message: 'Missing or insufficient permissions.' } })
+      }))
+    );
+    const result = await sync.pullSyncSnapshot();
+    expect(result).toEqual({ ok: true, applied: false, exists: false });
+  });
+
   it('applies a remote payload that differs from the current schedule', async () => {
     sync.setSyncPairing('demo-project', 'CODE1234');
     const { encodeTransferData, normalizeSettingsData } = await import('../src/editor-backup.js');
@@ -414,6 +428,33 @@ describe('orbitSyncJoin checks the code exists before ever warning about overwri
     expect(document.getElementById('sync-status').textContent).toMatch(/找不到這組配對代碼/);
     expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(false);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  // A second bug found right after the first: Firestore's own rule
+  // rejects a GET for a code that doesn't match the expected 8-character
+  // shape with 403 (checked before it ever looks for a document), not
+  // 404. A mistyped code that happens to be a different length, or that
+  // includes a lowercase letter or an excluded character (0/1/I/O), was
+  // surfacing as a raw "同步檢查失敗：Missing or insufficient permissions"
+  // instead of the same friendly "找不到這組配對代碼" a genuine 404 gets -
+  // both mean the same thing to the user (this code isn't a real,
+  // joinable sync), so they should look the same.
+  it('a malformed code (403 from the rule, not 404) shows the same friendly "not found" error', async () => {
+    document.getElementById('sync-project-id').value = 'demo-project';
+    document.getElementById('sync-join-code').value = 'not-a-real-code';
+    const fetchMock = vi.fn(async () => ({
+      status: 403,
+      ok: false,
+      json: async () => ({ error: { message: 'Missing or insufficient permissions.' } })
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await sync.orbitSyncJoin();
+
+    expect(sync.isSyncConfigured()).toBe(false);
+    expect(document.getElementById('sync-status').textContent).toMatch(/找不到這組配對代碼/);
+    expect(document.getElementById('sync-status').textContent).not.toMatch(/permissions/i);
+    expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(false);
   });
 });
 

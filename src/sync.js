@@ -118,6 +118,19 @@ async function firestoreErrorMessage(response) {
   return errorJson.error?.message || response.statusText || `HTTP ${response.status}`;
 }
 
+// A GET Firestore rejects with 403 for a code that doesn't match the
+// expected shape (see README's recommended rule: `allow get: if
+// code.matches(...)`) - that check runs before Firestore ever looks for a
+// document, so from the app's perspective it's indistinguishable from "not
+// found": a real, generated code always matches that shape, so a 403 here
+// only ever means a mistyped/bogus code, never a genuine permissions
+// problem with an otherwise-valid one. Treated the same as 404 everywhere
+// "does this code exist" is asked, so the user sees "找不到這組配對代碼"
+// instead of a raw, confusing "Missing or insufficient permissions".
+function isCodeNotFoundStatus(status) {
+  return status === 404 || status === 403;
+}
+
 // Uploads the currently-saved schedule as-is (never the live, possibly
 // unsaved editor form) so sync can never publish a half-edited draft.
 async function pushSyncSnapshot() {
@@ -154,7 +167,7 @@ async function pullSyncSnapshot({ force = false } = {}) {
   if (!projectId || !code) return { ok: false, error: '尚未設定同步。' };
   try {
     const response = await fetch(docUrl(projectId, code));
-    if (response.status === 404) return { ok: true, applied: false, exists: false };
+    if (isCodeNotFoundStatus(response.status)) return { ok: true, applied: false, exists: false };
     if (!response.ok) throw new Error(await firestoreErrorMessage(response));
     const doc = await response.json();
     const remoteUpdateTime = doc.updateTime || '';
@@ -296,7 +309,7 @@ async function orbitSyncCreate() {
 async function checkSyncCodeExists(projectId, code) {
   try {
     const response = await fetch(docUrl(projectId, code));
-    if (response.status === 404) return { ok: true, exists: false };
+    if (isCodeNotFoundStatus(response.status)) return { ok: true, exists: false };
     if (!response.ok)
       return { ok: false, error: `同步檢查失敗：${await firestoreErrorMessage(response)}` };
     return { ok: true, exists: true };
