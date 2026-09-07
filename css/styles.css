@@ -724,6 +724,21 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
   pointer-events:none;
   opacity:.5;
 }
+/* editor-fold-transfer is otherwise exempt from the lock above (its own
+   sync create/join/unlink controls must always stay usable), but the AI
+   photo-import box and the legacy manual-backup fold's *import* button
+   live in that same always-visible panel and are still real ways to
+   overwrite the local schedule - so they get locked individually here.
+   Manual *export* stays enabled: reading out the currently-synced schedule
+   isn't editing it. gemini-ocr.js's click handler and
+   requestTransferAction() (editor-backup.js) both also refuse the
+   underlying action directly, same belt-and-suspenders reasoning as
+   saveEditor(). */
+.editor-sheet.sync-viewer-locked #ocr-import-box,
+.editor-sheet.sync-viewer-locked #settings-import-btn{
+  pointer-events:none;
+  opacity:.5;
+}
 
 /* Manual export/import, demoted inside the transfer panel now that sync is the
    default (see editor-fold-transfer). A plain <details>, deliberately not

@@ -291,6 +291,22 @@ describe('manager/viewer roles', () => {
     window.saveEditor();
     expect(document.getElementById('sync-status').textContent).toMatch(/僅接收模式/);
   });
+
+  it('requestTransferAction refuses a manual import while locked as a viewer, but leaves export alone', () => {
+    sync.setSyncPairing('demo-project', 'CODE1234', 'viewer');
+    sync.renderSyncPanel();
+    document.getElementById('sync-status').textContent = '';
+
+    window.requestTransferAction('import');
+    expect(document.getElementById('sync-status').textContent).toMatch(/僅接收模式/);
+
+    // Export isn't refused by this guard (only 'import' is checked) - it
+    // proceeds into the normal async export flow instead of hitting the
+    // viewer-refusal message.
+    document.getElementById('sync-status').textContent = '';
+    window.requestTransferAction('export');
+    expect(document.getElementById('sync-status').textContent).toBe('');
+  });
 });
 
 describe('orbitSyncJoin warns before wiping local data', () => {

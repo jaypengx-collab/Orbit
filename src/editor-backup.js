@@ -40,6 +40,7 @@ import {
 } from './editor-schedule.js';
 import { renderEditorTeachers } from './editor-teachers.js';
 import { buildSchedule } from './schedule.js';
+import { isSyncViewer, setSyncStatusUi } from './sync.js';
 
 // ---- js/editor-backup.js ----
 // Reads the editor form and converts it into the app data shape.
@@ -181,6 +182,15 @@ function runTransferAction(action) {
   } else previewImportEditorSettings();
 }
 function requestTransferAction(action) {
+  // Belt-and-suspenders, same as saveEditor(): the editor UI already locks
+  // the manual-import button down for a viewer device (see styles.css's
+  // .sync-viewer-locked and src/sync.js's applyEditorRoleLock), but that's
+  // a CSS/pointer-events lock, not real access control. Export stays
+  // allowed - reading out the current (received) schedule isn't editing.
+  if (action === 'import' && isSyncViewer()) {
+    setSyncStatusUi('此裝置為僅接收模式，無法匯入。如要自行編輯，請先解除同步。', true);
+    return;
+  }
   if (!isEditorDirty()) {
     runTransferAction(action);
     return;

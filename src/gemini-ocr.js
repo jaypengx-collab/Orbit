@@ -10,6 +10,7 @@ import {
 } from './editor-backup.js';
 import { formatClassLabel } from './editor-core.js';
 import { updateTeacherCardAvatar } from './editor-teachers.js';
+import { isSyncViewer } from './sync.js';
 
 // ---- js/gemini-ocr.js ----
 // Loads a chosen photo into a plain canvas at its native colour (no destructive filtering),
@@ -617,6 +618,14 @@ function mountOCRImporter({ runButton, imagePreview, status, result, onImport })
 
   runButton.addEventListener('click', async () => {
     if (!source) return;
+    // Belt-and-suspenders, same as saveEditor()/requestTransferAction(): the
+    // editor UI already disables this button for a viewer device (see
+    // styles.css's .sync-viewer-locked), but that's a CSS/pointer-events
+    // lock, not real access control.
+    if (isSyncViewer()) {
+      status('此裝置為僅接收模式，無法使用 AI 匯入。如要自行編輯，請先解除同步。', true);
+      return;
+    }
     if (!isGeminiProxyConfigured()) {
       status('AI 匯入功能尚未設定，請聯絡課表管理者。', true);
       return;
