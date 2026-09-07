@@ -151,16 +151,25 @@ function isRateLimitedInMemory(ip) {
   return limited;
 }
 
+// Returns { limited, backend } rather than a plain boolean so the caller can
+// surface `backend` as a response header (see X-RateLimit-Backend below) -
+// there's no way to inspect a live Worker's internal state otherwise (no log
+// access from outside the Cloudflare dashboard), and "is the binding even
+// wired up, and if not why" turned out to need a real answer, not another
+// guess, after the binding and deployed code both checked out correct on
+// their own and it still wasn't engaging.
 async function isRateLimited(env, ip) {
   if (env.RATE_LIMIT_KV) {
     try {
-      return await isRateLimitedKV(env.RATE_LIMIT_KV, ip);
-    } catch {
-      // KV erroring shouldn't take the whole endpoint down - fall through
-      // to the weaker in-memory check rather than failing the request.
+      return { limited: await isRateLimitedKV(env.RATE_LIMIT_KV, ip), backend: 'kv' };
+    } catch (error) {
+      return {
+        limited: isRateLimitedInMemory(ip),
+        backend: `kv-error:${(error && error.message) || error}`
+      };
     }
   }
-  return isRateLimitedInMemory(ip);
+  return { limited: isRateLimitedInMemory(ip), backend: 'memory-no-binding' };
 }
 
 export default {
@@ -172,7 +181,12 @@ export default {
     if (request.method !== 'POST') return json({ error: { message: 'POST only' } }, 405, headers);
 
     const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-    if (await isRateLimited(env, ip)) {
+    const rateLimit = await isRateLimited(env, ip);
+    // Diagnostic only - not sensitive (no IPs, no counts, just which code
+    // path ran) - on every response so it can be checked with one curl
+    // request instead of needing dashboard log access.
+    headers['X-RateLimit-Backend'] = rateLimit.backend;
+    if (rateLimit.limited) {
       return json({ error: { message: '請求過於頻繁，請稍後再試。' } }, 429, headers);
     }
 
