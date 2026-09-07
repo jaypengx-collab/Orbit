@@ -141,30 +141,44 @@ describe('pullSyncSnapshot', () => {
   });
 });
 
-describe('editor navigation reaches the sync panel', () => {
-  // jsdom's inline onclick="..." attributes don't resolve bare identifiers
-  // against window the way a real browser does (no existing test in this
-  // suite relies on .click() for that reason - see README's note that
-  // editor UI flows are otherwise only verified manually). So this checks
-  // the two things that actually matter: the drill button's markup really
-  // targets editor-fold-sync, and calling the handler it names actually
-  // reveals that fold - together they cover what .click() would exercise
-  // in a real browser.
-  it('the "同步" drill button on the schedule page targets editor-fold-sync', () => {
+describe('the sync panel is merged into import/export, not a separate paged fold', () => {
+  // Sync used to be its own page-layer fold reached via a dedicated drill
+  // button; it's now folded into editor-fold-transfer, the always-visible
+  // tools panel at the bottom of the editor (see editor-core.js's
+  // moveEditorControlsIntoLayers/openEditorFold, which both special-case
+  // that panel so it never gets hidden by the paged schedule/teachers/bells
+  // navigation). So there's no separate drill button or fold id to check
+  // for any more - just that the sync UI lives inside that always-visible
+  // panel as its default option, ahead of the demoted manual-backup fold.
+  it('there is no dedicated "同步" drill button any more', () => {
     window.openEditor();
-    const drillBtn = [...document.querySelectorAll('.editor-drill-btn')].find(
-      button => button.textContent.trim() === '同步'
+    const labels = [...document.querySelectorAll('.editor-drill-btn')].map(button =>
+      button.textContent.trim()
     );
-    expect(drillBtn).toBeTruthy();
-    expect(drillBtn.getAttribute('onclick')).toBe("openEditorFold('editor-fold-sync')");
+    expect(labels).not.toContain('同步');
   });
 
-  it("openEditorFold('editor-fold-sync') reveals the sync panel", () => {
+  it('editor-fold-transfer is the always-visible tools panel and contains the sync UI', () => {
     window.openEditor();
-    window.openEditorFold('editor-fold-sync');
-    const fold = document.getElementById('editor-fold-sync');
-    expect(fold.classList.contains('active')).toBe(true);
-    expect(fold.querySelector('#sync-setup-box')).toBeTruthy();
+    const transfer = document.getElementById('editor-fold-transfer');
+    expect(transfer.classList.contains('editor-save-tools')).toBe(true);
+    expect(transfer.querySelector('#sync-setup-box')).toBeTruthy();
+    expect(transfer.querySelector('#sync-active-box')).toBeTruthy();
+  });
+
+  it('the manual export/import UI is demoted into a nested, collapsed disclosure', () => {
+    window.openEditor();
+    const legacyFold = document.getElementById('legacy-transfer-fold');
+    expect(legacyFold).toBeTruthy();
+    expect(legacyFold.open).toBe(false);
+    expect(legacyFold.querySelector('#settings-transfer-text')).toBeTruthy();
+    // Sync's markup comes before the legacy fold in the panel body, matching
+    // "sync is the default, manual backup is the fallback".
+    const transfer = document.getElementById('editor-fold-transfer');
+    const syncBox = transfer.querySelector('#sync-setup-box');
+    expect(
+      syncBox.compareDocumentPosition(legacyFold) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
   });
 });
 

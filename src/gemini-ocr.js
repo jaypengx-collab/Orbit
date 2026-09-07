@@ -54,35 +54,14 @@ function capCanvasDimension(canvas, maxDimension = 1600) {
 // True while a Gemini OCR request is in flight; the editor sheet checks this to block
 // closing mid-recognition (closing would abandon the in-progress import silently).
 
-// When set (build-time env var, see README), AI import calls this server-side proxy
-// instead of Gemini directly - the proxy holds the real key (Secret Manager, never
-// shipped to the client) and forwards the request, so users never need a Gemini key
-// of their own. Unset (e.g. a fork built from source without the proxy deployed)
-// falls back to the original bring-your-own-key flow below.
+// AI import always goes through this server-side proxy (build-time env var, see
+// README) - the proxy holds the real Gemini key (Secret Manager, never shipped to
+// the client) and forwards the request, so users never need a Gemini key of their
+// own. A fork built from source without the proxy deployed just leaves the feature
+// unavailable (see isGeminiProxyConfigured's callers) rather than asking for a key.
 const GEMINI_PROXY_URL = (import.meta.env.VITE_ORBIT_GEMINI_PROXY_URL || '').trim();
 function isGeminiProxyConfigured() {
   return !!GEMINI_PROXY_URL;
-}
-
-// Gemini API keys are user-supplied and kept only in this browser's localStorage; never
-// hardcode a real key in this file (it would be exposed to anyone who opens/shares it).
-const GEMINI_API_KEY_STORAGE_KEY = 'orbitAiGeminiApiKey';
-
-function getStoredGeminiApiKey() {
-  try {
-    return (localStorage.getItem(GEMINI_API_KEY_STORAGE_KEY) || '').trim();
-  } catch {
-    return '';
-  }
-}
-
-function setStoredGeminiApiKey(key) {
-  try {
-    if (key) localStorage.setItem(GEMINI_API_KEY_STORAGE_KEY, key);
-    else localStorage.removeItem(GEMINI_API_KEY_STORAGE_KEY);
-  } catch {
-    /* localStorage unavailable (private browsing, etc.) */
-  }
 }
 
 class AIVisionProcessor {
@@ -144,7 +123,7 @@ Interpret the timetable visually and use your best judgment to reconstruct its s
     return base;
   }
 
-  async recognizeSchedule(canvas, apiKey, onProgress) {
+  async recognizeSchedule(canvas, onProgress) {
     const report = message => {
       try {
         onProgress?.(message);
@@ -152,9 +131,7 @@ Interpret the timetable visually and use your best judgment to reconstruct its s
         /* ignore progress callback errors */
       }
     };
-    const usingProxy = !!GEMINI_PROXY_URL;
-    const trimmedKey = String(apiKey || '').trim();
-    if (!usingProxy && !trimmedKey) throw new Error('請先輸入 Gemini API 金鑰。');
+    if (!GEMINI_PROXY_URL) throw new Error('AI 匯入功能尚未設定，請聯絡課表管理者。');
 
     report('正在壓縮並編碼圖片…');
     const base64Data = canvas.toDataURL('image/jpeg', 0.9).replace(/^data:image\/jpeg;base64,/, '');
@@ -164,17 +141,14 @@ Interpret the timetable visually and use your best judgment to reconstruct its s
     let lastError = null;
     for (const model of this.geminiModels) {
       report(`正在請求 AI 模型（${model}）分析課表…`);
-      const url = usingProxy
-        ? GEMINI_PROXY_URL
-        : `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(trimmedKey)}`;
       const requestBody = JSON.stringify({
-        ...(usingProxy ? { model } : {}),
+        model,
         contents: [{ parts: [promptPart, imagePart] }],
         generationConfig: this.buildGenerationConfig(model)
       });
       let response;
       try {
-        response = await fetch(url, {
+        response = await fetch(GEMINI_PROXY_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: requestBody
@@ -192,13 +166,9 @@ Interpret the timetable visually and use your best judgment to reconstruct its s
       const errorJson = await response.json().catch(() => ({}));
       const message = errorJson.error?.message || response.statusText;
       if (response.status === 400 && /API_KEY_INVALID/.test(message)) {
-        throw new Error(
-          usingProxy
-            ? 'AI 服務目前無法使用，請稍後再試。'
-            : 'Gemini API 金鑰無效，請確認後重新輸入。'
-        );
+        throw new Error('AI 服務目前無法使用，請稍後再試。');
       }
-      if (response.status === 429 && usingProxy && /請求過於頻繁/.test(message)) {
+      if (response.status === 429 && /請求過於頻繁/.test(message)) {
         throw new Error(message);
       }
       // Retryable on the next model: retired/unknown model (404), overloaded (503), rate-limited (429), or transient server errors (5xx).
@@ -647,13 +617,9 @@ function mountOCRImporter({ runButton, imagePreview, status, result, onImport })
 
   runButton.addEventListener('click', async () => {
     if (!source) return;
-    let apiKey = '';
     if (!isGeminiProxyConfigured()) {
-      apiKey = getStoredGeminiApiKey();
-      if (!apiKey) {
-        apiKey = await promptGeminiApiKey();
-        if (!apiKey) return;
-      }
+      status('AI 匯入功能尚未設定，請聯絡課表管理者。', true);
+      return;
     }
     runButton.disabled = true;
     state.isOcrProcessing = true;
@@ -661,10 +627,8 @@ function mountOCRImporter({ runButton, imagePreview, status, result, onImport })
       const workingCanvas = capCanvasDimension(source.canvas, 1600);
 
       status('準備圖片中…');
-      const { candidate, modelUsed } = await aiProcessor.recognizeSchedule(
-        workingCanvas,
-        apiKey,
-        message => status(message)
+      const { candidate, modelUsed } = await aiProcessor.recognizeSchedule(workingCanvas, message =>
+        status(message)
       );
       status('正在驗證課表資料…');
       const validation = validator.validate(candidate);
@@ -684,49 +648,6 @@ function mountOCRImporter({ runButton, imagePreview, status, result, onImport })
   });
 
   return { loadFile };
-}
-
-// Shows a one-time modal asking for the Gemini API key; resolves with the trimmed key, or '' if cancelled.
-function promptGeminiApiKey() {
-  return new Promise(resolve => {
-    const overlay = document.getElementById('ocr-apikey-overlay');
-    const sheet = document.getElementById('ocr-apikey-sheet');
-    const keyInput = document.getElementById('ocr-apikey-input');
-    const confirmBtn = document.getElementById('ocr-apikey-confirm');
-    const cancelBtn = document.getElementById('ocr-apikey-cancel');
-
-    function close(result) {
-      overlay.classList.remove('show');
-      sheet.classList.remove('show');
-      overlay.setAttribute('aria-hidden', 'true');
-      overlay.onclick = null;
-      confirmBtn.onclick = null;
-      cancelBtn.onclick = null;
-      resolve(result);
-    }
-
-    function confirm() {
-      const key = keyInput.value.trim();
-      if (!key) {
-        keyInput.focus();
-        return;
-      }
-      setStoredGeminiApiKey(key);
-      close(key);
-    }
-
-    keyInput.value = '';
-    confirmBtn.onclick = confirm;
-    cancelBtn.onclick = () => close('');
-    overlay.onclick = () => close('');
-    keyInput.onkeydown = event => {
-      if (event.key === 'Enter') confirm();
-    };
-    overlay.classList.add('show');
-    sheet.classList.add('show');
-    overlay.setAttribute('aria-hidden', 'false');
-    requestAnimationFrame(() => keyInput.focus());
-  });
 }
 
 // Load the importer only when the image-import control is first used.
@@ -798,4 +719,4 @@ ocrImageInput?.addEventListener('change', async event => {
   await controller?.loadFile(file);
 });
 
-export { AIVisionProcessor, getStoredGeminiApiKey, isGeminiProxyConfigured, setStoredGeminiApiKey };
+export { AIVisionProcessor, isGeminiProxyConfigured };

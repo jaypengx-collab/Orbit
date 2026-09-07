@@ -185,7 +185,6 @@ function orderEditorFolds() {
     'editor-fold-teachers',
     'editor-fold-bells',
     'editor-fold-breaks',
-    'editor-fold-sync',
     'editor-fold-transfer'
   ].forEach(id => {
     const section = document.getElementById(id);

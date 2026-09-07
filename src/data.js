@@ -9,7 +9,6 @@ import {
   normalizeStyleSlots
 } from './appearance.js';
 import { editorTimeToMinutes } from './editor-core.js';
-import { getStoredGeminiApiKey } from './gemini-ocr.js';
 import { DEFAULT_STYLE_PRIMARY, DEFAULT_STYLE_SECONDARY } from './constants.js';
 
 // ---- js/data.js ----
@@ -171,8 +170,7 @@ function getDefaultData() {
     proAccent: DEFAULT_STYLE_PRIMARY,
     proSecondary: DEFAULT_STYLE_SECONDARY,
     proTertiary: DEFAULT_STYLE_SECONDARY,
-    styleSlots: normalizeStyleSlots([]),
-    geminiApiKey: getStoredGeminiApiKey()
+    styleSlots: normalizeStyleSlots([])
   };
 }
 
@@ -288,10 +286,7 @@ function loadData() {
       proAccent: normalizeProAccent(parsed.proAccent),
       proSecondary: normalizeProSecondary(parsed.proSecondary),
       proTertiary: normalizeProTertiary(parsed.proTertiary),
-      styleSlots: normalizeStyleSlots(parsed.styleSlots),
-      geminiApiKey: Object.prototype.hasOwnProperty.call(parsed, 'geminiApiKey')
-        ? String(parsed.geminiApiKey || '')
-        : getStoredGeminiApiKey()
+      styleSlots: normalizeStyleSlots(parsed.styleSlots)
     };
 
     return normalized;

@@ -37,8 +37,7 @@ export function buildFixtureData() {
     proAccent: '#0A84FF',
     proSecondary: '#5856D6',
     proTertiary: '#5856D6',
-    styleSlots: [],
-    geminiApiKey: ''
+    styleSlots: []
   };
 }
 

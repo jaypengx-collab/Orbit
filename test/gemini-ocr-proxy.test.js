@@ -46,7 +46,7 @@ describe('AIVisionProcessor.recognizeSchedule with a configured proxy', () => {
       'fetch',
       vi.fn(async () => fakeGeminiResponse({ teacherDB: {}, weeklySchedule: {} }))
     );
-    await expect(processor.recognizeSchedule(fakeCanvas(), '', () => {})).resolves.toMatchObject({
+    await expect(processor.recognizeSchedule(fakeCanvas(), () => {})).resolves.toMatchObject({
       modelUsed: 'gemini-3.6-flash'
     });
     vi.unstubAllGlobals();
@@ -62,7 +62,7 @@ describe('AIVisionProcessor.recognizeSchedule with a configured proxy', () => {
       return fakeGeminiResponse({ teacherDB: {}, weeklySchedule: {} });
     });
     vi.stubGlobal('fetch', fetchMock);
-    await processor.recognizeSchedule(fakeCanvas(), '', () => {});
+    await processor.recognizeSchedule(fakeCanvas(), () => {});
     expect(fetchMock).toHaveBeenCalledTimes(1);
     vi.unstubAllGlobals();
   });
@@ -76,7 +76,7 @@ describe('AIVisionProcessor.recognizeSchedule with a configured proxy', () => {
       json: async () => ({ error: { message: '請求過於頻繁，請稍後再試。' } })
     }));
     vi.stubGlobal('fetch', fetchMock);
-    await expect(processor.recognizeSchedule(fakeCanvas(), '', () => {})).rejects.toThrow(
+    await expect(processor.recognizeSchedule(fakeCanvas(), () => {})).rejects.toThrow(
       '請求過於頻繁，請稍後再試。'
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);

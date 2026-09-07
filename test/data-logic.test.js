@@ -156,8 +156,7 @@ describe('v2 backup encode/decode round-trip', () => {
       proAccent: '#123456',
       proSecondary: '#654321',
       proTertiary: '#abcdef',
-      styleSlots: [],
-      geminiApiKey: 'should-not-round-trip'
+      styleSlots: []
     });
 
     const encoded = await encodeTransferData(original);
@@ -174,24 +173,6 @@ describe('v2 backup encode/decode round-trip', () => {
     expect(decoded.countdownEvents).toEqual(original.countdownEvents);
     expect(decoded.reverseWeek).toBe(true);
     expect(decoded.proAccent).toBe('#123456');
-    // encodeTransferData/decodeTransferData round-trip whatever geminiApiKey
-    // they're given faithfully - the higher-level export flow
-    // (settingsDataForExport(), which builds its payload from the editor
-    // form rather than from applicationData) is what's responsible for the
-    // key never reaching this layer in the first place (README: "Gemini
-    // API Key 刻意存在另一把獨立的鍵...匯出課表備份不會連 Key 一起帶走").
-    expect(decoded.geminiApiKey).toBe('should-not-round-trip');
-  });
-
-  it('decodes an absent geminiApiKey as an empty string', async () => {
-    const original = normalizeSettingsData({
-      teacherDB: { A: ['數學', '王老師', ''] },
-      locationDB: { A: '101' },
-      weeklySchedule: { 1: ['A'] },
-      bellTimes: [['08:00', '08:50']]
-    });
-    const decoded = await decodeTransferData(await encodeTransferData(original));
-    expect(decoded.geminiApiKey).toBe('');
   });
 
   it('rejects text that is not a valid backup', async () => {

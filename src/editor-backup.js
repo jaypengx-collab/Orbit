@@ -39,7 +39,6 @@ import {
   saveEditor
 } from './editor-schedule.js';
 import { renderEditorTeachers } from './editor-teachers.js';
-import { getStoredGeminiApiKey, setStoredGeminiApiKey } from './gemini-ocr.js';
 import { buildSchedule } from './schedule.js';
 
 // ---- js/editor-backup.js ----
@@ -326,8 +325,7 @@ function encodeTransferPayloadV2(data) {
     data.proAccent,
     data.proSecondary,
     data.proTertiary,
-    styleSlotEntries,
-    data.geminiApiKey || ''
+    styleSlotEntries
   ];
 }
 function decodeTransferPayloadV2(array) {
@@ -342,8 +340,7 @@ function decodeTransferPayloadV2(array) {
     proAccent,
     proSecondary,
     proTertiary,
-    styleSlotEntries,
-    geminiApiKey
+    styleSlotEntries
   ] = array;
   const teacherDB = {},
     locationDB = {};
@@ -379,7 +376,6 @@ function decodeTransferPayloadV2(array) {
     proSecondary,
     proTertiary,
     styleSlots,
-    geminiApiKey,
     __orbit: { app: ORBIT_APP_ID, schema: ORBIT_STORAGE_SCHEMA }
   };
 }
@@ -512,9 +508,6 @@ function normalizeSettingsData(raw, { requireMarker = false } = {}) {
     countdownEvents,
     reverseWeek:
       typeof source.reverseWeek === 'boolean' ? source.reverseWeek : REVERSE_WEEK_LOGIC_DEFAULT,
-    geminiApiKey: Object.prototype.hasOwnProperty.call(source, 'geminiApiKey')
-      ? String(source.geminiApiKey || '')
-      : getStoredGeminiApiKey(),
     proAccent: normalizeProAccent(source.proAccent),
     proSecondary: normalizeProSecondary(source.proSecondary),
     proTertiary: normalizeProTertiary(source.proTertiary),
@@ -705,9 +698,6 @@ function describeSettingsDiff(current, next, { isImport = false } = {}) {
     lines.push(
       `單雙週對調：${current.reverseWeek ? '開啟' : '關閉'} -> ${next.reverseWeek ? '開啟' : '關閉'}`
     );
-  // Never print the key itself here — this text can end up on screen or pasted elsewhere.
-  if ((current.geminiApiKey || '') !== (next.geminiApiKey || ''))
-    lines.push(next.geminiApiKey ? 'Gemini API 金鑰：更新為匯入的金鑰' : 'Gemini API 金鑰：清除');
   const currentProAccent = normalizeProAccent(current.proAccent);
   const nextProAccent = normalizeProAccent(next.proAccent);
   const describeColorChange = (label, before, after) =>
@@ -919,12 +909,6 @@ function mergeImportedSettings(current, imported, preserveStyle = false) {
   if (current.reverseWeek !== imported.reverseWeek)
     replacedActions.push(`取代單雙週設定：${imported.reverseWeek ? '開啟' : '關閉'}`);
   merged.reverseWeek = imported.reverseWeek;
-  // Only a non-empty imported key replaces the current one — an older backup or an AI
-  // import saved before a key existed shouldn't silently wipe the one already stored.
-  if (imported.geminiApiKey && imported.geminiApiKey !== current.geminiApiKey) {
-    merged.geminiApiKey = imported.geminiApiKey;
-    replacedActions.push('更新 Gemini API 金鑰');
-  }
   // AI imports keep this browser's visual preferences; regular backups retain
   // the imported palette and saved presets.
   if (preserveStyle) {
@@ -1023,8 +1007,6 @@ function showEditorImportConfirm(current, next, isMerge, preserveStyle = false) 
 }
 function applyEditorSettingsData(next, { closeAfter = false, statusMessage = '' } = {}) {
   state.applicationData = cloneSettingsData(next);
-  if (Object.prototype.hasOwnProperty.call(state.applicationData, 'geminiApiKey'))
-    setStoredGeminiApiKey(state.applicationData.geminiApiKey);
   state.applicationData.proAccent = normalizeProAccent(state.applicationData.proAccent);
   state.applicationData.proSecondary = normalizeProSecondary(state.applicationData.proSecondary);
   state.applicationData.proTertiary = normalizeProTertiary(state.applicationData.proTertiary);

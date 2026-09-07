@@ -239,7 +239,6 @@
           <button type="button" class="editor-drill-btn" onclick="openEditorFold('editor-fold-bells')">節次</button>
           <button type="button" class="editor-drill-btn" onclick="openEditorFold('editor-fold-breaks')">時段</button>
           <button type="button" class="editor-drill-btn" onclick="openEditorFold('editor-fold-countdown')">倒數</button>
-          <button type="button" class="editor-drill-btn" onclick="openEditorFold('editor-fold-sync')">同步</button>
         </div>
         <div class="schedule-grid" id="schedule-grid">
         </div>
@@ -271,44 +270,7 @@
     </details>
     <details class="editor-fold" id="editor-fold-transfer">
       <summary class="editor-fold-summary">
-        匯入 / 匯出
-      </summary>
-      <div class="editor-fold-body">
-        <div class="settings-transfer-box">
-          <textarea id="settings-transfer-text" class="settings-transfer-text" spellcheck="false" placeholder="請在此貼上 Orbit AI 課表設定備份，或按下「匯出」建立備份。"></textarea>
-          <div class="editor-hint-body">這是 Orbit AI 課表設定備份文字。請複製完整內容，包含 BEGIN 與 END 標記。</div>
-          <div class="settings-transfer-actions">
-            <button type="button" id="settings-export-btn" class="settings-transfer-btn" onclick="requestTransferAction('export')">
-              匯出
-            </button>
-            <button type="button" id="settings-import-btn" class="settings-transfer-btn primary" onclick="requestTransferAction('import')">
-              匯入
-            </button>
-          </div>
-          <div id="settings-transfer-status" class="settings-transfer-status"></div>
-        </div>
-        <div class="ocr-import-box" id="ocr-import-box">
-          <div class="ocr-import-heading">圖片匯入</div>
-          <div class="editor-hint-body">選擇課表照片後，AI 會自動判讀整張照片中的課表內容，直接產出課程、教師與節次資料。</div>
-          <div class="ocr-import-file-row">
-            <label class="settings-transfer-btn" for="ocr-import-image">
-              選擇圖片
-            </label>
-            <div class="ocr-import-image-wrap" id="ocr-import-image-wrap">
-              <img id="ocr-import-image-preview" class="ocr-import-image-preview" alt="圖片預覽" hidden>
-            </div>
-            <div id="ocr-import-filename" class="ocr-import-filename">尚未選擇檔案</div>
-          </div>
-          <input id="ocr-import-image" class="ocr-import-file-input" type="file" accept="image/*">
-          <button type="button" id="ocr-import-detect" class="settings-transfer-btn primary" disabled>匯入</button>
-          <div id="ocr-import-status" class="settings-transfer-status" role="status"></div>
-          <div id="ocr-import-result" class="ocr-import-result" hidden></div>
-        </div>
-      </div>
-    </details>
-    <details class="editor-fold" id="editor-fold-sync">
-      <summary class="editor-fold-summary">
-        跨裝置同步
+        同步 / 匯入匯出
       </summary>
       <div class="editor-fold-body">
         <div class="settings-transfer-box" id="sync-setup-box">
@@ -337,6 +299,41 @@
           </div>
         </div>
         <div id="sync-status" class="settings-transfer-status"></div>
+        <details class="legacy-fold" id="legacy-transfer-fold">
+          <summary class="legacy-fold-summary">手動備份（舊版，不需要同步也能用）</summary>
+          <div class="legacy-fold-body">
+            <div class="settings-transfer-box">
+              <textarea id="settings-transfer-text" class="settings-transfer-text" spellcheck="false" placeholder="請在此貼上 Orbit AI 課表設定備份，或按下「匯出」建立備份。"></textarea>
+              <div class="editor-hint-body">這是 Orbit AI 課表設定備份文字。請複製完整內容，包含 BEGIN 與 END 標記。</div>
+              <div class="settings-transfer-actions">
+                <button type="button" id="settings-export-btn" class="settings-transfer-btn" onclick="requestTransferAction('export')">
+                  匯出
+                </button>
+                <button type="button" id="settings-import-btn" class="settings-transfer-btn primary" onclick="requestTransferAction('import')">
+                  匯入
+                </button>
+              </div>
+              <div id="settings-transfer-status" class="settings-transfer-status"></div>
+            </div>
+          </div>
+        </details>
+        <div class="ocr-import-box" id="ocr-import-box">
+          <div class="ocr-import-heading">圖片匯入</div>
+          <div class="editor-hint-body">選擇課表照片後，AI 會自動判讀整張照片中的課表內容，直接產出課程、教師與節次資料。</div>
+          <div class="ocr-import-file-row">
+            <label class="settings-transfer-btn" for="ocr-import-image">
+              選擇圖片
+            </label>
+            <div class="ocr-import-image-wrap" id="ocr-import-image-wrap">
+              <img id="ocr-import-image-preview" class="ocr-import-image-preview" alt="圖片預覽" hidden>
+            </div>
+            <div id="ocr-import-filename" class="ocr-import-filename">尚未選擇檔案</div>
+          </div>
+          <input id="ocr-import-image" class="ocr-import-file-input" type="file" accept="image/*">
+          <button type="button" id="ocr-import-detect" class="settings-transfer-btn primary" disabled>匯入</button>
+          <div id="ocr-import-status" class="settings-transfer-status" role="status"></div>
+          <div id="ocr-import-result" class="ocr-import-result" hidden></div>
+        </div>
       </div>
     </details>
     <button type="button" class="save-btn" onclick="saveEditor()">
@@ -390,24 +387,6 @@
     </button>
     <button type="button" class="editor-confirm-btn danger" onclick="discardEditorChangesAndClose()">
       捨棄
-    </button>
-  </div>
-</div>
-<div id="ocr-apikey-overlay" class="editor-confirm-overlay" aria-hidden="true"></div>
-<div id="ocr-apikey-sheet" class="editor-confirm-sheet ocr-apikey-sheet" role="alertdialog" aria-modal="true" aria-labelledby="ocr-apikey-title" aria-describedby="ocr-apikey-msg">
-  <h2 id="ocr-apikey-title" class="editor-confirm-title">
-    輸入 Gemini API 金鑰
-  </h2>
-  <p id="ocr-apikey-msg" class="editor-confirm-msg">
-    只需輸入一次，金鑰只會儲存在此瀏覽器，不會上傳或分享。
-  </p>
-  <input id="ocr-apikey-input" class="editor-input" type="password" autocomplete="off" spellcheck="false" placeholder="貼上 Gemini API 金鑰">
-  <div class="editor-confirm-actions">
-    <button type="button" id="ocr-apikey-cancel" class="editor-confirm-btn">
-      取消
-    </button>
-    <button type="button" id="ocr-apikey-confirm" class="editor-confirm-btn primary">
-      確定
     </button>
   </div>
 </div>

@@ -696,6 +696,16 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .sync-divider{font-size:11px;color:var(--sub);text-align:center;margin:2px 0}
 .sync-active-code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:22px;font-weight:800;letter-spacing:.14em;text-align:center;padding:12px;border-radius:12px;background:rgba(0,0,0,.18);border:1px solid var(--bd);color:var(--accent);word-break:break-all}
 
+/* Manual export/import, demoted inside the transfer panel now that sync is the
+   default (see editor-fold-transfer). A plain <details>, deliberately not
+   .editor-fold — it must stay outside the paged-editor/accordion machinery
+   that .editor-fold hooks into (initEditorAccordion, openEditorFold, etc.),
+   since it's just a disclosure nested inside that panel, not a page of its own. */
+.legacy-fold{margin-top:4px;border-radius:12px;border:1px solid var(--bd);overflow:hidden}
+.legacy-fold-summary{list-style:none;cursor:pointer;font-size:12px;font-weight:700;color:var(--sub);padding:10px 12px;user-select:none;-webkit-tap-highlight-color:transparent}
+.legacy-fold-summary::-webkit-details-marker{display:none}
+.legacy-fold-body{padding:0 12px 12px;display:flex;flex-direction:column;gap:9px}
+
 .ocr-import-box{display:flex;flex-direction:column;gap:9px;margin-top:14px;padding-top:14px;border-top:1px solid var(--bd)}
 .ocr-import-heading{font-size:10px;margin-bottom:3px;letter-spacing:.3px;font-weight:700;color:var(--sub);text-transform:uppercase}
 .ocr-import-file-input{display:none}
@@ -720,10 +730,6 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 #ocr-import-result .schedule-periods{overflow-x:auto;flex-wrap:nowrap;padding-bottom:3px}
 #ocr-import-result .period-select{flex:0 0 110px;width:110px;min-width:110px;min-height:40px}
 #ocr-import-result .settings-transfer-btn{min-height:42px;border-radius:12px;font-family:inherit;font-weight:800}
-
-.ocr-apikey-sheet{width:min(calc(100vw - 24px),400px)}
-.ocr-apikey-sheet .editor-confirm-msg{margin-bottom:16px}
-.ocr-apikey-sheet .editor-input{width:100%;min-height:48px;margin-bottom:4px;letter-spacing:.2px;box-sizing:border-box;padding:12px 14px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;border-radius:12px;font-size:14px}
 
 .save-btn{width:100%;padding:14px;font-size:16px;font-weight:700;cursor:pointer;transition:transform .15s,opacity .15s,box-shadow .15s;margin-top:10px;min-height:42px;border:none;border-radius:14px;background:linear-gradient(135deg,var(--pro-action-bg),var(--pro-action-bg-2));color:var(--pro-action-text);box-shadow:0 8px 22px color-mix(in srgb,var(--pro-accent) 20%,transparent);backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%)}
 .save-btn:active{transform:scale(.97);opacity:.9;box-shadow:0 3px 10px color-mix(in srgb,var(--pro-accent) 22%,transparent)}
@@ -1035,7 +1041,7 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
   }
   .dashboard, .nav-bar, .nav-item.active, .top-action-btn, #btn-menu.top-action-btn, .exam-countdown,
   .modal-sheet, .test-panel, .style-panel, .editor-confirm-sheet,
-  .assign-sheet, .ocr-apikey-sheet, .top-actions-menu, .row.is-now, .row.is-next,
+  .assign-sheet, .top-actions-menu, .row.is-now, .row.is-next,
   .close-btn, .save-btn, .editor-primary-btn, .settings-transfer-btn.primary,
   .style-apply-btn, .teacher-assign, .editor-sheet, .modal-overlay, .editor-confirm-overlay{
     backdrop-filter:none !important;-webkit-backdrop-filter:none !important;
