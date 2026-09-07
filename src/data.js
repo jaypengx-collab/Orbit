@@ -315,6 +315,7 @@ export {
   REVERSE_WEEK_LOGIC_DEFAULT,
   dayNames,
   formatCountdownEventDate,
+  getDefaultData,
   isValidTimeRange,
   loadData,
   normalizeCountdownEvent,
