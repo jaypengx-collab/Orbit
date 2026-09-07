@@ -294,6 +294,16 @@ function pemToDer(pem) {
     .trim()
     .replace(/-----BEGIN PRIVATE KEY-----/, '')
     .replace(/-----END PRIVATE KEY-----/, '')
+    // Handles pasting the key straight out of the downloaded JSON's
+    // `private_key` string value, literal backslash-n escapes and all,
+    // instead of the JSON-decoded value with real line breaks - a common
+    // copy-paste artifact since Cloudflare's secret box is a single text
+    // field either way. Order matters: this must run before the generic
+    // whitespace strip below, since a *real* newline is already whitespace
+    // but a literal `\n` (backslash then the letter n) is two ordinary,
+    // non-whitespace characters that would otherwise survive into the
+    // base64 string and corrupt it.
+    .replace(/\\n/g, '')
     .replace(/\s+/g, '');
   const binary = atob(b64);
   const bytes = new Uint8Array(binary.length);
