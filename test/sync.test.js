@@ -16,6 +16,7 @@ beforeEach(() => {
   sync.clearSyncPairing();
   document.getElementById('sync-project-id').value = '';
   document.getElementById('sync-join-code').value = '';
+  document.getElementById('sync-join-as-manager').checked = false;
 });
 
 afterEach(() => {
@@ -208,5 +209,88 @@ describe('orbitSyncCreate / orbitSyncJoin / orbitSyncUnlink UI wiring', () => {
     expect(sync.isSyncConfigured()).toBe(false);
     expect(document.getElementById('sync-setup-box').hidden).toBe(false);
     expect(document.getElementById('sync-active-box').hidden).toBe(true);
+  });
+});
+
+describe('manager/viewer roles', () => {
+  it('a device paired before roles existed defaults to manager (no retroactive lockout)', () => {
+    sync.setSyncPairing('demo-project', 'CODE1234');
+    localStorage.removeItem('orbitSyncRole');
+    expect(sync.getSyncRole()).toBe('manager');
+    expect(sync.isSyncViewer()).toBe(false);
+  });
+
+  it('orbitSyncCreate always pairs this device as manager', async () => {
+    document.getElementById('sync-project-id').value = 'demo-project';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, json: async () => ({ updateTime: 'now' }) }))
+    );
+    await sync.orbitSyncCreate();
+    expect(sync.getSyncRole()).toBe('manager');
+    expect(sync.isSyncViewer()).toBe(false);
+  });
+
+  it('orbitSyncJoin defaults to viewer and never publishes local data to an empty code', async () => {
+    document.getElementById('sync-project-id').value = 'demo-project';
+    document.getElementById('sync-join-code').value = 'EMPTY123';
+    const fetchMock = vi.fn(async (url, options) => {
+      // Only a GET (the pull) is expected - a viewer must never PATCH.
+      expect(options?.method).not.toBe('PATCH');
+      return { ok: false, status: 404 };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    await sync.orbitSyncJoin();
+    expect(sync.isSyncConfigured()).toBe(true);
+    expect(sync.isSyncViewer()).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('orbitSyncJoin pairs as manager when "以管理者身份加入" is checked, and may publish', async () => {
+    document.getElementById('sync-project-id').value = 'demo-project';
+    document.getElementById('sync-join-code').value = 'EMPTY123';
+    document.getElementById('sync-join-as-manager').checked = true;
+    const fetchMock = vi.fn(async (url, options) => {
+      if (options?.method === 'PATCH')
+        return { ok: true, json: async () => ({ updateTime: 'now' }) };
+      return { ok: false, status: 404 };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    await sync.orbitSyncJoin();
+    expect(sync.isSyncViewer()).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('syncTick only pulls for a viewer, even when the local schedule has "changed"', async () => {
+    sync.setSyncPairing('demo-project', 'CODE1234', 'viewer');
+    const fetchMock = vi.fn(async (url, options) => {
+      expect(options?.method).not.toBe('PATCH');
+      return { status: 404, ok: false };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    await sync.syncTick();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('applyEditorRoleLock locks the editor sheet for a viewer and unlocks it for a manager', () => {
+    window.openEditor();
+    const sheet = document.getElementById('editor-sheet');
+    sync.setSyncPairing('demo-project', 'CODE1234', 'viewer');
+    sync.renderSyncPanel();
+    expect(sheet.classList.contains('sync-viewer-locked')).toBe(true);
+    expect(document.getElementById('sync-role-label').textContent).toMatch(/僅接收/);
+
+    sync.setSyncPairing('demo-project', 'CODE1234', 'manager');
+    sync.renderSyncPanel();
+    expect(sheet.classList.contains('sync-viewer-locked')).toBe(false);
+    expect(document.getElementById('sync-role-label').textContent).toMatch(/管理者/);
+  });
+
+  it('saveEditor refuses to save while locked as a viewer, as a second line of defense', async () => {
+    sync.setSyncPairing('demo-project', 'CODE1234', 'viewer');
+    sync.renderSyncPanel();
+    document.getElementById('sync-status').textContent = '';
+    window.saveEditor();
+    expect(document.getElementById('sync-status').textContent).toMatch(/僅接收模式/);
   });
 });

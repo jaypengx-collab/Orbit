@@ -695,6 +695,34 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .sync-input{min-height:auto;height:42px;font-family:inherit;font-size:13px}
 .sync-divider{font-size:11px;color:var(--sub);text-align:center;margin:2px 0}
 .sync-active-code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:22px;font-weight:800;letter-spacing:.14em;text-align:center;padding:12px;border-radius:12px;background:rgba(0,0,0,.18);border:1px solid var(--bd);color:var(--accent);word-break:break-all}
+.sync-role-checkbox{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--sub);padding:2px 2px 4px}
+.sync-role-label{font-size:11px;font-weight:700;color:var(--accent);text-align:center}
+.sync-role-label.is-viewer{color:var(--sub)}
+
+/* A viewer device (see src/sync.js's isSyncViewer/applyEditorRoleLock) can
+   see its synced schedule but not edit it - every editor page except the
+   always-visible sync/import-export panel itself (#editor-fold-transfer,
+   never selected here so its unlink button always stays reachable) has its
+   whole body made inert and dimmed. pointer-events:none on the body (rather
+   than listing input/button/etc.) also catches non-form mutation controls
+   like the countdown/teacher drag handles; it's re-enabled on drill/back
+   buttons specifically so a locked device can still navigate between pages
+   to browse read-only. This is a UX guardrail, not real access control -
+   saveEditor() itself also refuses to save for a viewer (editor-schedule.js)
+   as a second line of defense. */
+.editor-sheet.sync-viewer-locked #editor-sheet-body > details.editor-fold:not(#editor-fold-transfer) .editor-fold-body{
+  pointer-events:none;
+  opacity:.5;
+}
+.editor-sheet.sync-viewer-locked #editor-sheet-body > details.editor-fold:not(#editor-fold-transfer) .editor-fold-body .editor-drill-btn,
+.editor-sheet.sync-viewer-locked #editor-sheet-body > details.editor-fold:not(#editor-fold-transfer) .editor-fold-body .editor-back-btn{
+  pointer-events:auto;
+  opacity:1;
+}
+.editor-sheet.sync-viewer-locked .save-btn{
+  pointer-events:none;
+  opacity:.5;
+}
 
 /* Manual export/import, demoted inside the transfer panel now that sync is the
    default (see editor-fold-transfer). A plain <details>, deliberately not

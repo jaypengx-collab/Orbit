@@ -22,6 +22,7 @@ import {
   sortEditorPeriodsByTime
 } from './editor-core.js';
 import { pad2 } from './schedule.js';
+import { isSyncViewer, setSyncStatusUi } from './sync.js';
 
 // ---- js/editor-schedule.js ----
 // Renders the day-by-day period dropdowns in the editor.
@@ -213,6 +214,15 @@ function deleteBreakRow(btn) {
 
 // Saves editor changes, rebuilds the schedule, and closes the editor.
 function saveEditor() {
+  // Belt-and-suspenders: the editor UI already locks itself down for a
+  // viewer device (see src/sync.js's applyEditorRoleLock), but this is a
+  // plain CSS/pointer-events lock, not real access control (same as the
+  // rest of sync - see README). Refusing here too means a save can't slip
+  // through even if something bypasses the UI lock.
+  if (isSyncViewer()) {
+    setSyncStatusUi('此裝置為僅接收模式，無法儲存變更。如要自行編輯，請先解除同步。', true);
+    return;
+  }
   sortEditorPeriodsByTime();
   sortEditorBreaksByTime();
   const draft = collectEditorFormState();

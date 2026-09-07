@@ -30,8 +30,11 @@ import {
 const DEFAULT_PROJECT_ID = (import.meta.env.VITE_ORBIT_SYNC_PROJECT_ID || '').trim();
 const PROJECT_ID_KEY = 'orbitSyncProjectId';
 const CODE_KEY = 'orbitSyncCode';
+const ROLE_KEY = 'orbitSyncRole';
 const LAST_UPDATE_TIME_KEY = 'orbitSyncLastUpdateTime';
 const POLL_INTERVAL_MS = 8000;
+const MANAGER_ROLE = 'manager';
+const VIEWER_ROLE = 'viewer';
 // 0/O/1/I excluded so a hand-copied or read-aloud code is never ambiguous.
 const CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 const CODE_LENGTH = 8;
@@ -64,12 +67,26 @@ function getSyncCode() {
 function isSyncConfigured() {
   return !!(getSyncProjectId() && getSyncCode());
 }
+// Devices that created or explicitly joined-as-manager a sync can edit and
+// publish changes; every other paired device defaults to (and can only
+// become) a viewer - it receives updates but is locked out of editing (see
+// isSyncViewer's callers: syncTick never pushes for one, and the editor UI
+// locks itself down - src/editor-core.js's applyEditorRoleLock). A device
+// paired before this feature existed has no role recorded yet; treating that
+// as 'manager' preserves its previous (both-can-edit) behavior rather than
+// retroactively locking someone out.
+function getSyncRole() {
+  return readLocal(ROLE_KEY).trim() === VIEWER_ROLE ? VIEWER_ROLE : MANAGER_ROLE;
+}
+function isSyncViewer() {
+  return isSyncConfigured() && getSyncRole() === VIEWER_ROLE;
+}
 function generateSyncCode() {
   const bytes = new Uint8Array(CODE_LENGTH);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, byte => CODE_ALPHABET[byte % CODE_ALPHABET.length]).join('');
 }
-function setSyncPairing(projectId, code) {
+function setSyncPairing(projectId, code, role = MANAGER_ROLE) {
   writeLocal(PROJECT_ID_KEY, String(projectId || '').trim());
   writeLocal(
     CODE_KEY,
@@ -77,12 +94,14 @@ function setSyncPairing(projectId, code) {
       .trim()
       .toUpperCase()
   );
+  writeLocal(ROLE_KEY, role === VIEWER_ROLE ? VIEWER_ROLE : MANAGER_ROLE);
   writeLocal(LAST_UPDATE_TIME_KEY, '');
   lastPushedSnapshot = null;
 }
 function clearSyncPairing() {
   writeLocal(PROJECT_ID_KEY, '');
   writeLocal(CODE_KEY, '');
+  writeLocal(ROLE_KEY, '');
   writeLocal(LAST_UPDATE_TIME_KEY, '');
   lastPushedSnapshot = null;
 }
@@ -164,11 +183,21 @@ function setSyncStatusUi(message, isError) {
 // both in the same tick - there's nothing to reconcile since a push always
 // means "we are already current" and a pull that changes anything updates
 // lastPushedSnapshot itself.
+//
+// A viewer never pushes, full stop - not even as a fallback if a local
+// mutation somehow slipped past the editor's UI lock (see
+// src/editor-core.js's applyEditorRoleLock). It only ever pulls, so it stays
+// a pure mirror of whatever a manager device published.
 async function syncTick() {
   if (!isSyncConfigured() || document.hidden || syncInFlight) return;
   syncInFlight = true;
   try {
     if (isEditorDirty()) return;
+    if (isSyncViewer()) {
+      const result = await pullSyncSnapshot();
+      if (!result.ok) setSyncStatusUi(result.error, true);
+      return;
+    }
     const currentSnapshot = JSON.stringify(state.applicationData);
     if (currentSnapshot !== lastPushedSnapshot) {
       const result = await pushSyncSnapshot();
@@ -195,6 +224,7 @@ function renderSyncPanel() {
   const setupBox = document.getElementById('sync-setup-box');
   const activeBox = document.getElementById('sync-active-box');
   const activeCode = document.getElementById('sync-active-code');
+  const roleLabel = document.getElementById('sync-role-label');
   const projectIdField = document.getElementById('sync-project-id');
   const setupHint = document.getElementById('sync-setup-hint');
   if (!setupBox || !activeBox) return;
@@ -202,11 +232,31 @@ function renderSyncPanel() {
   setupBox.hidden = configured;
   activeBox.hidden = !configured;
   if (configured && activeCode) activeCode.textContent = getSyncCode();
+  if (configured && roleLabel) {
+    const viewer = isSyncViewer();
+    roleLabel.textContent = viewer
+      ? '身份：僅接收（唯讀）— 課表會自動更新，但這台裝置無法編輯。'
+      : '身份：管理者 — 可以編輯課表，變更會同步到其他裝置。';
+    roleLabel.classList.toggle('is-viewer', viewer);
+  }
   if (projectIdField) projectIdField.hidden = hasDefaultSyncProjectId();
   if (setupHint)
     setupHint.textContent = hasDefaultSyncProjectId()
       ? '同步會把課表存到 Orbit AI 內建的同步伺服器，讓多台裝置自動保持一致，不需要自己申請任何帳號。'
       : '同步會把課表存到你自己的 Firebase 專案（Firestore），讓多台裝置自動保持一致。需要一個免費的 Firebase 專案。';
+  applyEditorRoleLock();
+}
+
+// Locks the rest of the editor down to view-only for a viewer device -
+// everything except the always-visible "同步 / 匯入匯出" panel itself (where
+// the unlink button that gets a viewer back to full local editing lives).
+// This is a UX guardrail, not a real access-control boundary - same as the
+// rest of sync's fully-open Firestore rules (see README) - so it's plain
+// CSS (.sync-viewer-locked, see styles.css) rather than anything that
+// actually removes the underlying form controls.
+function applyEditorRoleLock() {
+  const sheet = document.getElementById('editor-sheet');
+  if (sheet) sheet.classList.toggle('sync-viewer-locked', isSyncViewer());
 }
 
 // ---- UI entry points, exposed on window for index.html's onclick="..." ----
@@ -239,7 +289,13 @@ async function orbitSyncJoin() {
     setSyncStatusUi('請輸入配對代碼。', true);
     return;
   }
-  setSyncPairing(projectId, code);
+  // Joining defaults to view-only (the whole point of a manager/viewer
+  // split: most joining devices should just receive updates) - checking
+  // "以管理者身份加入" is how a second editable device gets added on
+  // purpose, matching "one or more devices as manager" rather than "exactly
+  // one".
+  const asManager = !!document.getElementById('sync-join-as-manager')?.checked;
+  setSyncPairing(projectId, code, asManager ? MANAGER_ROLE : VIEWER_ROLE);
   setSyncStatusUi('正在加入同步…');
   const result = await pullSyncSnapshot({ force: true });
   if (!result.ok) {
@@ -247,9 +303,14 @@ async function orbitSyncJoin() {
     setSyncStatusUi(result.error, true);
     return;
   }
-  if (!result.applied) {
+  if (!result.applied && asManager) {
     // No document yet under this code (or it matched what we already have)
-    // - publish this device's data so the code becomes a valid pairing.
+    // - publish this device's data so the code becomes a valid pairing. A
+    // viewer must never do this - it would mean seeding the shared
+    // schedule with whatever this device happened to already have, exactly
+    // the "editing" a receive-only device isn't supposed to do. If a viewer
+    // joins a code with nothing published yet, it just waits for the next
+    // poll to pick up whatever a manager eventually pushes.
     const pushResult = await pushSyncSnapshot();
     if (!pushResult.ok) {
       clearSyncPairing();
@@ -258,7 +319,7 @@ async function orbitSyncJoin() {
     }
   }
   renderSyncPanel();
-  setSyncStatusUi('已加入同步。');
+  setSyncStatusUi(asManager ? '已以管理者身份加入同步。' : '已加入同步（僅接收）。');
   startSyncLoop();
 }
 function orbitSyncUnlink() {
@@ -272,12 +333,15 @@ window.orbitSyncJoin = orbitSyncJoin;
 window.orbitSyncUnlink = orbitSyncUnlink;
 
 export {
+  applyEditorRoleLock,
   clearSyncPairing,
   generateSyncCode,
   getSyncCode,
   getSyncProjectId,
+  getSyncRole,
   hasDefaultSyncProjectId,
   isSyncConfigured,
+  isSyncViewer,
   orbitSyncCreate,
   orbitSyncJoin,
   orbitSyncUnlink,
@@ -285,6 +349,7 @@ export {
   pushSyncSnapshot,
   renderSyncPanel,
   setSyncPairing,
+  setSyncStatusUi,
   startSyncLoop,
   syncTick
 };
