@@ -220,6 +220,18 @@ function clearStoredData() {
   }
 }
 
+// Whether this browser has ever actually saved a schedule - i.e. a
+// brand-new user, as opposed to one who's just looking at the (indistinguish-
+// able-looking) default data loadData() also returns on a first run. Used to
+// decide whether to show the first-run onboarding prompt (src/onboarding.js).
+function hasSavedSchedule() {
+  try {
+    return !!localStorage.getItem('classFocusData');
+  } catch {
+    return false;
+  }
+}
+
 function loadData() {
   try {
     const raw = localStorage.getItem('classFocusData');
@@ -334,6 +346,7 @@ export {
   dayNames,
   formatCountdownEventDate,
   getDefaultData,
+  hasSavedSchedule,
   isValidTimeRange,
   loadData,
   normalizeCountdownEvent,

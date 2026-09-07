@@ -6,6 +6,7 @@ import { setStyleMode } from './appearance.js';
 import { syncTestToolbar } from './dashboard.js';
 import { mainClockTick, syncTestPlayPauseUi } from './dashboard-render.js';
 import { loadData } from './data.js';
+import { showOnboardingPrompt } from './onboarding.js';
 import { buildSchedule } from './schedule.js';
 import { state } from './state.js';
 import { renderSyncPanel, startSyncLoop } from './sync.js';
@@ -33,6 +34,14 @@ syncTestToolbar();
 window.update();
 renderSyncPanel();
 startSyncLoop();
+// Deferred rather than shown inline here: this runs before testsim-
+// runtime.js's finishBoot() clears the loading spinner (see main.js's
+// import order), so showing a modal this early would sit behind/under it.
+// A plain setTimeout still fires well after that regardless of exactly
+// where in the boot sequence it's scheduled from, since it can't run until
+// the current synchronous script (the rest of this module-import chain)
+// finishes - which is all "deferred" needs to mean here.
+setTimeout(showOnboardingPrompt, 400);
 
 // Caches the whole app shell so a return visit can load almost entirely
 // from disk instead of the network - see public/sw.js for the actual
