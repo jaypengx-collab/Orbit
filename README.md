@@ -2,7 +2,7 @@
 
 **🚀 [開啟 Orbit AI](https://jaypengx-collab.github.io/Orbit/)**
 
-Orbit AI 是一個跑在瀏覽器裡的課表儀表板。它不只是把課表「顯示」出來，而是持續計算「現在」這個時間點對應到哪一堂課、還剩幾分鐘、下一堂在哪裡上——打開頁面就是答案，不用自己對照時間表換算。整個專案本身是純前端、單機運作的靜態網站：沒有帳號系統、沒有自己的後端資料庫，課表資料預設就存在使用者自己瀏覽器的儲存空間裡。AI 辨識課表照片與跨裝置同步這兩個選用功能，背後各接了一個部署站台已經設定好的共用服務（分別是一支 Cloud Function 代理、一個 Firestore 專案），讓使用者不用自己申請 Gemini API Key 或建立 Firebase 專案；細節與風險見下方對應章節。
+Orbit AI 是一個跑在瀏覽器裡的課表儀表板。它不只是把課表「顯示」出來，而是持續計算「現在」這個時間點對應到哪一堂課、還剩幾分鐘、下一堂在哪裡上——打開頁面就是答案，不用自己對照時間表換算。整個專案本身是純前端、單機運作的靜態網站：沒有帳號系統、沒有自己的後端資料庫，課表資料預設就存在使用者自己瀏覽器的儲存空間裡。AI 辨識課表照片與跨裝置同步這兩個選用功能，背後各接了一個部署站台已經設定好的共用服務（分別是一支 Cloudflare Workers 代理、一個 Firestore 專案），讓使用者不用自己申請 Gemini API Key 或建立 Firebase 專案；兩者都選在「免費方案本身就有寫死的額度上限、不需要掛信用卡」的服務上，即使被大量濫用，最壞情況是額度用完、功能暫時不能用，不會產生帳單。細節與風險見下方對應章節。
 
 ---
 
@@ -116,24 +116,20 @@ npm run format       # Prettier 格式化 src/、test/ 等（不含 index.html�
 
 這一步需要網路連線；沒有網路，其他所有功能完全不受影響，因為這從頭到尾都是可以跳過的選用功能。
 
-**金鑰從哪來**：部署站台（jaypengx-collab.github.io/Orbit）已經設定了伺服器端代理（`functions/`，見下），一般使用者完全不需要自己申請或輸入 Gemini API Key——請自己申請一把金鑰、要求所有使用者都準備一把並不實際。從原始碼自建（fork、`npm run dev` 沒設定代理）的話，會自動退回成使用者自備 Key 的舊流程：第一次使用時跳出輸入框，Key 只存在該瀏覽器的 `localStorage`。
+**金鑰從哪來**：部署站台（jaypengx-collab.github.io/Orbit）已經設定了伺服器端代理（`cloudflare-worker/`，見下），一般使用者完全不需要自己申請或輸入 Gemini API Key——請自己申請一把金鑰、要求所有使用者都準備一把並不實際。從原始碼自建（fork、`npm run dev` 沒設定代理）的話，會自動退回成使用者自備 Key 的舊流程：第一次使用時跳出輸入框，Key 只存在該瀏覽器的 `localStorage`。
 
-**代理是怎麼運作、部署者要做什麼**：`functions/index.js` 是一支 Firebase Cloud Function（`geminiProxy`），把真正的 Gemini API Key 放在 Secret Manager，永遠不出現在瀏覽器端的程式碼裡；客戶端把圖片與提示詞送到這支函式，函式代為呼叫 Gemini 並把結果原封轉回。部署者（不是每個使用者）要做的一次性設定：
+**代理是怎麼運作、部署者要做什麼**：`cloudflare-worker/gemini-proxy-worker.js` 是一支跑在 Cloudflare Workers 免費方案上的代理，把真正的 Gemini API Key 存成該 Worker 的加密環境變數，永遠不出現在瀏覽器端的程式碼裡；客戶端把圖片與提示詞送到這支 Worker，Worker 代為呼叫 Gemini 並把結果原封轉回。刻意選 Cloudflare Workers 而不是需要掛信用卡、按用量計費的雲端方案：Workers 免費方案有寫死的每日請求上限，不需要綁定任何付款方式，超過額度只會請求失敗到隔天重置，不可能產生帳單。部署者（不是每個使用者）要做的一次性設定，全程不需要安裝任何 CLI：
 
-1. 建立（或沿用同一個）Firebase 專案，升級到 Blaze（用量計費）方案——Cloud Functions 用 Secret Manager 存金鑰、或呼叫外部網路，都需要 Blaze 方案才能部署，超出免費額度前不會產生費用，但強烈建議在 Google Cloud Console 設定預算提醒。
-2. 在專案裡設定金鑰密鑰：
-   ```bash
-   cd functions && npm install
-   firebase functions:secrets:set GEMINI_API_KEY --project <你的 Firebase 專案 ID>
-   ```
-3. 部署函式：
-   ```bash
-   firebase deploy --only functions --project <你的 Firebase 專案 ID>
-   ```
-   部署完成後會印出函式網址（例如 `https://asia-east1-<專案id>.cloudfunctions.net/geminiProxy`）。
-4. 到 GitHub 專案的 Settings → Secrets and variables → Actions → **Variables**（不是 Secrets——這個值本來就會進到公開的前端程式碼），新增 `VITE_ORBIT_GEMINI_PROXY_URL`，值是上一步印出的網址。下次推送到 `main` 觸發部署，靜態站台就會改用代理，使用者從此不用輸入任何 Key。
+1. 到 [Cloudflare 註冊免費帳號](https://dash.cloudflare.com/sign-up)（只需要 email，不需要信用卡）。
+2. 左側選單 Workers & Pages → Create → Create Worker，取個名字（例如 `orbit-ai-gemini-proxy`）→ Deploy（先建立一個預設的空白 Worker）。
+3. 點「Edit code」，把整個編輯器內容換成 `cloudflare-worker/gemini-proxy-worker.js` 的內容，儲存並部署。
+4. 回到該 Worker 的 Settings → Variables and Secrets → Add → 名稱填 `GEMINI_API_KEY`、值是你自己申請的 Gemini API Key（[到這裡申請](https://aistudio.google.com/apikey)）、類型選 **Secret**（加密）→ 儲存並部署。
+5. Worker 頁面上會顯示網址，格式是 `https://<worker 名稱>.<你的 Cloudflare 子網域>.workers.dev`，複製起來。
+6. 到 GitHub 專案的 Settings → Secrets and variables → Actions → **Variables**（不是 Secrets——這個值本來就會進到公開的前端程式碼），新增 `VITE_ORBIT_GEMINI_PROXY_URL`，值是上一步複製的網址。下次推送到 `main` 觸發部署，靜態站台就會改用代理，使用者從此不用輸入任何 Key。
 
-函式內建一個很陽春的每小時請求數量限制（同一個實例內、依 IP 計算），純粹是避免被隨手濫用而不小心燒到額度，不是真正的安全機制；真正的防線是 Blaze 的預算提醒。願意承擔「別人用的 AI 辨識費用算在我頭上」這件事，才建議開啟這個代理——不想承擔的話，把 `VITE_ORBIT_GEMINI_PROXY_URL` 留空，使用者自備 Key 的流程完全不受影響。
+（也可以用 Wrangler CLI 部署，見 `cloudflare-worker/wrangler.toml` 開頭的註解，效果完全一樣，純粹是操作習慣不同。）
+
+Worker 內建一個很陽春的每小時請求數量限制（同一個執行個體內、依 IP 計算），純粹是減少被隨手濫用的機會，不是真正的安全機制——真正的防線是 Cloudflare 免費方案本身「不綁費、額度用完就停」的設計。想開得更寬鬆或更嚴格，直接調整 `gemini-proxy-worker.js` 裡的 `RATE_LIMIT` 常數即可。不想開啟這個代理的話，把 `VITE_ORBIT_GEMINI_PROXY_URL` 留空，使用者自備 Key 的流程完全不受影響。
 
 ---
 
@@ -218,7 +214,7 @@ src/strings.js         畫面文字對照表（見下）
 src/main.js            進入點，依序 import 以上每個模組
 ```
 
-另外還有 `functions/`：一支獨立部署的 Firebase Cloud Function（`geminiProxy`，見〈AI 辨識課表照片〉），有自己的 `package.json`，不屬於 `src/` 的 ES module 相依圖，也不會被 Vite 打包進靜態站台——它是唯一一段跑在伺服器端的程式碼。
+另外還有 `cloudflare-worker/`：一支獨立部署到 Cloudflare Workers 的代理（`gemini-proxy-worker.js`，見〈AI 辨識課表照片〉），不屬於 `src/` 的 ES module 相依圖，也不會被 Vite 打包進靜態站台——它是唯一一段跑在伺服器端的程式碼。
 
 每個檔名跟職責都直接延續自舊版單檔案裡原本用註解標出的區塊，只是現在的相依關係是編譯器會檢查的 `import`/`export`，不再是「檔案內先後順序」這種隱性約定。每個檔案開頭也都有一行註解說明它負責什麼。
 
@@ -281,7 +277,7 @@ src/main.js            進入點，依序 import 以上每個模組
 - 資料預設綁在單一瀏覽器；沒有開啟跨裝置同步的話，清掉瀏覽器的網站資料會連課表一起清掉，建議偶爾匯出備份留底。
 - 沒有帳號系統，也就沒有多人協作；跨裝置同步是輪詢式（每 8 秒），不是真正即時推播。
 - 跨裝置同步用的 Firestore 規則完全公開讀寫，不做任何身分驗證或加密——不是為了保護隱私設計的，配對代碼是唯一的門檻，在意這點的話不建議開啟。
-- AI 辨識與跨裝置同步背後都是共用服務（Cloud Function 代理、Firestore 專案），額度與費用算在部署者頭上，不是使用者自己的帳號；規則完全公開加上沒有使用者身分驗證，代表濫用的風險也是部署者要承擔的，函式內建的頻率限制只是很陽春的緩解，不是真正的防護（見〈AI 辨識課表照片〉〈跨裝置同步〉裡的部署設定說明）。
+- AI 辨識與跨裝置同步背後都是共用服務（Cloudflare Workers 代理、Firestore 專案），額度算在部署者頭上，不是使用者自己的帳號；兩者都刻意選在免費、不需要信用卡、額度用完就停的方案上，所以最壞情況是「被濫用到額度爆掉、功能暫時不能用」，不是帳單——但仍然是可能被別人濫用光額度、害正常使用者暫時用不了的風險。規則完全公開加上沒有使用者身分驗證，Worker／Firestore 內建的頻率限制也只是很陽春的緩解，不是真正的防護（見〈AI 辨識課表照片〉〈跨裝置同步〉裡的部署設定說明）。
 - AI 辨識的準確度取決於照片清晰度與課表版型，不是每次都能完美讀出所有欄位，匯入前務必看過預覽再確認。
 - AI 功能需要網路連線；沒有網路就無法使用（但其他功能完全不受影響）。
 - 自動化測試涵蓋課表計算、資料驗證、備份格式、同步模組與 AI 代理切換邏輯，但編輯器 UI 流程、樣式面板、AI 辨識實際呼叫 Gemini 的準確度目前仍主要靠時間模擬與手動驗證。

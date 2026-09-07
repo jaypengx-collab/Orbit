@@ -65,16 +65,18 @@ export default [
     }
   },
   {
-    // The Gemini proxy Cloud Function: a separate, server-side CommonJS
-    // deployable (its own package.json, deployed independently with
-    // `firebase deploy --only functions`), not part of the app's src/ ES
-    // module graph.
-    files: ['functions/**/*.js'],
+    // The Gemini proxy Cloudflare Worker: a separate, server-side deployable
+    // (pasted into the Cloudflare dashboard or deployed with Wrangler - see
+    // README), not part of the app's src/ ES module graph. Its global scope
+    // (fetch/Response/Request/URL as ambient globals, an ES module with a
+    // default export) matches the service-worker environment closely enough
+    // to reuse those globals here.
+    files: ['cloudflare-worker/**/*.js'],
     languageOptions: {
       ecmaVersion: 2022,
-      sourceType: 'commonjs',
+      sourceType: 'module',
       globals: {
-        ...globals.node
+        ...globals.serviceworker
       }
     }
   }
