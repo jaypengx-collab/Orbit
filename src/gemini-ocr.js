@@ -54,6 +54,16 @@ function capCanvasDimension(canvas, maxDimension = 1600) {
 // True while a Gemini OCR request is in flight; the editor sheet checks this to block
 // closing mid-recognition (closing would abandon the in-progress import silently).
 
+// When set (build-time env var, see README), AI import calls this server-side proxy
+// instead of Gemini directly - the proxy holds the real key (Secret Manager, never
+// shipped to the client) and forwards the request, so users never need a Gemini key
+// of their own. Unset (e.g. a fork built from source without the proxy deployed)
+// falls back to the original bring-your-own-key flow below.
+const GEMINI_PROXY_URL = (import.meta.env.VITE_ORBIT_GEMINI_PROXY_URL || '').trim();
+function isGeminiProxyConfigured() {
+  return !!GEMINI_PROXY_URL;
+}
+
 // Gemini API keys are user-supplied and kept only in this browser's localStorage; never
 // hardcode a real key in this file (it would be exposed to anyone who opens/shares it).
 const GEMINI_API_KEY_STORAGE_KEY = 'orbitAiGeminiApiKey';
@@ -142,8 +152,9 @@ Interpret the timetable visually and use your best judgment to reconstruct its s
         /* ignore progress callback errors */
       }
     };
+    const usingProxy = !!GEMINI_PROXY_URL;
     const trimmedKey = String(apiKey || '').trim();
-    if (!trimmedKey) throw new Error('請先輸入 Gemini API 金鑰。');
+    if (!usingProxy && !trimmedKey) throw new Error('請先輸入 Gemini API 金鑰。');
 
     report('正在壓縮並編碼圖片…');
     const base64Data = canvas.toDataURL('image/jpeg', 0.9).replace(/^data:image\/jpeg;base64,/, '');
@@ -153,8 +164,11 @@ Interpret the timetable visually and use your best judgment to reconstruct its s
     let lastError = null;
     for (const model of this.geminiModels) {
       report(`正在請求 AI 模型（${model}）分析課表…`);
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(trimmedKey)}`;
+      const url = usingProxy
+        ? GEMINI_PROXY_URL
+        : `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(trimmedKey)}`;
       const requestBody = JSON.stringify({
+        ...(usingProxy ? { model } : {}),
         contents: [{ parts: [promptPart, imagePart] }],
         generationConfig: this.buildGenerationConfig(model)
       });
@@ -178,7 +192,14 @@ Interpret the timetable visually and use your best judgment to reconstruct its s
       const errorJson = await response.json().catch(() => ({}));
       const message = errorJson.error?.message || response.statusText;
       if (response.status === 400 && /API_KEY_INVALID/.test(message)) {
-        throw new Error('Gemini API 金鑰無效，請確認後重新輸入。');
+        throw new Error(
+          usingProxy
+            ? 'AI 服務目前無法使用，請稍後再試。'
+            : 'Gemini API 金鑰無效，請確認後重新輸入。'
+        );
+      }
+      if (response.status === 429 && usingProxy && /請求過於頻繁/.test(message)) {
+        throw new Error(message);
       }
       // Retryable on the next model: retired/unknown model (404), overloaded (503), rate-limited (429), or transient server errors (5xx).
       lastError = new Error(`AI 辨識請求失敗（${response.status}）：${message}`);
@@ -626,10 +647,13 @@ function mountOCRImporter({ runButton, imagePreview, status, result, onImport })
 
   runButton.addEventListener('click', async () => {
     if (!source) return;
-    let apiKey = getStoredGeminiApiKey();
-    if (!apiKey) {
-      apiKey = await promptGeminiApiKey();
-      if (!apiKey) return;
+    let apiKey = '';
+    if (!isGeminiProxyConfigured()) {
+      apiKey = getStoredGeminiApiKey();
+      if (!apiKey) {
+        apiKey = await promptGeminiApiKey();
+        if (!apiKey) return;
+      }
     }
     runButton.disabled = true;
     state.isOcrProcessing = true;
@@ -774,4 +798,4 @@ ocrImageInput?.addEventListener('change', async event => {
   await controller?.loadFile(file);
 });
 
-export { getStoredGeminiApiKey, setStoredGeminiApiKey };
+export { AIVisionProcessor, getStoredGeminiApiKey, isGeminiProxyConfigured, setStoredGeminiApiKey };

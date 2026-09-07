@@ -4,7 +4,7 @@ import globals from 'globals';
 export default [
   js.configs.recommended,
   {
-    ignores: ['dist/**', 'node_modules/**']
+    ignores: ['dist/**', '**/node_modules/**']
   },
   {
     files: ['src/**/*.js'],
@@ -61,6 +61,20 @@ export default [
       sourceType: 'script',
       globals: {
         ...globals.serviceworker
+      }
+    }
+  },
+  {
+    // The Gemini proxy Cloud Function: a separate, server-side CommonJS
+    // deployable (its own package.json, deployed independently with
+    // `firebase deploy --only functions`), not part of the app's src/ ES
+    // module graph.
+    files: ['functions/**/*.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'commonjs',
+      globals: {
+        ...globals.node
       }
     }
   }

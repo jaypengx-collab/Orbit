@@ -6,14 +6,18 @@
 // document payload, so this is really "auto-paste the export text into a
 // shared doc, auto-import it elsewhere" rather than a separate data format.
 //
-// No server of Orbit's own: the user supplies their own free Firebase
-// project's ID, and Firestore's REST API is called directly with fetch (no
-// SDK, no new dependency) - the same way gemini-ocr.js talks to Gemini's
-// REST API without a client library. A pairing code is just the Firestore
-// document ID both devices read/write; nothing here proves who the caller
-// is, so whatever Firestore security rule the user sets on
+// No server of Orbit's own: sync talks to a single shared Firebase project
+// (its ID baked in at build time via VITE_ORBIT_SYNC_PROJECT_ID - see
+// README) that the app's owner - not each user - creates once, so a device
+// only ever needs a pairing code. Firestore's REST API is called directly
+// with fetch (no SDK, no new dependency) - the same way gemini-ocr.js talks
+// to Gemini's REST API without a client library. A pairing code is just the
+// Firestore document ID every paired device reads/writes; nothing here
+// proves who the caller is, so whatever Firestore security rule is set on
 // /orbit-schedules/{code} is the only access control - see README for the
-// exact rule text this is designed against.
+// exact rule text this is designed against. A build without that env var
+// set (e.g. a fork run from source) falls back to letting each device type
+// in its own Firebase project ID, exactly like before.
 import { state } from './state.js';
 import {
   applyEditorSettingsData,
@@ -23,6 +27,7 @@ import {
   normalizeSettingsData
 } from './editor-backup.js';
 
+const DEFAULT_PROJECT_ID = (import.meta.env.VITE_ORBIT_SYNC_PROJECT_ID || '').trim();
 const PROJECT_ID_KEY = 'orbitSyncProjectId';
 const CODE_KEY = 'orbitSyncCode';
 const LAST_UPDATE_TIME_KEY = 'orbitSyncLastUpdateTime';
@@ -47,8 +52,11 @@ function writeLocal(key, value) {
   }
 }
 
+function hasDefaultSyncProjectId() {
+  return !!DEFAULT_PROJECT_ID;
+}
 function getSyncProjectId() {
-  return readLocal(PROJECT_ID_KEY).trim();
+  return readLocal(PROJECT_ID_KEY).trim() || DEFAULT_PROJECT_ID;
 }
 function getSyncCode() {
   return readLocal(CODE_KEY).trim();
@@ -187,16 +195,23 @@ function renderSyncPanel() {
   const setupBox = document.getElementById('sync-setup-box');
   const activeBox = document.getElementById('sync-active-box');
   const activeCode = document.getElementById('sync-active-code');
+  const projectIdField = document.getElementById('sync-project-id');
+  const setupHint = document.getElementById('sync-setup-hint');
   if (!setupBox || !activeBox) return;
   const configured = isSyncConfigured();
   setupBox.hidden = configured;
   activeBox.hidden = !configured;
   if (configured && activeCode) activeCode.textContent = getSyncCode();
+  if (projectIdField) projectIdField.hidden = hasDefaultSyncProjectId();
+  if (setupHint)
+    setupHint.textContent = hasDefaultSyncProjectId()
+      ? '同步會把課表存到 Orbit AI 內建的同步伺服器，讓多台裝置自動保持一致，不需要自己申請任何帳號。'
+      : '同步會把課表存到你自己的 Firebase 專案（Firestore），讓多台裝置自動保持一致。需要一個免費的 Firebase 專案。';
 }
 
 // ---- UI entry points, exposed on window for index.html's onclick="..." ----
 async function orbitSyncCreate() {
-  const projectId = document.getElementById('sync-project-id')?.value.trim();
+  const projectId = DEFAULT_PROJECT_ID || document.getElementById('sync-project-id')?.value.trim();
   if (!projectId) {
     setSyncStatusUi('請先輸入 Firebase 專案 ID。', true);
     return;
@@ -214,10 +229,14 @@ async function orbitSyncCreate() {
   startSyncLoop();
 }
 async function orbitSyncJoin() {
-  const projectId = document.getElementById('sync-project-id')?.value.trim();
+  const projectId = DEFAULT_PROJECT_ID || document.getElementById('sync-project-id')?.value.trim();
   const code = document.getElementById('sync-join-code')?.value.trim();
-  if (!projectId || !code) {
-    setSyncStatusUi('請輸入 Firebase 專案 ID 與配對代碼。', true);
+  if (!projectId) {
+    setSyncStatusUi('請先輸入 Firebase 專案 ID。', true);
+    return;
+  }
+  if (!code) {
+    setSyncStatusUi('請輸入配對代碼。', true);
     return;
   }
   setSyncPairing(projectId, code);
@@ -257,6 +276,7 @@ export {
   generateSyncCode,
   getSyncCode,
   getSyncProjectId,
+  hasDefaultSyncProjectId,
   isSyncConfigured,
   orbitSyncCreate,
   orbitSyncJoin,

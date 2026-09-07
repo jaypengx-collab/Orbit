@@ -312,8 +312,8 @@
       </summary>
       <div class="editor-fold-body">
         <div class="settings-transfer-box" id="sync-setup-box">
-          <div class="editor-hint-body">同步會把課表存到你自己的 Firebase 專案（Firestore），讓多台裝置自動保持一致。需要一個免費的 Firebase 專案。</div>
-          <input id="sync-project-id" class="settings-transfer-text sync-input" type="text" inputmode="text" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="Firebase 專案 ID（Project ID）">
+          <div class="editor-hint-body" id="sync-setup-hint">同步會把課表存到 Orbit AI 內建的同步伺服器，讓多台裝置自動保持一致，不需要自己申請任何帳號。</div>
+          <input id="sync-project-id" class="settings-transfer-text sync-input" type="text" inputmode="text" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="Firebase 專案 ID（Project ID，僅開發/自架時需要）">
           <div class="settings-transfer-actions">
             <button type="button" id="sync-create-btn" class="settings-transfer-btn" onclick="orbitSyncCreate()">
               建立新同步
