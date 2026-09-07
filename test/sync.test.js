@@ -231,32 +231,30 @@ describe('manager/viewer roles', () => {
     expect(sync.isSyncViewer()).toBe(false);
   });
 
-  it('orbitSyncJoin defaults to viewer and never publishes local data to an empty code', async () => {
-    document.getElementById('sync-project-id').value = 'demo-project';
-    document.getElementById('sync-join-code').value = 'EMPTY123';
+  // These exercise performSyncJoin directly - the actual pairing/pull/push
+  // logic - rather than orbitSyncJoin's confirm-sheet wrapper (see the
+  // "orbitSyncJoin warns before wiping local data" suite below for that).
+  it('performSyncJoin defaults to viewer and never publishes local data to an empty code', async () => {
     const fetchMock = vi.fn(async (url, options) => {
       // Only a GET (the pull) is expected - a viewer must never PATCH.
       expect(options?.method).not.toBe('PATCH');
       return { ok: false, status: 404 };
     });
     vi.stubGlobal('fetch', fetchMock);
-    await sync.orbitSyncJoin();
+    await sync.performSyncJoin('demo-project', 'EMPTY123', false);
     expect(sync.isSyncConfigured()).toBe(true);
     expect(sync.isSyncViewer()).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('orbitSyncJoin pairs as manager when "以管理者身份加入" is checked, and may publish', async () => {
-    document.getElementById('sync-project-id').value = 'demo-project';
-    document.getElementById('sync-join-code').value = 'EMPTY123';
-    document.getElementById('sync-join-as-manager').checked = true;
+  it('performSyncJoin pairs as manager when asked to, and may publish', async () => {
     const fetchMock = vi.fn(async (url, options) => {
       if (options?.method === 'PATCH')
         return { ok: true, json: async () => ({ updateTime: 'now' }) };
       return { ok: false, status: 404 };
     });
     vi.stubGlobal('fetch', fetchMock);
-    await sync.orbitSyncJoin();
+    await sync.performSyncJoin('demo-project', 'EMPTY123', true);
     expect(sync.isSyncViewer()).toBe(false);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
@@ -292,5 +290,85 @@ describe('manager/viewer roles', () => {
     document.getElementById('sync-status').textContent = '';
     window.saveEditor();
     expect(document.getElementById('sync-status').textContent).toMatch(/僅接收模式/);
+  });
+});
+
+describe('orbitSyncJoin warns before wiping local data', () => {
+  it('shows a confirm sheet and does not pair or fetch anything until confirmed', () => {
+    document.getElementById('sync-project-id').value = 'demo-project';
+    document.getElementById('sync-join-code').value = 'CODE1234';
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    sync.orbitSyncJoin();
+
+    expect(sync.isSyncConfigured()).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(true);
+    expect(document.getElementById('editor-confirm-title').textContent).toMatch(/加入同步/);
+    expect(document.getElementById('editor-confirm-msg').textContent).toMatch(/取代/);
+  });
+
+  it('joins only once the confirm button is actually clicked', async () => {
+    document.getElementById('sync-project-id').value = 'demo-project';
+    document.getElementById('sync-join-code').value = 'CODE1234';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ status: 404, ok: false }))
+    );
+
+    sync.orbitSyncJoin();
+    const confirmBtn = document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[1];
+    confirmBtn.onclick();
+    // performSyncJoin is async and fire-and-forget from the click handler -
+    // flush microtasks so its fetch/pairing has actually settled.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(sync.isSyncConfigured()).toBe(true);
+    expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(false);
+  });
+
+  it('cancelling leaves the device unpaired', () => {
+    document.getElementById('sync-project-id').value = 'demo-project';
+    document.getElementById('sync-join-code').value = 'CODE1234';
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    sync.orbitSyncJoin();
+    const cancelBtn = document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[0];
+    cancelBtn.onclick();
+
+    expect(sync.isSyncConfigured()).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(false);
+  });
+});
+
+// getComputedStyle isn't meaningful here - this test harness loads
+// index.html's body markup directly (see loadApp.js) without its <link>
+// stylesheet, so css/styles.css's actual cascade (including the
+// .settings-transfer-box[hidden]{display:none} override this fold added -
+// .settings-transfer-box{display:flex} was beating the browser's own
+// [hidden]{display:none} at equal specificity, so the setup/active boxes
+// never really hid despite `.hidden` being set correctly all along) isn't
+// loaded in jsdom at all. What's actually checked below - and was already
+// correct before this fold's CSS fix - is that renderSyncPanel()/
+// orbitSyncUnlink() flip the `hidden` property itself, immediately and
+// without waiting on anything async.
+describe('sync-setup-box / sync-active-box hidden-state toggling', () => {
+  it('the setup box (create/join fields and buttons) is hidden once paired', () => {
+    sync.setSyncPairing('demo-project', 'CODE1234');
+    sync.renderSyncPanel();
+    expect(document.getElementById('sync-setup-box').hidden).toBe(true);
+    expect(document.getElementById('sync-active-box').hidden).toBe(false);
+  });
+
+  it('unlinking immediately re-shows the setup box and hides the active box', () => {
+    sync.setSyncPairing('demo-project', 'CODE1234');
+    sync.renderSyncPanel();
+    sync.orbitSyncUnlink();
+    expect(document.getElementById('sync-setup-box').hidden).toBe(false);
+    expect(document.getElementById('sync-active-box').hidden).toBe(true);
   });
 });

@@ -26,6 +26,11 @@ import {
   isEditorDirty,
   normalizeSettingsData
 } from './editor-backup.js';
+import {
+  hideEditorDiscardConfirm,
+  setEditorConfirmContent,
+  showEditorConfirmSheet
+} from './editor-core.js';
 
 const DEFAULT_PROJECT_ID = (import.meta.env.VITE_ORBIT_SYNC_PROJECT_ID || '').trim();
 const PROJECT_ID_KEY = 'orbitSyncProjectId';
@@ -278,7 +283,7 @@ async function orbitSyncCreate() {
   setSyncStatusUi('同步已建立，可在另一台裝置輸入代碼加入。');
   startSyncLoop();
 }
-async function orbitSyncJoin() {
+function orbitSyncJoin() {
   const projectId = DEFAULT_PROJECT_ID || document.getElementById('sync-project-id')?.value.trim();
   const code = document.getElementById('sync-join-code')?.value.trim();
   if (!projectId) {
@@ -295,6 +300,25 @@ async function orbitSyncJoin() {
   // purpose, matching "one or more devices as manager" rather than "exactly
   // one".
   const asManager = !!document.getElementById('sync-join-as-manager')?.checked;
+  // Joining pulls whatever is already published under that code (if
+  // anything) and applies it immediately - overwriting this device's
+  // current schedule - so this warns before doing anything, rather than
+  // silently replacing data the user might not have backed up.
+  setEditorConfirmContent(
+    '加入同步？',
+    '如果這組代碼下已經有課表，加入後會立刻用該課表取代這台裝置目前的課表，且無法復原。建立同步的裝置目前的課表不會受影響。',
+    '',
+    '仍要加入',
+    () => {
+      hideEditorDiscardConfirm();
+      performSyncJoin(projectId, code, asManager);
+    },
+    '取消'
+  );
+  showEditorConfirmSheet();
+}
+
+async function performSyncJoin(projectId, code, asManager) {
   setSyncPairing(projectId, code, asManager ? MANAGER_ROLE : VIEWER_ROLE);
   setSyncStatusUi('正在加入同步…');
   const result = await pullSyncSnapshot({ force: true });
@@ -345,6 +369,7 @@ export {
   orbitSyncCreate,
   orbitSyncJoin,
   orbitSyncUnlink,
+  performSyncJoin,
   pullSyncSnapshot,
   pushSyncSnapshot,
   renderSyncPanel,
