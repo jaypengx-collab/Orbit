@@ -1,0 +1,41 @@
+# Optional: only needed if you deploy this worker with the Wrangler CLI
+# instead of pasting sync-proxy-worker.js into the Cloudflare dashboard's
+# online editor (the dashboard route needs no CLI or local install at all -
+# see README's cross-device sync section, which documents both paths).
+#
+# CLI path:
+#   npx wrangler login
+#   npx wrangler deploy --config sync-proxy-wrangler.toml
+#   npx wrangler secret put FIREBASE_CLIENT_EMAIL --config sync-proxy-wrangler.toml
+#   npx wrangler secret put FIREBASE_PRIVATE_KEY --config sync-proxy-wrangler.toml
+#   npx wrangler kv namespace create RATE_LIMIT_KV
+#     (then uncomment the [[kv_namespaces]] block below with the printed id -
+#     this can be the same namespace gemini-proxy-worker.js already uses, if
+#     you've deployed that too; the two workers' keys are prefixed
+#     differently and never collide)
+name = "orbit-sync-proxy"
+main = "sync-proxy-worker.js"
+compatibility_date = "2025-01-01"
+
+# Not a secret - it's already public today (it ships inside the client JS
+# bundle as VITE_ORBIT_SYNC_PROJECT_ID in the no-proxy fallback path). Kept
+# as a plain var here so it's easy to see/change in the dashboard without
+# needing "reveal secret".
+[vars]
+FIREBASE_PROJECT_ID = "<your Firebase project ID>"
+
+# Required: a service account's credentials, from Firebase Console -> Project
+# Settings -> Service accounts -> Generate new private key. The downloaded
+# JSON has `client_email` and `private_key` fields - put those values in the
+# two secrets above (FIREBASE_CLIENT_EMAIL / FIREBASE_PRIVATE_KEY). Treat
+# that JSON file like a password: it grants full read/write access to this
+# Firebase project, bypassing Firestore Security Rules entirely (that's the
+# whole point - see sync-proxy-worker.js's top-of-file comment).
+
+# Optional but recommended: a real, cross-request rate limit instead of the
+# in-memory per-isolate fallback the worker uses when this isn't bound - see
+# sync-proxy-worker.js's isRateLimited(). Free on Cloudflare's Workers KV
+# free tier (no billing account needed).
+# [[kv_namespaces]]
+# binding = "RATE_LIMIT_KV"
+# id = "<paste the namespace id here>"

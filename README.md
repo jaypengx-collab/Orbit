@@ -184,16 +184,21 @@ npm run format       # Prettier 格式化（不含 index.html／css/styles.css�
 
 ### 安全性：多開放、多脆弱
 
-Firestore 規則沒有帳號驗證，**配對代碼是唯一的門檻**：
+配對代碼是唯一的門檻，不管走哪種部署方式：
 
 - 拿到代碼的人可以永久讀寫該份課表，直到手動建立新同步棄用舊代碼——目前沒有「換代碼」功能。
-- 管理者／僅接收身份只存在裝置本機（`localStorage`），Firestore 完全不認識這個概念。任何人只要有代碼，繞過 UI 直接發 HTTP 請求，就能寫入資料，而且不管是管理者還是僅接收裝置的瀏覽器都會照樣把這筆資料拉回來套用——這層身分鎖定不了惡意第三方，只防得住自己人手滑誤觸。
-- 下方規則已加上欄位與大小限制，並關閉整個集合的列表查詢（Firestore 對 wildcard 規則預設 `allow read` 會連 `list` 一起放行，等於任何人能撈出全部班級的同步文件，不只是自己手上那組代碼），但仍然沒有身分驗證，不是為了保護隱私設計的。
-- 建立同步後沒有自動過期或清除：不再使用的配對代碼會永遠留在 Firestore 裡（見〈限制〉）。
+- 管理者／僅接收身份只存在裝置本機（`localStorage`），伺服器端完全不認識這個概念。任何人只要有代碼，繞過 UI 直接發 HTTP 請求，就能寫入資料，而且不管是管理者還是僅接收裝置的瀏覽器都會照樣把這筆資料拉回來套用——這層身分鎖定不了惡意第三方，只防得住自己人手滑誤觸。
+- 建立同步後沒有自動過期或清除：不再使用的配對代碼會永遠留在資料庫裡（見〈限制〉）。
 
-在意這個風險就不建議開啟跨裝置同步；接受風險才繼續下面的部署設定。
+不透過 Cloudflare Worker（下方「基本設定」）：Firestore 規則本身已加上欄位與大小限制、並關閉整個集合的列表查詢（Firestore 對 wildcard 規則預設 `allow read` 會連 `list` 一起放行，等於任何人能撈出全部班級的同步文件），但規則沒辦法計數請求次數——**沒有真正的流量限制**，一支腳本可以無限制地灌讀寫請求，直到撞上 Firestore 自己的配額。
+
+透過 Cloudflare Worker（下方「進階設定」）：瀏覽器不再直接碰 Firestore，全部請求先經過一個會計數、擋格式錯誤代碼、擋超大 payload 的 Worker，Worker 才用自己的服務帳戶去存取 Firestore；同時把 Firestore 規則改成完全拒絕直接存取，等於關掉了原本那條任何人都能直接打的門。這樣才有真正跨請求的流量上限（見 Worker 檔案裡的數字），但**身分驗證依然不存在**——代碼還是唯一門檻，上面三點風險原封不動。
+
+在意這個風險就不建議開啟跨裝置同步；接受風險才繼續下面的部署設定，兩種都做才是最完整的保護。
 
 ### 部署者一次性設定
+
+#### 基本設定（純 Firestore，任何人都能做到）
 
 1. 到 [Firebase Console](https://console.firebase.google.com/) 建立新專案，啟用 Firestore。
 2. 「規則」分頁貼上：
@@ -212,10 +217,37 @@ Firestore 規則沒有帳號驗證，**配對代碼是唯一的門檻**：
      }
    }
    ```
-   限制文件只能是 8 碼配對代碼格式、只能有 `payload` 一個欄位、內容是不超過 20KB 的字串——擋掉亂寫其他欄位、塞垃圾大檔案、列出整個集合，但**依然不驗證是誰在寫**，代碼還是唯一門檻。
+   限制文件只能是 8 碼配對代碼格式、只能有 `payload` 一個欄位、內容是不超過 20KB 的字串——擋掉亂寫其他欄位、塞垃圾大檔案、列出整個集合，但**依然不驗證是誰在寫、也不限流量**，代碼還是唯一門檻。**如果接著做下面的進階設定，這條規則最後要整個換成 `allow read, write: if false`（見下）**，這裡先貼上是為了在還沒設定 Worker 前，基本設定也能獨立跑起來。
 3. GitHub 專案 Settings → Secrets and variables → Actions → **Variables**（不是 Secrets），新增 `VITE_ORBIT_SYNC_PROJECT_ID`，值是這個 Firebase 專案的 Project ID。推送到 `main` 後站台建置時內建進去。
 
 沒設定 `VITE_ORBIT_SYNC_PROJECT_ID`（例如自建 fork）會退回原本流程：編輯器多顯示一個「Firebase 專案 ID」欄位，使用者自己建專案輸入。
+
+#### 進階設定：Cloudflare Worker 加上真正的流量限制（建議正式站台使用）
+
+延續上面的 Firebase 專案，額外做這幾步，把 Firestore 完全鎖起來、只讓這支 Worker 能碰：
+
+1. Firebase Console → 專案設定 → 服務帳戶 → 產生新的私密金鑰，下載 JSON。這把金鑰形同該 Firebase 專案的完整讀寫權限，跟密碼一樣保管，不要放進任何會被推送到 GitHub 的檔案。
+2. [Cloudflare Dashboard](https://dash.cloudflare.com/) → Workers & Pages → Create → 貼上 `cloudflare-worker/sync-proxy-worker.js` 的內容，部署。
+3. 這個 Worker 的 Settings → Variables and Secrets，新增：
+   - `FIREBASE_PROJECT_ID`（一般變數）：Firebase 專案的 Project ID。
+   - `FIREBASE_CLIENT_EMAIL`（Secret）：下載的 JSON 裡的 `client_email`。
+   - `FIREBASE_PRIVATE_KEY`（Secret）：下載的 JSON 裡的 `private_key`（含 `-----BEGIN PRIVATE KEY-----`／`-----END PRIVATE KEY-----`，保留原本的換行）。
+4. （可選但建議）Workers & Pages → KV → Create namespace → 任意命名 → 回到這個 Worker 的 Settings → Bindings → Add → KV Namespace → 變數名稱 `RATE_LIMIT_KV` → 選剛建立的 namespace。跟 AI 匯入用的 Worker 共用同一個 namespace 也可以，兩邊的鍵不會互相碰撞。設定完 Bindings 後記得回「Edit code」畫面按一次 Deploy——只加 Binding 不會自動讓正在跑的版本套用它，一定要重新部署一次。
+5. 回到 Firebase Console「規則」分頁，把規則整個換成：
+   ```
+   rules_version = '2';
+   service cloud.firestore {
+     match /databases/{database}/documents {
+       match /orbit-schedules/{code} {
+         allow read, write: if false;
+       }
+     }
+   }
+   ```
+   服務帳戶的存取本來就不受 Firestore 規則限制（跟 Admin SDK 一樣），所以這條規則只影響「繞過 Worker、直接打 Firestore」的請求——把它整個關掉，才是這個 Worker 真正的意義：不是多一層檢查，是拿掉原本永遠開著的那道門。
+6. GitHub 專案 Settings → Secrets and variables → Actions → **Variables**，新增 `VITE_ORBIT_SYNC_PROXY_URL`，值是這個 Worker 的 `*.workers.dev` 網址。推送到 `main` 後站台建置時內建進去；設定了這個變數的話，`VITE_ORBIT_SYNC_PROJECT_ID` 就不會再被使用（Project ID 已經只存在 Worker 的環境變數裡，不再進到瀏覽器端的程式碼）。
+
+沒設定 `VITE_ORBIT_SYNC_PROXY_URL` 就是退回「基本設定」的直連 Firestore 模式——這個 Worker 完全是加分項，不是跨裝置同步能不能用的必要條件。
 
 ---
 
@@ -260,7 +292,7 @@ src/editor-teachers.js 教師／課程清單編輯
 src/editor-schedule.js 每週排課介面
 src/dashboard-render.js 主畫面實際的 DOM 渲染
 src/gemini-ocr.js      圖片前處理與 Gemini 代理呼叫
-src/sync.js            跨裝置同步：Firestore REST 呼叫與輪詢
+src/sync.js            跨裝置同步：直連 Firestore 或透過 Worker 代理、輪詢
 src/onboarding.js      第一次使用的提示流程
 src/bootstrap.js       啟動流程：讀資料、建課表、開每秒計時器
 src/testsim-runtime.js 時間模擬狀態機
@@ -269,7 +301,7 @@ src/strings.js         畫面文字對照表
 src/main.js            進入點，依序 import 以上每個模組
 ```
 
-`cloudflare-worker/`（`gemini-proxy-worker.js`）獨立部署到 Cloudflare Workers，不屬於 `src/` 的相依圖，不會被 Vite 打包——是唯一跑在伺服器端的程式碼。
+`cloudflare-worker/`（`gemini-proxy-worker.js`、`sync-proxy-worker.js`）各自獨立部署到 Cloudflare Workers，不屬於 `src/` 的相依圖，不會被 Vite 打包——是唯二跑在伺服器端的程式碼，兩支都是可選的：沒部署就分別退回「AI 匯入功能尚未設定」和直連 Firestore。
 
 每個檔案開頭有一行註解說明職責。改程式碼前值得知道的幾個約定：
 
