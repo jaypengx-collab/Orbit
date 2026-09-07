@@ -126,10 +126,9 @@ npm run format       # Prettier 格式化（不含 index.html／css/styles.css�
 
 代理不是單純的轉發水管，客戶端只能傳 `{model, image}`，實際送去 Gemini 的提示詞與生成參數是 Worker 自己寫死的——即使有人挖出 Worker 網址（它本來就在公開的前端程式碼裡）直接發請求，也只能拿它跑「辨識這張圖裡的課表」，沒辦法把它當成通用的免費 AI 代理去問別的問題。這是刻意設計成這樣，因為 Worker 網址從來就不是秘密。
 
-其餘防護都偏軟性、屬於「降低隨手濫用機率」而非硬性防線：
+**每小時請求數限制**：綁定 KV 命名空間（`RATE_LIMIT_KV`，見下方設定步驟）後，是跨邊緣節點共用的真計數器，不是單一執行個體內的軟性統計——不綁的話會退回成單一執行個體記憶體計數，Cloudflare 邊緣會平行跑很多個實例，容易被分散請求繞過。不管有沒有綁 KV，這一層都只能擋到「單一 IP 短時間內大量請求」，擋不住分散在很多 IP 的濫用，也不是密碼學意義上的安全機制。
 
-- Worker 內建的每小時請求數限制是單一執行個體內計算，Cloudflare 邊緣節點會平行跑很多個實例，不是全站計數器。
-- 真正的硬性防線是 **Cloudflare Workers 免費方案本身的每日請求上限**：超過額度就是失敗到隔天重置，不需要額外設定，也不可能產生帳單（除非有人自行把 Gemini 金鑰接上付費帳單，見〈限制〉）。
+真正不可能被繞過的硬性防線是 **Cloudflare Workers 免費方案本身的每日請求上限**：超過額度就是失敗到隔天重置，不需要額外設定，也不可能產生帳單（除非有人自行把 Gemini 金鑰接上付費帳單，見〈限制〉）。
 
 沒有網路無法辨識，沒有代理則整個功能直接不可用（`VITE_ORBIT_GEMINI_PROXY_URL` 留空），不會退回成使用者自備 Key 的舊流程——課表其他功能完全不受影響。
 
@@ -143,8 +142,9 @@ npm run format       # Prettier 格式化（不含 index.html／css/styles.css�
 4. Settings → Variables and Secrets → 新增 `GEMINI_API_KEY`（[到這裡申請](https://aistudio.google.com/apikey)），類型選 **Secret** → 儲存並部署。
 5. 複製 Worker 網址（`https://<worker 名稱>.<子網域>.workers.dev`）。
 6. GitHub 專案 Settings → Secrets and variables → Actions → **Variables**（不是 Secrets，這個值本來就會進公開前端程式碼），新增 `VITE_ORBIT_GEMINI_PROXY_URL`，值是上一步的網址。下次推送到 `main`，站台就會改用代理。
+7. **建議但非必要**：Cloudflare 左側選單 Workers & Pages → KV → Create namespace（名稱隨意）；回到這個 Worker 的 Settings → Bindings → Add → KV Namespace，變數名稱填 `RATE_LIMIT_KV`，選剛建立的命名空間 → Deploy。這一步讓每小時請求限制變成跨邊緣節點的真計數器（見上方安全性小節），跳過的話功能一樣能用，只是這層限制比較弱。
 
-也可以用 Wrangler CLI 部署（見 `cloudflare-worker/wrangler.toml` 開頭註解），效果相同。想調整每小時限制，改 `gemini-proxy-worker.js` 裡的 `RATE_LIMIT` 常數即可。
+也可以用 Wrangler CLI 部署（見 `cloudflare-worker/wrangler.toml` 開頭註解，含 KV 命名空間的 CLI 建立指令），效果相同。想調整每小時限制次數，改 `gemini-proxy-worker.js` 裡的 `RATE_LIMIT` 常數即可。
 
 ---
 

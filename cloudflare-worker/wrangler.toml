@@ -7,6 +7,19 @@
 #   npx wrangler login
 #   npx wrangler deploy
 #   npx wrangler secret put GEMINI_API_KEY
+#   npx wrangler kv namespace create RATE_LIMIT_KV
+#     (then uncomment the [[kv_namespaces]] block below with the printed id)
 name = "orbit-ai-gemini-proxy"
 main = "gemini-proxy-worker.js"
 compatibility_date = "2025-01-01"
+
+# Optional but recommended: a real, cross-request rate limit instead of the
+# in-memory per-isolate fallback the worker uses when this isn't bound - see
+# gemini-proxy-worker.js's isRateLimited(). Free on Cloudflare's Workers KV
+# free tier (no billing account needed). Dashboard path: Workers & Pages ->
+# KV -> Create namespace -> name it anything -> back on this Worker's
+# Settings -> Bindings -> Add -> KV Namespace -> variable name
+# RATE_LIMIT_KV -> pick the namespace you just created.
+# [[kv_namespaces]]
+# binding = "RATE_LIMIT_KV"
+# id = "<paste the namespace id here>"

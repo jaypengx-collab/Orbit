@@ -113,22 +113,54 @@ function json(data, status, headers) {
   });
 }
 
-// Best-effort per-isolate rate limit: cheap insurance against a burst of
-// casual scraping, not a real security boundary - Workers can and do run
-// many isolates in parallel across the edge, so this map is not a global
-// counter. The real, hard limit is Cloudflare's own free-plan daily request
-// cap, which needs no configuration here at all.
-const requestLog = new Map();
+// Real, cross-request rate limit via Workers KV (env.RATE_LIMIT_KV - see
+// README, an optional but recommended one-time binding) - one counter per
+// IP per hour, shared across every edge location, unlike a plain in-memory
+// Map (kept below as isRateLimitedInMemory, used only as a fallback if the
+// KV binding is missing or a KV call errors): Workers run many isolates in
+// parallel across Cloudflare's edge, so an in-memory counter resets per
+// isolate and a distributed burst of requests can blow straight through it
+// - actual mass abuse (a script hammering this endpoint, not a browser)
+// looks exactly like that. KV is still not a hard security boundary on its
+// own (an abuser can spread requests across enough source IPs to dodge a
+// per-IP counter), but it closes the specific gap of "just send enough
+// requests to outrun a single isolate's memory." The real, unconditional
+// backstop underneath both is Cloudflare's own free-plan daily request cap.
 const RATE_LIMIT = 20;
 const RATE_WINDOW_MS = 60 * 60 * 1000;
+const RATE_WINDOW_SECONDS = RATE_WINDOW_MS / 1000;
 
-function isRateLimited(ip) {
+async function isRateLimitedKV(kv, ip) {
+  const bucket = Math.floor(Date.now() / RATE_WINDOW_MS);
+  const key = `rl:${ip}:${bucket}`;
+  const count = Number((await kv.get(key)) || '0');
+  if (count >= RATE_LIMIT) return true;
+  // expirationTtl a little past the window so a key never outlives its own
+  // bucket by much, instead of accumulating in the namespace forever.
+  await kv.put(key, String(count + 1), { expirationTtl: RATE_WINDOW_SECONDS + 60 });
+  return false;
+}
+
+const requestLog = new Map();
+function isRateLimitedInMemory(ip) {
   const now = Date.now();
   const timestamps = (requestLog.get(ip) || []).filter(time => now - time < RATE_WINDOW_MS);
   const limited = timestamps.length >= RATE_LIMIT;
   timestamps.push(now);
   requestLog.set(ip, timestamps);
   return limited;
+}
+
+async function isRateLimited(env, ip) {
+  if (env.RATE_LIMIT_KV) {
+    try {
+      return await isRateLimitedKV(env.RATE_LIMIT_KV, ip);
+    } catch {
+      // KV erroring shouldn't take the whole endpoint down - fall through
+      // to the weaker in-memory check rather than failing the request.
+    }
+  }
+  return isRateLimitedInMemory(ip);
 }
 
 export default {
@@ -140,7 +172,7 @@ export default {
     if (request.method !== 'POST') return json({ error: { message: 'POST only' } }, 405, headers);
 
     const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-    if (isRateLimited(ip)) {
+    if (await isRateLimited(env, ip)) {
       return json({ error: { message: '請求過於頻繁，請稍後再試。' } }, 429, headers);
     }
 
