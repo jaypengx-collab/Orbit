@@ -690,9 +690,9 @@ function orbitSyncSetKeepLocalStyle(checked) {
   setEditorConfirmContent(
     wantsKeepLocal ? '不再同步樣式顏色？' : '恢復同步樣式顏色？',
     wantsKeepLocal
-      ? '會保留這台裝置目前的配色，之後不再套用其他裝置的樣式；課表仍照常同步。'
-      : '下次同步時，目前配色會被共用樣式取代（已自動備份，可按「還原保留的樣式」找回）。',
-    '',
+      ? '會保留這台裝置目前的配色，不再套用其他裝置的樣式。'
+      : '目前配色會在下次同步時被共用樣式取代。',
+    wantsKeepLocal ? '課表內容仍照常同步。' : '已自動備份，可按「還原保留的樣式」找回。',
     wantsKeepLocal ? '不再同步樣式' : '恢復同步',
     () => {
       hideEditorDiscardConfirm();
@@ -792,7 +792,7 @@ function promptScheduleBackupRestore() {
   if (!backup) return;
   setEditorConfirmContent(
     '找回加入同步前的課表？',
-    '加入同步前的課表已備份，要換回舊課表，還是繼續使用剛同步的課表？',
+    '要換回舊課表，還是繼續使用剛同步的課表？',
     '',
     '換回加入前的課表',
     () => {
@@ -923,8 +923,8 @@ function orbitSyncCreate() {
   }
   setEditorConfirmContent(
     '建立新同步？',
-    '會建立新課表文件與一組同步代碼、管理者密碼。已有代碼的話請改用「加入同步」——名額有限，勿浪費。',
-    '',
+    '會產生一組新的同步代碼與管理者密碼。',
+    '已有代碼的話請改用「加入同步」，名額有限。',
     '建立新同步',
     () => {
       hideEditorDiscardConfirm();
@@ -1006,11 +1006,11 @@ async function orbitSyncJoin() {
     // so this warns before doing anything, rather than silently replacing
     // data the user might not have backed up.
     setSyncStatusUi('');
-    const roleText = wantsManager ? '管理者身份（可以編輯課表）' : '僅接收身份（無法編輯課表）';
+    const roleText = wantsManager ? '管理者' : '僅接收者';
     setEditorConfirmContent(
       '加入同步？',
-      `即將以「${roleText}」加入，會立刻用該代碼的課表取代這台裝置目前的課表，無法復原（其他裝置不受影響）。`,
-      '',
+      `以「${roleText}」加入，會取代這台裝置目前的課表，無法復原。`,
+      '其他裝置的課表不受影響。',
       '仍要加入',
       () => {
         hideEditorDiscardConfirm();
@@ -1186,8 +1186,8 @@ function orbitSyncDeleteForEveryone() {
   }
   setEditorConfirmContent(
     '整個刪除這組同步？',
-    `會刪除伺服器上的共用課表，代碼「${code}」與管理者密碼立即失效；所有裝置之後同步時會各自變回本機課表。此動作無法復原。`,
-    '',
+    '會刪除伺服器上的共用課表，此動作無法復原。',
+    `代碼「${code}」與管理者密碼立即失效，所有裝置之後同步時會各自變回本機課表。`,
     '整個刪除',
     async () => {
       hideEditorDiscardConfirm();

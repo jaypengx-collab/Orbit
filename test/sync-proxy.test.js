@@ -850,7 +850,8 @@ describe('orbitSyncDeleteForEveryone', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(true);
     expect(document.getElementById('editor-confirm-title').textContent).toMatch(/整個刪除/);
-    expect(document.getElementById('editor-confirm-msg').textContent).toMatch(/管理者密碼/);
+    expect(document.getElementById('editor-confirm-msg').textContent).toMatch(/無法復原/);
+    expect(document.getElementById('editor-import-diff').textContent).toMatch(/管理者密碼/);
     // Unlike orbitSyncUnlink's confirm sheet, this one offers no "複製代碼"
     // button - once this succeeds the code is dead for everyone, so copying
     // it would be pointless.

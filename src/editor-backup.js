@@ -1103,8 +1103,8 @@ function applyPendingImportSettings() {
 function resetAllAppData() {
   setEditorConfirmContent(
     '重設所有資料？',
-    '會清除這台裝置的所有資料（課表、樣式、同步等）並回到初始畫面，此動作無法復原；其他同步裝置不受影響。',
-    '',
+    '會清除所有資料並回到初始畫面，此動作無法復原。',
+    '課表、樣式、同步設定等皆會清除；其他同步裝置不受影響。',
     '重設',
     () => {
       localStorage.clear();

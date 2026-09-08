@@ -200,7 +200,7 @@ function assignToSlot(key, day, period) {
       pendingAssignment = { key, day, period };
       setEditorConfirmContent(
         '覆蓋這個時段？',
-        `第 ${period + 1} 節目前是「${getEditorClassLabelFromDom(current) || current}」，確定改成「${getEditorClassLabelFromDom(key) || key}」嗎？`,
+        `第 ${period + 1} 節：「${getEditorClassLabelFromDom(current) || current}」改成「${getEditorClassLabelFromDom(key) || key}」？`,
         '',
         '確定覆蓋',
         confirmAssignment,

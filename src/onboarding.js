@@ -53,7 +53,7 @@ function focusAIImportSection() {
 function showStartChoice() {
   setEditorConfirmContent(
     '怎麼開始？',
-    '可以直接在編輯器裡手動建立課表，或是選一張課表照片，讓 AI 自動辨識並產生課表。',
+    '手動建立課表，或用 AI 辨識照片自動產生課表。',
     '',
     '用 AI 辨識照片',
     () => {
@@ -76,7 +76,7 @@ function showOnboardingPrompt() {
   markOnboardingSeen();
   setEditorConfirmContent(
     '開始使用 Orbit AI',
-    '有配對代碼的話，輸入即可加入班上的課表；沒有的話可以自己建立。',
+    '有代碼可直接輸入加入，沒有的話可以自己建立。',
     '',
     '輸入配對代碼',
     () => {
