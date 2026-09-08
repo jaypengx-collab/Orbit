@@ -13,6 +13,7 @@ import {
   setEditorConfirmContent,
   showEditorConfirmSheet
 } from './editor-core.js';
+import { subjectHue } from './schedule.js';
 
 // ---- js/editor-teachers.js ----
 // Renders the editable teacher list.
@@ -75,23 +76,13 @@ function makeTeacherCard(key, subject, teacher, location) {
   return div;
 }
 
-// Deterministic background color for a subject's avatar, so the same subject
-// always gets the same color across renders.
-const TEACHER_AVATAR_HUES = [6, 28, 48, 145, 168, 200, 225, 265, 290, 330];
-function subjectAvatarHue(subject) {
-  const text = String(subject || '').trim();
-  if (!text) return TEACHER_AVATAR_HUES[0];
-  let hash = 0;
-  for (let i = 0; i < text.length; i++) hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
-  return TEACHER_AVATAR_HUES[hash % TEACHER_AVATAR_HUES.length];
-}
 // Updates a teacher card's colored initial avatar from its current subject text.
 function updateTeacherCardAvatar(card) {
   const avatar = card.querySelector('.teacher-avatar');
   if (!avatar) return;
   const subject = (card.querySelector('.tc-subject')?.value || '').trim();
   const initial = subject ? [...subject][0] : '?';
-  const hue = subjectAvatarHue(subject);
+  const hue = subjectHue(subject);
   avatar.textContent = initial;
   avatar.style.setProperty('--avatar-hue', String(hue));
 }

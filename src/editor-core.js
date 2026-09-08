@@ -512,6 +512,11 @@ function setEditorConfirmContent(
   extraBtn.style.display = options.extraLabel ? '' : 'none';
   extraBtn.textContent = options.extraLabel || '';
   extraBtn.onclick = options.extraLabel ? options.extraHandler || hideEditorDiscardConfirm : null;
+  // extraBtn is a singleton reused across every caller of this function, so
+  // its danger styling has to be reset on every call - otherwise a
+  // destructive extra option (e.g. sync's "整個刪除同步") would leak its
+  // red styling onto the next, unrelated dialog's plain extra button.
+  extraBtn.classList.toggle('danger', !!options.extraDanger);
   overlay.onclick = canCancel
     ? hideEditorDiscardConfirm
     : function (event) {

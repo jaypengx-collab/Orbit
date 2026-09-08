@@ -827,10 +827,15 @@ describe('orbitSyncJoin checks the code exists before ever warning about overwri
 });
 
 describe('orbitSyncDeleteForEveryone', () => {
-  it('is hidden from a viewer and refuses even if called directly, with no network request', async () => {
+  it('is not offered to a viewer (the unlink dialog offers copy-code instead), and refuses even if called directly', async () => {
     sync.setSyncPairing('CODE1234');
     sync.renderSyncPanel();
-    expect(document.getElementById('sync-delete-all-btn').hidden).toBe(true);
+    sync.orbitSyncUnlink();
+    expect(document.getElementById('editor-confirm-extra-btn').textContent).toMatch(/複製代碼/);
+    expect(document.getElementById('editor-confirm-extra-btn').classList.contains('danger')).toBe(
+      false
+    );
+    document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[0].onclick(); // 取消
 
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
@@ -839,14 +844,17 @@ describe('orbitSyncDeleteForEveryone', () => {
     expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(false);
   });
 
-  it('is visible to a manager, warns before doing anything, and reverts nothing on cancel', async () => {
+  it("is reachable to a manager only as the unlink dialog's extra option, which warns before doing anything and reverts nothing on cancel", async () => {
     sync.setSyncPairing('CODE1234', 'PASSCODE1');
     sync.renderSyncPanel();
-    expect(document.getElementById('sync-delete-all-btn').hidden).toBe(false);
+    sync.orbitSyncUnlink();
+    const extraBtn = document.getElementById('editor-confirm-extra-btn');
+    expect(extraBtn.textContent).toMatch(/整個刪除同步/);
+    expect(extraBtn.classList.contains('danger')).toBe(true);
 
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    sync.orbitSyncDeleteForEveryone();
+    extraBtn.onclick(); // 整個刪除同步 (chains from the unlink dialog into this one)
     expect(fetchMock).not.toHaveBeenCalled();
     expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(true);
     expect(document.getElementById('editor-confirm-title').textContent).toMatch(/整個刪除/);

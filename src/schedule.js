@@ -108,6 +108,18 @@ function processSplitName(c, week) {
   };
 }
 
+// Deterministic per-subject color hue, shared by the teacher/subject editor's
+// avatars and the dashboard's class cards so the same subject always reads
+// as the same color in both places.
+const SUBJECT_HUES = [6, 28, 48, 145, 168, 200, 225, 265, 290, 330];
+function subjectHue(subject) {
+  const text = String(subject || '').trim();
+  if (!text) return SUBJECT_HUES[0];
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+  return SUBJECT_HUES[hash % SUBJECT_HUES.length];
+}
+
 export {
   buildSchedule,
   getISOWeekNumber,
@@ -116,5 +128,6 @@ export {
   getWeekType,
   pad2,
   parseTime,
-  processSplitName
+  processSplitName,
+  subjectHue
 };

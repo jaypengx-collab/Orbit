@@ -358,46 +358,53 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
    trying to time it: with nothing painted here before the buttons exist,
    there's nothing left to flash regardless of how slowly they load. */
 .nav-bar{
-  width:min(420px,100%);flex:0 0 auto;display:flex;gap:2px;padding:2px 4px;margin-bottom:9px;
+  width:min(420px,100%);flex:0 0 auto;display:flex;gap:2px;padding:3px;margin-bottom:7px;
   transition:filter .35s ease,opacity .35s ease,transform .35s ease;
+  border-radius:var(--orbit-radius-md);
 }
-/* Floating-text day tabs: no pill/box fill in any state (unselected, today,
-   tomorrow, or active) - just the label itself, sized and colored to read as
-   the control. The GPU-layer hints (translateZ/backface-visibility/
-   will-change) are kept from the old pill design defensively even though
-   there's no color-mix() gradient left to mis-rasterize, since they cost
-   nothing and this button still animates on :active. */
 .nav-item{
+  /* Removing the background/color/border-color transition (see git history)
+     did not fix this on a real Safari device, which rules out "gradient
+     transition interpolation" as the actual cause. What's left, and what
+     real WebKit engines are specifically known to get wrong, is compositing:
+     :active applies `transform:scale()`, which promotes the button to its
+     own GPU layer only while pressed and drops it back afterward. Safari can
+     fail to rasterize this button's color-mix()-based gradient background
+     onto that layer in time, so the button paints blank for a frame - then
+     "reappears" once the transform transition ends and the layer is torn
+     down and repainted from scratch. Forcing the button onto a GPU layer
+     permanently (not just while :active) keeps that layer alive across the
+     whole press, so there's nothing to promote/demote and nothing to
+     mis-rasterize. Every earlier fix here (is-today/is-tomorrow ring,
+     -webkit-appearance:none, dropping .nav-bar's background, box-shadow/
+     tap-highlight resets, the background transition itself) targeted a
+     different layer of this than the actual compositing glitch. */
   -webkit-appearance:none;appearance:none;
   -webkit-tap-highlight-color:transparent;
   -webkit-transform:translateZ(0);transform:translateZ(0);
   -webkit-backface-visibility:hidden;backface-visibility:hidden;
   will-change:transform;
-  position:relative;flex:1;min-width:0;min-height:48px;height:48px;border:none;background:transparent;
+  flex:1;min-width:0;min-height:46px;height:46px;border:none;background:transparent;
   box-shadow:none;outline:none;
-  display:flex;align-items:center;justify-content:center;
-  font-size:clamp(14px,3.9vw,16.5px);cursor:pointer;transition:transform .12s var(--ease-glass),color .15s;
-  border-radius:11px;padding:8px 3px;font-weight:750;color:var(--orbit-muted);
-  letter-spacing:-.01em;
+  font-size:clamp(13px,3.6vw,15px);cursor:pointer;transition:transform .12s var(--ease-glass);
+  border-radius:11px;padding:8px 3px;font-weight:700;color:var(--orbit-muted);
 }
 .nav-item:active,.nav-item:focus,.nav-item:focus-visible{box-shadow:none;outline:none}
-.nav-item:active{transform:scale(.94)}
-/* Today/tomorrow read purely through text color while browsing a different
-   day - no border/fill box. The active (currently viewed) tab layers a
-   bright color, bolder weight, and a small floating underline bar on top of
-   whichever of those colors already applies. */
-.nav-item.is-today{color:var(--pro-accent-readable)}
-.nav-item.is-tomorrow{color:var(--pro-secondary-readable)}
-.nav-item::after{
-  content:"";position:absolute;left:50%;bottom:3px;width:18px;height:3px;border-radius:3px;
-  background:var(--pro-accent);transform:translateX(-50%) scaleX(0);opacity:0;
-  transition:transform .3s var(--ease-glass),opacity .2s;
-}
-.nav-item.active{color:#fff;font-weight:900}
-.nav-item.active::after{transform:translateX(-50%) scaleX(1);opacity:1}
-.nav-item.active.is-tomorrow::after{background:var(--pro-secondary)}
-@media (max-width:480px){.nav-bar{gap:4px;padding:2px}.nav-item{font-size:15px;min-height:46px;height:46px}}
-@media (max-width:430px){.nav-bar{margin-bottom:11px}}
+.nav-item:active{transform:scale(.95)}
+.nav-item.is-today{color:#fff;border:2px solid var(--day-today-border);background:color-mix(in srgb,var(--pro-accent) 24%,transparent)}
+.nav-item.is-tomorrow{color:#fff;border:2px solid var(--day-tomorrow-border);background:color-mix(in srgb,var(--pro-secondary) 26%,transparent)}
+/* .active always wins the fill when combined with is-today/is-tomorrow — the
+   selected tab reads as the solid pill; the today/tomorrow state only needs
+   its 2px border while browsing a different day, no additional shadow/ring
+   on top of it. No drop shadow anywhere on these buttons: iOS Safari was
+   rendering this pill with no shadow at all while desktop Chrome drew a soft
+   one, so any shadow layer is dropped everywhere to match the flatter look
+   consistently across platforms. */
+.nav-item.active{background:linear-gradient(135deg,color-mix(in srgb,var(--pro-accent) 58%,#ffffff),color-mix(in srgb,var(--pro-accent) 28%,#ffffff));color:var(--pro-accent-text)}
+.nav-item.active.is-today{border-color:color-mix(in srgb,var(--pro-accent) 34%,transparent)}
+.nav-item.active.is-tomorrow{border-color:color-mix(in srgb,var(--pro-secondary) 72%,#ffffff 28%)}
+@media (max-width:480px){.nav-bar{gap:6px;padding:4px}.nav-item{font-size:14px;padding:0 10px;min-height:44px;height:44px}}
+@media (max-width:430px){.nav-bar{margin-bottom:10px}}
 
 /* ============================================================================
    Schedule list & rows
@@ -418,24 +425,40 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
 body.orbit-suppress-list-animation .animate-list .row{animation:none}
 @media (prefers-reduced-motion:reduce){.animate-list .row{animation:none}#schedule-list.nav-slide{animation:none}}
 
+/* --row-accent drives the whole card's identity color: a subject-hashed hue
+   for an ordinary period (see subjectHue() in schedule.js and dashboard-
+   render.js's renderList - the same hash the teacher/subject editor's
+   avatars use, so a subject reads as the same color in both places),
+   overridden back to the theme accent/secondary for the is-now/is-next
+   cards below since those signal live status, not subject identity. This
+   replaces the old single global --class-color (every card, every subject,
+   painted the same flat theme blue) and a second variable
+   (--current-class-color) .meta-location referenced but nothing ever set on
+   these rows, which silently fell back to plain --accent regardless of
+   subject. */
 .row{
+  --row-hue:210;
+  --row-accent:hsl(var(--row-hue) 74% 60%);
   transition:transform .2s var(--ease-glass),border-color .2s,background .2s,box-shadow .2s;
   cursor:pointer;height:76px;padding:11px 13px;margin-bottom:8px;display:flex;align-items:center;gap:10px;overflow:hidden;
-  border-radius:var(--orbit-radius-md);border:1px solid transparent;box-shadow:none;
-  background:var(--orbit-panel);
+  border-radius:var(--orbit-radius-md);border:1px solid color-mix(in srgb,var(--row-accent) 14%,transparent);box-shadow:none;
+  background:linear-gradient(135deg,color-mix(in srgb,var(--row-accent) 11%,var(--orbit-panel)),var(--orbit-panel) 65%);
 }
 .row:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .row:active{transform:scale(.98)}
-@media (hover:hover){.row:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--accent) 22%,transparent)}}
-.row .content{display:flex;flex-direction:column;justify-content:center;flex:1;min-width:0}
-.row-name{font-weight:800;display:flex;align-items:center;flex-wrap:nowrap;gap:4px;letter-spacing:-.3px;font-size:16.5px;line-height:1.22;margin-bottom:3.5px;border-left:3px solid var(--class-color,var(--accent));padding-left:8px;min-width:0}
+@media (hover:hover){.row:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--row-accent) 34%,transparent)}}
+/* The accent stripe lives on .content (spanning both the name and meta
+   lines) rather than just .row-name, so the meta line's left edge lines up
+   with the name's instead of sitting flush left of it. */
+.row .content{display:flex;flex-direction:column;justify-content:center;flex:1;min-width:0;border-left:3px solid var(--row-accent);padding-left:9px}
+.row-name{font-weight:800;display:flex;align-items:center;flex-wrap:nowrap;gap:4px;letter-spacing:-.3px;font-size:16.5px;line-height:1.22;margin-bottom:3.5px;min-width:0}
 .row-name-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:0 1 auto}
 .row-name .status-tag,.row-name .row-name-week-label{flex:0 0 auto}
 .row-meta{color:var(--orbit-muted);display:flex;flex-wrap:nowrap;overflow:hidden;align-items:center;gap:2px 6px;font-size:11.5px;line-height:1.32;background:transparent}
 .row-meta .meta-chip{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:rgba(255,255,255,.075);border:1px solid rgba(255,255,255,.08);color:rgba(248,250,252,.72);padding:1px 6px;border-radius:6px}
 .row-meta .meta-time{font-family:ui-monospace,SFMono-Regular,monospace;background:transparent;border:0;box-shadow:none;padding:0}
-.row-meta .meta-location{color:var(--current-class-color,var(--accent));font-weight:700;border-color:color-mix(in srgb,var(--pro-accent) 24%,transparent);background:color-mix(in srgb,var(--pro-accent) 14%,var(--orbit-panel))}
-.period-badge{background:color-mix(in srgb,var(--pro-accent) 12%,rgba(255,255,255,.09));display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--sub);flex-shrink:0;margin-top:1px;width:26px;height:26px;border-radius:9px;border:1px solid color-mix(in srgb,var(--pro-accent) 18%,rgba(255,255,255,.10));box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+.row-meta .meta-location{color:var(--row-accent);font-weight:700;border-color:color-mix(in srgb,var(--row-accent) 30%,transparent);background:color-mix(in srgb,var(--row-accent) 16%,var(--orbit-panel))}
+.period-badge{background:color-mix(in srgb,var(--row-accent) 22%,rgba(255,255,255,.07));display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--row-accent);flex-shrink:0;margin-top:1px;width:26px;height:26px;border-radius:9px;border:1px solid color-mix(in srgb,var(--row-accent) 34%,rgba(255,255,255,.10));box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
 .status-tag{font-size:9px;font-weight:800;padding:1px 5px;border-radius:4px;white-space:nowrap;margin-left:2px}
 .is-now .status-tag{background:var(--status-tag-now-bg,var(--pro-secondary));color:var(--status-tag-now-fg,#fff)}
 .is-next .status-tag{background:var(--status-tag-next-bg,var(--pro-accent));color:var(--status-tag-next-fg,#fff)}
@@ -444,8 +467,13 @@ body.orbit-suppress-list-animation .animate-list .row{animation:none}
 .label-even{background:var(--even-bg);color:var(--even-txt)}
 
 /* Current/next class highlight — the whole point of bug #4: keep these as
-   the last, most specific word on .row so nothing generic can stomp them. */
+   the last, most specific word on .row so nothing generic can stomp them.
+   --row-accent is reset to the theme accent/secondary here (status, not
+   subject, is what these two cards communicate), and .content's own inline
+   stripe is hidden so it doesn't double up on the card's own left-edge
+   accent border right next to it. */
 .row.is-next{
+  --row-accent:var(--pro-accent);
   border-radius:var(--orbit-radius-md);
   background:linear-gradient(135deg,color-mix(in srgb,var(--pro-accent) 26%,var(--orbit-panel-strong)),color-mix(in srgb,var(--pro-accent) 8%,var(--orbit-panel-strong)));
   border:1.5px solid color-mix(in srgb,var(--pro-accent) 55%,transparent);
@@ -453,12 +481,14 @@ body.orbit-suppress-list-animation .animate-list .row{animation:none}
   border-left:4px solid var(--pro-accent);padding-left:10px;
 }
 .row.is-now{
+  --row-accent:var(--pro-secondary);
   border-radius:var(--orbit-radius-md);
   background:linear-gradient(135deg,color-mix(in srgb,var(--pro-secondary) 28%,var(--orbit-panel-strong)),color-mix(in srgb,var(--pro-secondary) 9%,var(--orbit-panel-strong)));
   border:1.5px solid color-mix(in srgb,var(--pro-secondary) 58%,transparent);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.09);
   border-left:4px solid var(--pro-secondary);padding-left:10px;
 }
+.row.is-next .content,.row.is-now .content{border-left-color:transparent}
 .row.is-next .period-badge{border-color:transparent;background:var(--pro-accent);color:var(--pro-accent-text)}
 .row.is-now .period-badge{border-color:transparent;background:var(--pro-secondary);color:var(--pro-secondary-text)}
 

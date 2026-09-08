@@ -5,7 +5,7 @@ import { state } from './state.js';
 import { normalizeProAccent } from './appearance.js';
 import { keepActiveClassVisible, openModal } from './dashboard.js';
 import { openEditorFold } from './editor-core.js';
-import { getNextSchoolDay, processSplitName } from './schedule.js';
+import { getNextSchoolDay, processSplitName, subjectHue } from './schedule.js';
 
 // ---- js/dashboard-render.js ----
 // Manual simulator controls change the displayed clock without changing saved data.
@@ -244,7 +244,11 @@ function renderList(week, curIdx, nxtIdx, curDay, isDayFinished) {
     const isNext = isToday && i === nxtIdx;
     const row = document.createElement('div');
     row.className = `row ${isNow ? 'is-now' : ''} ${isNext ? 'is-next' : ''}`.trim();
-    row.style.setProperty('--class-color', getClassColor());
+    // Per-subject hue (same hash the teacher/subject editor's avatars use),
+    // not the single theme accent - see .row's --row-accent in styles.css.
+    // is-now/is-next override it back to the theme accent/secondary since
+    // those cards signal status, not subject identity.
+    row.style.setProperty('--row-hue', String(subjectHue(info.n)));
     row.style.setProperty('--row-i', String(i));
     row.tabIndex = 0;
     row.role = 'button';
@@ -283,11 +287,7 @@ function renderList(week, curIdx, nxtIdx, curDay, isDayFinished) {
     meta.className = 'row-meta';
     meta.append(createMetaChip(`${c.s} – ${c.e}`, 'meta-time'));
     if (info.t) meta.append(createMetaChip(info.t, 'meta-teacher'));
-    if (c.loc) {
-      const locationChip = createMetaChip(c.loc, 'meta-location');
-      locationChip.style.setProperty('--class-color', getClassColor());
-      meta.append(locationChip);
-    }
+    if (c.loc) meta.append(createMetaChip(c.loc, 'meta-location'));
     content.append(name, meta);
     row.append(badge, content);
     list.appendChild(row);

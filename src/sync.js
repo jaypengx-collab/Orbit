@@ -613,7 +613,6 @@ function renderSyncPanel() {
   const roleLabel = document.getElementById('sync-role-label');
   const keepStyleCheckbox = document.getElementById('sync-keep-local-style');
   const styleBackupNotice = document.getElementById('sync-style-backup-notice');
-  const deleteAllBtn = document.getElementById('sync-delete-all-btn');
   const createdCodesBox = document.getElementById('sync-created-codes');
   const managerPasscodeBox = document.getElementById('sync-manager-passcode-box');
   const upgradeBox = document.getElementById('sync-upgrade-box');
@@ -662,13 +661,6 @@ function renderSyncPanel() {
   // an already-manager device (nothing to upgrade) or an unpaired one
   // (nothing to upgrade *into* yet - that's what "加入同步" is for).
   if (upgradeBox) upgradeBox.hidden = !configured || !viewer;
-  // Deleting the shared document affects every paired device, not just this
-  // one - only a manager gets the button at all (a viewer can't publish a
-  // change either, so wiping the shared document isn't a "my data" decision
-  // it should get to make). Purely a UI guardrail, same caveat as the rest
-  // of this file's role locks - see orbitSyncDeleteForEveryone's own
-  // isSyncViewer() check for the part that actually matters.
-  if (deleteAllBtn) deleteAllBtn.hidden = !configured || viewer;
   if (keepStyleCheckbox) keepStyleCheckbox.checked = getSyncKeepLocalStyle();
   // Shown whenever a backed-up style is sitting around waiting on a
   // decision - regardless of the checkbox's current state, since the user
@@ -1123,6 +1115,15 @@ async function orbitSyncUpgradeToManager() {
 // be needed again to rejoin (or, for a manager, to ever write again at
 // all - unlike the sync code, there's no separate "接收者代碼" any more
 // that could still read things back).
+//
+// A manager gets a third option here instead of the copy shortcut: the
+// account-wide "整個刪除同步" used to be its own always-visible danger
+// button in the panel regardless of whether anyone was about to unlink -
+// folded into this same dialog instead, since deleting the shared sync is
+// really just the more drastic thing a manager might mean by "解除同步"
+// (this device only) vs. really wanting it gone for every device. Picking
+// it here hands off to orbitSyncDeleteForEveryone's own, more explicit
+// warning rather than deleting straight from this dialog's confirm button.
 function orbitSyncUnlink() {
   const code = getSyncCode();
   const managerPasscode = getSyncManagerPasscode();
@@ -1131,7 +1132,7 @@ function orbitSyncUnlink() {
   setEditorConfirmContent(
     '解除同步？',
     isManager
-      ? '解除後會變回本機課表，並忘記這組代碼與管理者密碼；建議先複製備用：'
+      ? '這只會讓這台裝置變回本機課表，其他裝置仍會繼續同步。忘記代碼前可先複製備用：'
       : '解除後會變回本機課表，並忘記這組配對代碼；建議先複製備用：',
     copyText,
     '解除同步',
@@ -1143,21 +1144,30 @@ function orbitSyncUnlink() {
       promptScheduleBackupRestore();
     },
     '取消',
-    {
-      extraLabel: '複製代碼',
-      // Deliberately doesn't close the sheet (unlike the default
-      // extraHandler) - copying is meant to happen *before* deciding
-      // whether to actually confirm the unlink, not instead of it.
-      extraHandler: async () => {
-        const extraBtn = document.getElementById('editor-confirm-extra-btn');
-        try {
-          await copyTransferText(copyText);
-          if (extraBtn) extraBtn.textContent = '已複製！';
-        } catch (error) {
-          setSyncStatusUi(`複製失敗：${error.message || error}`, true);
+    isManager
+      ? {
+          extraLabel: '整個刪除同步',
+          extraDanger: true,
+          extraHandler: () => {
+            hideEditorDiscardConfirm();
+            orbitSyncDeleteForEveryone();
+          }
         }
-      }
-    }
+      : {
+          extraLabel: '複製代碼',
+          // Deliberately doesn't close the sheet (unlike the default
+          // extraHandler) - copying is meant to happen *before* deciding
+          // whether to actually confirm the unlink, not instead of it.
+          extraHandler: async () => {
+            const extraBtn = document.getElementById('editor-confirm-extra-btn');
+            try {
+              await copyTransferText(copyText);
+              if (extraBtn) extraBtn.textContent = '已複製！';
+            } catch (error) {
+              setSyncStatusUi(`複製失敗：${error.message || error}`, true);
+            }
+          }
+        }
   );
   showEditorConfirmSheet();
 }
@@ -1170,11 +1180,11 @@ function orbitSyncUnlink() {
 // pullSyncSnapshot's `exists: false` path). There is no undo and no way to
 // warn the other devices first beyond what this device's own confirmation
 // text says, so this gets its own, more explicit warning than a plain
-// unlink - manager-only (see the `sync-delete-all-btn` hidden toggle in
-// renderSyncPanel, and the isSyncViewer() guard below as the real check a
-// hidden button alone never is, same reasoning as every other role lock in
-// this file; the Worker itself also refuses this without the correct
-// passcode - see its handleSyncRequest).
+// unlink - manager-only (surfaced only as an option inside orbitSyncUnlink's
+// dialog above, never its own standalone button; the isSyncViewer() guard
+// below is the real check, same reasoning as every other role lock in this
+// file; the Worker itself also refuses this without the correct passcode -
+// see its handleSyncRequest).
 function orbitSyncDeleteForEveryone() {
   if (isSyncViewer()) return;
   const code = getSyncCode();
