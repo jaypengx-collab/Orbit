@@ -589,6 +589,10 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .editor-confirm-btn.danger{background:transparent;color:#ff453a;border:1px solid rgba(255,69,58,.35);font-weight:700}
 .editor-primary-btn{background:linear-gradient(135deg,var(--pro-action-bg),var(--pro-action-bg-2));color:var(--pro-action-text);box-shadow:0 8px 22px color-mix(in srgb,var(--pro-accent) 20%,transparent);backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%)}
 @media (min-width:390px){.editor-confirm-actions{flex-direction:row}.editor-confirm-btn{flex:1 1 0}}
+/* A 3rd (extra) button - e.g. unlink's "複製代碼" - makes a side-by-side row too
+   cramped on a real phone width (labels wrap into 2 lines and everything looks
+   squished); stack those back into a full-width column regardless of viewport. */
+.editor-confirm-actions:has(#editor-confirm-extra-btn){flex-direction:column}
 
 .toggle-row{background:rgba(0,0,0,.16);border-radius:16px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;border:1px solid transparent;margin-bottom:0}
 .editor-inline-options .toggle-row{margin-bottom:0}
@@ -700,6 +704,9 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .sync-divider{font-size:11px;color:var(--sub);text-align:center;margin:2px 0}
 .sync-active-code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:22px;font-weight:800;letter-spacing:.14em;text-align:center;padding:12px;border-radius:12px;background:rgba(0,0,0,.18);border:1px solid var(--bd);color:var(--accent);word-break:break-all}
 .sync-role-checkbox{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--sub);padding:2px 2px 4px}
+.sync-style-backup-notice{display:flex;flex-direction:column;gap:8px;padding:10px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid var(--bd)}
+.sync-style-backup-notice[hidden]{display:none}
+.sync-style-backup-notice .editor-hint-body{margin:0}
 .sync-role-label{font-size:11px;font-weight:700;color:var(--accent);text-align:center}
 .sync-role-label.is-viewer{color:var(--sub)}
 

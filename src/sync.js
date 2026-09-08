@@ -57,6 +57,13 @@ const KEEP_LOCAL_STYLE_KEY = 'orbitSyncKeepLocalStyle';
 // above: it's "what this pairing's shared style is", so it's cleared
 // alongside the rest of the pairing state.
 const LAST_KNOWN_SHARED_STYLE_KEY = 'orbitSyncLastKnownStyle';
+// A one-shot safety net for the one genuinely destructive moment in this
+// whole feature: un-checking "不同步樣式顏色" immediately pulls the shared
+// style in and overwrites whatever this device had, with no other undo. Set
+// right before that happens (see orbitSyncSetKeepLocalStyle), cleared once
+// the user either restores it or dismisses it - a per-device backup, like
+// the preference itself, not tied to any one pairing.
+const STYLE_BACKUP_KEY = 'orbitSyncStyleBackup';
 const MANAGER_ROLE = 'manager';
 const VIEWER_ROLE = 'viewer';
 // 0/O/1/I excluded so a hand-copied or read-aloud code is never ambiguous.
@@ -132,6 +139,27 @@ function setLastKnownSharedStyle(data) {
       styleSlots: data.styleSlots
     })
   );
+}
+function getStyleBackup() {
+  try {
+    return JSON.parse(readLocal(STYLE_BACKUP_KEY) || 'null');
+  } catch {
+    return null;
+  }
+}
+function backUpCurrentStyle() {
+  writeLocal(
+    STYLE_BACKUP_KEY,
+    JSON.stringify({
+      proAccent: state.applicationData.proAccent,
+      proSecondary: state.applicationData.proSecondary,
+      proTertiary: state.applicationData.proTertiary,
+      styleSlots: state.applicationData.styleSlots
+    })
+  );
+}
+function clearStyleBackup() {
+  writeLocal(STYLE_BACKUP_KEY, '');
 }
 function generateSyncCode() {
   const bytes = new Uint8Array(CODE_LENGTH);
@@ -398,6 +426,7 @@ function renderSyncPanel() {
   const activeCode = document.getElementById('sync-active-code');
   const roleLabel = document.getElementById('sync-role-label');
   const keepStyleCheckbox = document.getElementById('sync-keep-local-style');
+  const styleBackupNotice = document.getElementById('sync-style-backup-notice');
   if (!setupBox || !activeBox) return;
   const configured = isSyncConfigured();
   setupBox.hidden = configured;
@@ -411,6 +440,11 @@ function renderSyncPanel() {
     roleLabel.classList.toggle('is-viewer', viewer);
   }
   if (keepStyleCheckbox) keepStyleCheckbox.checked = getSyncKeepLocalStyle();
+  // Shown whenever a backed-up style is sitting around waiting on a
+  // decision - regardless of the checkbox's current state, since the user
+  // could re-check "不同步樣式顏色" again before ever coming back to deal
+  // with the backup from the last time they unchecked it.
+  if (styleBackupNotice) styleBackupNotice.hidden = !getStyleBackup();
   applyEditorRoleLock();
 }
 // Warns before either direction of this toggle takes effect - a native
@@ -427,17 +461,29 @@ function orbitSyncSetKeepLocalStyle(checked) {
     wantsKeepLocal ? '不再同步樣式顏色？' : '恢復同步樣式顏色？',
     wantsKeepLocal
       ? '這台裝置會保留目前的配色：其他裝置改樣式不會再套用過來，這台裝置的配色也不會覆蓋共用樣式。課表內容仍會照常同步。'
-      : '這台裝置會恢復接收共用樣式——下次同步時，目前保留的配色會立刻被共用樣式取代，且無法復原。',
+      : '這台裝置會恢復接收共用樣式——下次同步時，目前保留的配色會立刻被共用樣式取代。系統會先備份目前的配色，之後可以在這裡按「還原保留的樣式」拿回來。',
     '',
     wantsKeepLocal ? '不再同步樣式' : '恢復同步',
     () => {
       hideEditorDiscardConfirm();
+      // The one genuinely destructive direction: turning this off means
+      // the very next sync overwrites whatever's here now. Back it up
+      // first so renderSyncPanel's recovery option (see below) has
+      // something to offer, in case the shared style wasn't actually what
+      // they wanted after all.
+      if (!wantsKeepLocal) backUpCurrentStyle();
       setSyncKeepLocalStyle(wantsKeepLocal);
       // The style tool's own lock (see applyEditorRoleLock) depends on this
       // setting too, not just role - refresh it immediately so confirming
       // unlocks/locks the style button right away, no reload or re-pair
       // needed.
       applyEditorRoleLock();
+      renderSyncPanel();
+      // Don't wait for the next touch-triggered check (see the
+      // activity-driven sync section below) - a style-sync change is
+      // exactly the kind of moment where the user wants the effect to show
+      // up right away, not whenever they next happen to click something.
+      syncTick();
     },
     '取消',
     {
@@ -448,6 +494,41 @@ function orbitSyncSetKeepLocalStyle(checked) {
     }
   );
   showEditorConfirmSheet();
+}
+// The recovery half of the safety net above: reapplies whatever style was
+// backed up right before the user last turned sync-style back on, and
+// re-enables the opt-out so it isn't just immediately overwritten again by
+// the very next sync. A deliberate, explicit action (its own button, not
+// bundled into some other flow) so it doesn't need its own confirmation
+// sheet on top of everything else here.
+function orbitSyncRestoreStyleBackup() {
+  const backup = getStyleBackup();
+  if (!backup) return;
+  // Re-enable the opt-out first - restoring the old colors only to have the
+  // very next sync immediately overwrite them again would defeat the point.
+  setSyncKeepLocalStyle(true);
+  const next = {
+    ...state.applicationData,
+    proAccent: backup.proAccent,
+    proSecondary: backup.proSecondary,
+    proTertiary: backup.proTertiary,
+    styleSlots: backup.styleSlots
+  };
+  // fromSync:true here isn't about where the data came from - it's to get
+  // the same "don't push this back out" behavior applyEditorSettingsData
+  // already gives a sync-applied change, which is exactly what a pure
+  // local restore also needs (setSyncKeepLocalStyle(true) above would make
+  // any push substitute the shared style anyway, so this is belt-and-
+  // suspenders more than strictly load-bearing).
+  applyEditorSettingsData(next, { fromSync: true });
+  clearStyleBackup();
+  applyEditorRoleLock();
+  renderSyncPanel();
+  setSyncStatusUi('已還原保留的樣式，並重新開啟「不同步樣式顏色」。');
+}
+function orbitSyncDismissStyleBackup() {
+  clearStyleBackup();
+  renderSyncPanel();
 }
 
 // Locks the rest of the editor down to view-only for a viewer device -
@@ -661,11 +742,14 @@ window.orbitSyncCreate = orbitSyncCreate;
 window.orbitSyncJoin = orbitSyncJoin;
 window.orbitSyncUnlink = orbitSyncUnlink;
 window.orbitSyncSetKeepLocalStyle = orbitSyncSetKeepLocalStyle;
+window.orbitSyncRestoreStyleBackup = orbitSyncRestoreStyleBackup;
+window.orbitSyncDismissStyleBackup = orbitSyncDismissStyleBackup;
 
 export {
   applyEditorRoleLock,
   clearSyncPairing,
   generateSyncCode,
+  getStyleBackup,
   getSyncCode,
   getSyncKeepLocalStyle,
   getSyncRole,
@@ -673,7 +757,9 @@ export {
   isSyncProxyConfigured,
   isSyncViewer,
   orbitSyncCreate,
+  orbitSyncDismissStyleBackup,
   orbitSyncJoin,
+  orbitSyncRestoreStyleBackup,
   orbitSyncSetKeepLocalStyle,
   orbitSyncUnlink,
   performSyncJoin,

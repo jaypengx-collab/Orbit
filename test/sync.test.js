@@ -9,11 +9,13 @@ import { seedLocalStorage } from './helpers/fixtureData.js';
 // covers every push/pull/join/create test that actually needs a fetch call
 // - none of that can run here since isSyncProxyConfigured() is false.
 let sync;
+let state;
 
 beforeAll(async () => {
   seedLocalStorage();
   await loadApp();
   sync = await import('../src/sync.js');
+  ({ state } = await import('../src/state.js'));
 });
 
 beforeEach(() => {
@@ -286,5 +288,99 @@ describe('orbitSyncSetKeepLocalStyle warns before either direction takes effect'
     expect(sync.getSyncKeepLocalStyle()).toBe(true);
     expect(checkbox.checked).toBe(true); // reverted back to checked
     sync.setSyncKeepLocalStyle(false);
+  });
+
+  it('confirming either direction checks sync immediately instead of waiting for the next touch', async () => {
+    // No proxy is configured in this file, so the immediate check has
+    // nothing to actually push or pull - but it still runs, which is
+    // observable as the status line reporting sync isn't set up rather than
+    // staying whatever it said before.
+    document.getElementById('sync-status').textContent = '';
+    const checkbox = document.getElementById('sync-keep-local-style');
+    checkbox.checked = true;
+    sync.orbitSyncSetKeepLocalStyle(true);
+    document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[1].onclick();
+    await vi.waitFor(() =>
+      expect(document.getElementById('sync-status').textContent).toMatch(/尚未設定/)
+    );
+    sync.setSyncKeepLocalStyle(false);
+  });
+});
+
+describe('the destructive "resume shared style" direction backs up the local style first', () => {
+  beforeEach(() => {
+    sync.setSyncPairing('CODE1234');
+    document.getElementById('sync-keep-local-style').checked = false;
+    sync.orbitSyncDismissStyleBackup(); // clear any backup left over from another test
+  });
+
+  it('turning keep-local-style ON does not create a backup', () => {
+    const checkbox = document.getElementById('sync-keep-local-style');
+    checkbox.checked = true;
+    sync.orbitSyncSetKeepLocalStyle(true);
+    document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[1].onclick();
+    expect(sync.getStyleBackup()).toBeNull();
+    expect(document.getElementById('sync-style-backup-notice').hidden).toBe(true);
+  });
+
+  it('turning keep-local-style OFF backs up the current style, and it can be restored later', () => {
+    sync.setSyncKeepLocalStyle(true);
+    state.applicationData.proAccent = '#111111';
+    state.applicationData.proSecondary = '#222222';
+    state.applicationData.proTertiary = '#333333';
+    state.applicationData.styleSlots = [{ name: 'Kept', primary: '#111111', secondary: '#222222' }];
+
+    const checkbox = document.getElementById('sync-keep-local-style');
+    checkbox.checked = false;
+    sync.orbitSyncSetKeepLocalStyle(false);
+    document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[1].onclick(); // 恢復同步
+
+    expect(sync.getSyncKeepLocalStyle()).toBe(false);
+    const backup = sync.getStyleBackup();
+    expect(backup.proAccent).toBe('#111111');
+    expect(backup.proSecondary).toBe('#222222');
+    expect(backup.proTertiary).toBe('#333333');
+    expect(backup.styleSlots[0]).toEqual({
+      name: 'Kept',
+      primary: '#111111',
+      secondary: '#222222'
+    });
+    expect(document.getElementById('sync-style-backup-notice').hidden).toBe(false);
+
+    // Simulate what turning the checkbox off actually does in practice: the
+    // very next sync pulls in the shared style and overwrites it.
+    state.applicationData.proAccent = '#999999';
+    state.applicationData.styleSlots = [
+      { name: 'Shared', primary: '#999999', secondary: '#888888' }
+    ];
+
+    sync.orbitSyncRestoreStyleBackup();
+    expect(state.applicationData.proAccent).toBe('#111111');
+    expect(state.applicationData.proSecondary).toBe('#222222');
+    expect(state.applicationData.proTertiary).toBe('#333333');
+    expect(state.applicationData.styleSlots[0]).toEqual({
+      name: 'Kept',
+      primary: '#111111',
+      secondary: '#222222'
+    });
+    expect(sync.getSyncKeepLocalStyle()).toBe(true); // re-enabled, so it isn't overwritten right away again
+    expect(sync.getStyleBackup()).toBeNull();
+    expect(document.getElementById('sync-style-backup-notice').hidden).toBe(true);
+    expect(document.getElementById('sync-status').textContent).toMatch(/已還原/);
+  });
+
+  it('dismissing the backup clears it without touching the current style', () => {
+    sync.setSyncKeepLocalStyle(true);
+    state.applicationData.proAccent = '#111111';
+    document.getElementById('sync-keep-local-style').checked = false;
+    sync.orbitSyncSetKeepLocalStyle(false);
+    document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[1].onclick();
+    expect(sync.getStyleBackup()).not.toBeNull();
+
+    state.applicationData.proAccent = '#999999';
+    sync.orbitSyncDismissStyleBackup();
+    expect(sync.getStyleBackup()).toBeNull();
+    expect(state.applicationData.proAccent).toBe('#999999'); // untouched
+    expect(document.getElementById('sync-style-backup-notice').hidden).toBe(true);
   });
 });
