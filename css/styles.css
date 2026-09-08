@@ -352,20 +352,27 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
   border-radius:var(--orbit-radius-md);
 }
 .nav-item{
-  /* Frame-by-frame analysis of a screen recording of the actual bug (the
-     button going blank mid-tap, then redrawing once the click animation
-     finished) showed the real cause: .active sets a linear-gradient
-     background while every other state uses a flat color/transparent, and a
-     gradient can't be smoothly interpolated against a flat color the way two
-     solid colors can. Animating `background` here made the browser render a
-     garbage/blank frame on the button mid-transition. None of the earlier
-     fixes (removing the is-today/is-tomorrow ring, -webkit-appearance:none,
-     dropping .nav-bar's own background, resetting box-shadow/tap-highlight)
-     touched this because the bug was never about shadows, native button
-     styling, or tap highlights - it was this one non-animatable background
-     transition. Only `transform` is safe to animate here. */
+  /* Removing the background/color/border-color transition (see git history)
+     did not fix this on a real Safari device, which rules out "gradient
+     transition interpolation" as the actual cause. What's left, and what
+     real WebKit engines are specifically known to get wrong, is compositing:
+     :active applies `transform:scale()`, which promotes the button to its
+     own GPU layer only while pressed and drops it back afterward. Safari can
+     fail to rasterize this button's color-mix()-based gradient background
+     onto that layer in time, so the button paints blank for a frame - then
+     "reappears" once the transform transition ends and the layer is torn
+     down and repainted from scratch. Forcing the button onto a GPU layer
+     permanently (not just while :active) keeps that layer alive across the
+     whole press, so there's nothing to promote/demote and nothing to
+     mis-rasterize. Every earlier fix here (is-today/is-tomorrow ring,
+     -webkit-appearance:none, dropping .nav-bar's background, box-shadow/
+     tap-highlight resets, the background transition itself) targeted a
+     different layer of this than the actual compositing glitch. */
   -webkit-appearance:none;appearance:none;
   -webkit-tap-highlight-color:transparent;
+  -webkit-transform:translateZ(0);transform:translateZ(0);
+  -webkit-backface-visibility:hidden;backface-visibility:hidden;
+  will-change:transform;
   flex:1;min-width:0;min-height:46px;height:46px;border:none;background:transparent;
   box-shadow:none;outline:none;
   font-size:clamp(13px,3.6vw,15px);cursor:pointer;transition:transform .12s var(--ease-glass);
