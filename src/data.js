@@ -9,7 +9,11 @@ import {
   normalizeStyleSlots
 } from './appearance.js';
 import { editorTimeToMinutes } from './editor-core.js';
-import { DEFAULT_STYLE_PRIMARY, DEFAULT_STYLE_SECONDARY } from './constants.js';
+import {
+  DEFAULT_STYLE_PRIMARY,
+  DEFAULT_STYLE_SECONDARY,
+  WEEKDAYS_INDEX_ORDER
+} from './constants.js';
 
 // ---- js/data.js ----
 // App defaults and live simulator state.
@@ -298,7 +302,7 @@ function loadData() {
         ])
       ),
       weeklySchedule: Object.fromEntries(
-        [0, 1, 2, 3, 4, 5, 6].map(day => {
+        WEEKDAYS_INDEX_ORDER.map(day => {
           const row = Array.isArray(
             parsed.weeklySchedule[day] || parsed.weeklySchedule[String(day)]
           )

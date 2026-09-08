@@ -1,6 +1,7 @@
 // ---- src/gemini-ocr.js ----
 // Photo -> canvas preprocessing and the Gemini API call/response parsing
 // for the optional AI schedule-photo import.
+import { WEEKDAYS_INDEX_ORDER, WEEKDAY_LABELS } from './constants.js';
 import { state } from './state.js';
 import { normalizeCountdownEvents } from './data.js';
 import {
@@ -266,7 +267,7 @@ class AIVisionProcessor {
 
     const weeklySchedule = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
     const rawWeekly = aiResult.weeklySchedule ?? {};
-    [0, 1, 2, 3, 4, 5, 6].forEach(dayKey => {
+    WEEKDAYS_INDEX_ORDER.forEach(dayKey => {
       const dayArr = rawWeekly[dayKey] ?? rawWeekly[String(dayKey)];
       if (!Array.isArray(dayArr)) return;
       weeklySchedule[dayKey] = dayArr.map(item => {
@@ -279,7 +280,7 @@ class AIVisionProcessor {
     });
 
     const recognizedBlocks = [];
-    [0, 1, 2, 3, 4, 5, 6].forEach(day => {
+    WEEKDAYS_INDEX_ORDER.forEach(day => {
       const daySchedule = weeklySchedule[day] || [];
       daySchedule.forEach((code, period) => {
         if (code && teacherDB[code]) {
@@ -406,15 +407,6 @@ class ImportPreview {
     const classFold = this.root.querySelector('[data-ocr-class-fold]');
     if (classFold && !classRecords.length) classFold.remove();
 
-    const weekdayLabels = {
-      0: '週日',
-      1: '週一',
-      2: '週二',
-      3: '週三',
-      4: '週四',
-      5: '週五',
-      6: '週六'
-    };
     const weeklySchedule = candidate.weeklySchedule || {};
     const extraDays = [6, 0].filter(day => (weeklySchedule[day] || []).some(Boolean));
     const days = [1, 2, 3, 4, 5, ...extraDays];
@@ -422,7 +414,7 @@ class ImportPreview {
     days.forEach(day => {
       const row = document.getElementById('ocr-day-row-template').content.cloneNode(true);
       row.querySelector('.schedule-day-row').dataset.day = day;
-      row.querySelector('.schedule-day-label').textContent = weekdayLabels[day];
+      row.querySelector('.schedule-day-label').textContent = WEEKDAY_LABELS[day];
       const periods = row.querySelector('.schedule-periods');
       bellTimes.forEach((time, period) => {
         const select = document.createElement('select');

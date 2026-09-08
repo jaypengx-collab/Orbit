@@ -1,13 +1,19 @@
 // ---- src/schedule.js ----
 // Turns settings data (from data.js) into the day-by-day runtime schedule,
 // plus the pure day/week-parity time helpers most other modules rely on.
+import {
+  MS_PER_DAY,
+  WEEKDAYS_DISPLAY_ORDER,
+  WEEKDAYS_INDEX_ORDER,
+  WEEKDAY_LABELS
+} from './constants.js';
 import { state } from './state.js';
 
 // ---- js/schedule.js ----
 // Builds the runtime schedule rows from teacher, location, and bell-time data.
 function buildSchedule() {
   state.runtimeSchedule = {};
-  [0, 1, 2, 3, 4, 5, 6].forEach(day => {
+  WEEKDAYS_INDEX_ORDER.forEach(day => {
     state.runtimeSchedule[day] = (state.applicationData.weeklySchedule[day] || [])
       .map((key, i) => {
         if (!key) return null;
@@ -36,21 +42,12 @@ function buildSchedule() {
 function renderNavBar() {
   const navBar = document.querySelector('.nav-bar');
   if (!navBar) return;
-  let days = [1, 2, 3, 4, 5, 6, 0].filter(d => (state.runtimeSchedule[d] || []).length > 0);
+  let days = WEEKDAYS_DISPLAY_ORDER.filter(d => (state.runtimeSchedule[d] || []).length > 0);
   if (!days.length) days = [1, 2, 3, 4, 5];
-  const labels = {
-    0: '週日',
-    1: '週一',
-    2: '週二',
-    3: '週三',
-    4: '週四',
-    5: '週五',
-    6: '週六'
-  };
   navBar.innerHTML = days
     .map(
       d =>
-        `<button class="nav-item" data-day="${d}" onclick="handleNav(${d})" tabindex="0">${labels[d]}</button>`
+        `<button class="nav-item" data-day="${d}" onclick="handleNav(${d})" tabindex="0">${WEEKDAY_LABELS[d]}</button>`
     )
     .join('');
 }
@@ -69,7 +66,7 @@ function getISOWeekNumber(date) {
   const dayNum = d.getUTCDay() || 7;
   d.setUTCDate(d.getUTCDate() + 4 - dayNum);
   const ys = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil(((d - ys) / 86400000 + 1) / 7);
+  return Math.ceil(((d - ys) / MS_PER_DAY + 1) / 7);
 }
 // Returns the current odd/even week label, respecting the reverse-week setting.
 function getWeekType() {
