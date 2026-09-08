@@ -13,9 +13,15 @@
 // own Firebase service-account credentials server-side and applies real,
 // cross-request rate limiting, then proxies to Firestore - the same
 // reasoning as gemini-ocr.js talking to the Gemini proxy instead of Gemini
-// directly. A device only ever needs a pairing code; nothing here proves
-// who the caller is, so the pairing code is the only access control on top
-// of whatever the Worker itself enforces - see README for the full design.
+// directly.
+//
+// One shared sync code plus a separate manager passcode - the passcode is
+// the only thing "manager mode" is gated by, both here and server-side (see
+// the Worker's handleSyncRequest): reading (GET) never needs it, anyone
+// with the plain sync code can receive updates, exactly like the original
+// single-code design. Only writing (PATCH) and deleting (DELETE) require
+// the correct passcode - the Worker checks it against the hash it stored at
+// creation time, so this isn't just a client-side convention any more.
 //
 // This feature simply doesn't work without VITE_ORBIT_SYNC_PROXY_URL set
 // (see isSyncProxyConfigured) - same as gemini-ocr.js's AI import without
@@ -41,13 +47,25 @@ import {
 
 const SYNC_PROXY_URL = (import.meta.env.VITE_ORBIT_SYNC_PROXY_URL || '').trim();
 const CODE_KEY = 'orbitSyncCode';
-const ROLE_KEY = 'orbitSyncRole';
+// Empty/absent means this device is a viewer; a non-empty value is the
+// actual manager passcode, kept in plaintext (there's nothing else it could
+// be kept as - it has to be sent back to the Worker on every write) so this
+// device can re-display or re-share it later (see renderSyncPanel's manager
+// passcode reveal) instead of it being a one-time-only secret the way the
+// old two-code design's viewer code was.
+const MANAGER_PASSCODE_KEY = 'orbitSyncManagerPasscode';
 const LAST_UPDATE_TIME_KEY = 'orbitSyncLastUpdateTime';
 // Left over from before this feature required the proxy Worker, when a
 // device could pair against a self-typed Firebase project id - cleared
 // opportunistically below so an old pairing doesn't leave a stale value
 // sitting in localStorage forever.
 const LEGACY_PROJECT_ID_KEY = 'orbitSyncProjectId';
+// Left over from an earlier revision of this feature that split manager and
+// viewer into two separate codes instead of one code plus a passcode -
+// cleared opportunistically the same way, so a pairing made under that
+// short-lived design doesn't leave a stale, now-meaningless role flag
+// sitting in localStorage forever.
+const LEGACY_ROLE_KEY = 'orbitSyncRole';
 // A per-device (not per-pairing) preference - deliberately survives
 // clearSyncPairing/setSyncPairing, since it's about *this device's own*
 // taste in colors, not something tied to any one pairing code.
@@ -107,21 +125,24 @@ function getSyncCode() {
 function isSyncConfigured() {
   return !!getSyncCode();
 }
-// Which role a device has is decided entirely by which of the two codes it
-// was given (see the Worker's handleSyncRequest) - the code a device typed
-// in to create or join resolves to 'manager' or 'viewer' on the server, and
-// that resolved role is what setSyncPairing stores here, never a choice the
-// client makes for itself. A manager can edit and publish changes; a viewer
-// receives updates but is locked out of editing (see isSyncViewer's
-// callers: syncTick never pushes for one, and the editor UI locks itself
-// down - src/editor-core.js's applyEditorRoleLock) - and, unlike before,
-// the Worker itself refuses a viewer's code on PATCH/DELETE too, so this
-// isn't just a client-side convention any more. A device paired before this
-// feature existed has no role recorded yet; treating that as 'manager'
-// preserves its previous (both-can-edit) behavior rather than retroactively
-// locking someone out.
+function getSyncManagerPasscode() {
+  return readLocal(MANAGER_PASSCODE_KEY).trim();
+}
+// Only ever writes the passcode itself, unlike setSyncPairing below - used
+// when an already-joined viewer device unlocks manager mode later (see
+// orbitSyncUpgradeToManager), which shouldn't reset the code, last-update
+// time, or anything else this device already has.
+function setSyncManagerPasscode(passcode) {
+  writeLocal(MANAGER_PASSCODE_KEY, String(passcode || '').trim());
+}
+// A device is a manager purely by possessing the correct manager passcode
+// locally - never a role asserted by the server or chosen once and
+// remembered separately. Whether that passcode is actually still correct
+// is checked wherever it's actually load-bearing (every write, every
+// delete - see the Worker's handleSyncRequest), not here; this is only
+// "does this device currently believe itself to be a manager."
 function getSyncRole() {
-  return readLocal(ROLE_KEY).trim() === VIEWER_ROLE ? VIEWER_ROLE : MANAGER_ROLE;
+  return getSyncManagerPasscode() ? MANAGER_ROLE : VIEWER_ROLE;
 }
 function isSyncViewer() {
   return isSyncConfigured() && getSyncRole() === VIEWER_ROLE;
@@ -197,29 +218,35 @@ function backUpLocalSchedule(data) {
 function clearScheduleBackup() {
   writeLocal(SCHEDULE_BACKUP_KEY, '');
 }
-function setSyncPairing(code, role = MANAGER_ROLE) {
+// `managerPasscode` is empty for a viewer pairing, the actual passcode for
+// a manager one - see MANAGER_PASSCODE_KEY's comment on why it's kept in
+// plaintext rather than hashed or one-time-only.
+function setSyncPairing(code, managerPasscode = '') {
   writeLocal(
     CODE_KEY,
     String(code || '')
       .trim()
       .toUpperCase()
   );
-  writeLocal(ROLE_KEY, role === VIEWER_ROLE ? VIEWER_ROLE : MANAGER_ROLE);
+  setSyncManagerPasscode(managerPasscode);
   writeLocal(LAST_UPDATE_TIME_KEY, '');
   writeLocal(LEGACY_PROJECT_ID_KEY, '');
+  writeLocal(LEGACY_ROLE_KEY, '');
   writeLocal(LAST_KNOWN_SHARED_STYLE_KEY, '');
   lastPushedSnapshot = null;
 }
 function clearSyncPairing() {
   writeLocal(CODE_KEY, '');
-  writeLocal(ROLE_KEY, '');
+  writeLocal(MANAGER_PASSCODE_KEY, '');
   writeLocal(LAST_UPDATE_TIME_KEY, '');
   writeLocal(LEGACY_PROJECT_ID_KEY, '');
+  writeLocal(LEGACY_ROLE_KEY, '');
   writeLocal(LAST_KNOWN_SHARED_STYLE_KEY, '');
   lastPushedSnapshot = null;
 }
-function proxyUrl(code) {
-  return `${SYNC_PROXY_URL}?code=${encodeURIComponent(code)}`;
+function proxyUrl(code, extraParams = {}) {
+  const params = new URLSearchParams({ code, ...extraParams });
+  return `${SYNC_PROXY_URL}?${params.toString()}`;
 }
 // The proxy's errors (rate limit, bad code, upstream failure) come back as
 // `{error:{message}}` - a 429 gets its own friendlier text here rather than
@@ -231,8 +258,16 @@ async function proxyErrorMessage(response) {
   return errorJson.error?.message || response.statusText || `HTTP ${response.status}`;
 }
 
-async function fetchSyncDoc(code) {
-  const response = await fetch(proxyUrl(code));
+// Reading never needs a passcode - any holder of the plain sync code can
+// fetch the shared schedule, exactly like the original single-code design.
+// `passcode`, when supplied, is purely a *role check*: the Worker compares
+// it against this document's manager passcode and reports back `role:
+// 'manager'` only if it matches (see handleSyncRequest) - used at join time
+// and by orbitSyncUpgradeToManager, never by ordinary polling (which has no
+// reason to ask "am I a manager" on every single check - it already knows
+// from local storage).
+async function fetchSyncDoc(code, passcode = '') {
+  const response = await fetch(proxyUrl(code, passcode ? { passcode } : {}));
   // The Worker rejects a code that doesn't match the expected 8-character
   // shape with 400, before it ever asks Firestore about it - a real,
   // generated code always matches that shape, so from here a 400 only ever
@@ -250,17 +285,18 @@ async function fetchSyncDoc(code) {
     exists: !!data.exists,
     updateTime: data.updateTime || '',
     payload: data.payload || '',
-    // Which of the two codes this one turned out to be - resolved by the
-    // Worker (see its handleSyncRequest), never asserted by the client. Only
-    // meaningful when `exists` is true.
-    role: data.role === MANAGER_ROLE ? MANAGER_ROLE : data.role === VIEWER_ROLE ? VIEWER_ROLE : null
+    // Only ever 'manager' (the supplied passcode matched) or null (no
+    // passcode supplied, or it didn't match) - the Worker never reports
+    // 'viewer' as such, since reading needs no passcode to begin with.
+    role: data.role === MANAGER_ROLE ? MANAGER_ROLE : null
   };
 }
 
-// Mints a brand new pairing (two fresh, unrelated codes - see the Worker's
-// handleSyncCreate) with `payload` as its starting shared schedule. Unlike
-// every other request here, this one carries no code at all - there's
-// nothing to look up yet, the server is creating something new.
+// Mints a brand new pairing - a fresh sync code and a separate, unrelated
+// manager passcode (see the Worker's handleSyncCreate) - with `payload` as
+// its starting shared schedule. Unlike every other request here, this one
+// carries no code at all - there's nothing to look up yet, the server is
+// creating something new.
 async function createSyncDoc(payload) {
   try {
     const response = await fetch(SYNC_PROXY_URL, {
@@ -272,8 +308,8 @@ async function createSyncDoc(payload) {
     const data = await response.json();
     return {
       ok: true,
-      managerCode: data.managerCode,
-      viewerCode: data.viewerCode,
+      code: data.code,
+      managerPasscode: data.managerPasscode,
       updateTime: data.updateTime || ''
     };
   } catch (error) {
@@ -281,11 +317,17 @@ async function createSyncDoc(payload) {
   }
 }
 
-async function writeSyncDoc(code, payload) {
+// Writing always needs the manager passcode - see writeSyncDoc's caller,
+// pushSyncSnapshot, which only ever runs on a device that has one stored
+// (a viewer never reaches this; see syncTick and applyEditorSettingsData's
+// own isSyncViewer() gates). The Worker re-checks it independently either
+// way (see handleSyncRequest's PATCH branch) - this isn't the only thing
+// standing between a viewer and a write, just the client's own half of it.
+async function writeSyncDoc(code, payload, passcode) {
   const response = await fetch(proxyUrl(code), {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ payload })
+    body: JSON.stringify({ payload, passcode })
   });
   if (!response.ok) return { ok: false, error: await proxyErrorMessage(response) };
   const doc = await response.json();
@@ -295,9 +337,11 @@ async function writeSyncDoc(code, payload) {
 // Wipes the shared document on the server outright - see
 // orbitSyncDeleteForEveryone. Unlike writeSyncDoc/fetchSyncDoc, this isn't
 // something syncTick's regular loop ever calls; it only ever runs as a
-// deliberate, manager-triggered, confirmed action.
-async function deleteSyncDoc(code) {
-  const response = await fetch(proxyUrl(code), { method: 'DELETE' });
+// deliberate, manager-triggered, confirmed action - and, like writeSyncDoc,
+// needs the manager passcode (as a query param here, since this app never
+// sends a DELETE with a body - see the Worker's own comment on why).
+async function deleteSyncDoc(code, passcode) {
+  const response = await fetch(proxyUrl(code, { passcode }), { method: 'DELETE' });
   if (!response.ok) return { ok: false, error: await proxyErrorMessage(response) };
   return { ok: true };
 }
@@ -339,7 +383,7 @@ async function pushSyncSnapshot() {
   if (!isSyncProxyConfigured() || !code) return { ok: false, error: '尚未設定同步。' };
   try {
     const payload = await encodeTransferData(dataForPush());
-    const result = await writeSyncDoc(code, payload);
+    const result = await writeSyncDoc(code, payload, getSyncManagerPasscode());
     if (!result.ok) throw new Error(result.error);
     writeLocal(LAST_UPDATE_TIME_KEY, result.updateTime);
     // Owned here, not by callers - applyEditorSettingsData's own
@@ -363,10 +407,11 @@ async function pushSyncSnapshot() {
 // refuse joining a code nobody has actually created yet, which callers
 // that only care about `applied` (syncTick's regular polling) can ignore.
 //
-// Accepts an already-fetched `doc` (performSyncJoin's own role-check GET)
-// instead of always issuing its own - joining would otherwise cost two GETs
-// for the exact same document (one just to learn the role, one to actually
-// pull) when the first one already had everything this function needs.
+// Accepts an already-fetched `doc` (performSyncJoin's own existence/
+// passcode-check GET) instead of always issuing its own - joining would
+// otherwise cost two GETs for the exact same document (one just to check,
+// one to actually pull) when the first one already had everything this
+// function needs.
 async function pullSyncSnapshot({ force = false, doc: prefetchedDoc = null } = {}) {
   const code = getSyncCode();
   if (!isSyncProxyConfigured() || !code) return { ok: false, error: '尚未設定同步。' };
@@ -497,18 +542,21 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('pageshow', syncOnAppActive);
 
 // Held only in memory, never localStorage - see orbitSyncCreate/
-// showCreatedSyncCodes. The viewer code in particular is never sent by the
-// server again once this is cleared, so this is genuinely the one and only
-// chance to see it; losing it before copying it down means creating a new
-// sync from scratch.
+// showCreatedSyncCodes. Unlike the sync code (which stays visible in the
+// active-sync box afterward) and the manager passcode (which a manager
+// device can re-display later - see renderSyncPanel's reveal fold), this
+// specific one-time screen is the only place *both* are shown together
+// right after creation, so losing it before copying them down just means
+// falling back to those two other places instead of losing anything for
+// good.
 let pendingCreatedCodes = null;
 
-function showCreatedSyncCodes(managerCode, viewerCode) {
-  pendingCreatedCodes = { managerCode, viewerCode };
-  const managerCopyBtn = document.getElementById('sync-created-manager-copy');
-  const viewerCopyBtn = document.getElementById('sync-created-viewer-copy');
-  if (managerCopyBtn) managerCopyBtn.textContent = '複製';
-  if (viewerCopyBtn) viewerCopyBtn.textContent = '複製';
+function showCreatedSyncCodes(code, managerPasscode) {
+  pendingCreatedCodes = { code, managerPasscode };
+  const codeCopyBtn = document.getElementById('sync-created-code-copy');
+  const passcodeCopyBtn = document.getElementById('sync-created-passcode-copy');
+  if (codeCopyBtn) codeCopyBtn.textContent = '複製';
+  if (passcodeCopyBtn) passcodeCopyBtn.textContent = '複製';
   renderSyncPanel();
 }
 function acknowledgeSyncCreatedCodes() {
@@ -517,17 +565,43 @@ function acknowledgeSyncCreatedCodes() {
 }
 async function copySyncCreatedCode(which) {
   if (!pendingCreatedCodes) return;
-  const code =
-    which === 'viewer' ? pendingCreatedCodes.viewerCode : pendingCreatedCodes.managerCode;
+  const text =
+    which === 'passcode' ? pendingCreatedCodes.managerPasscode : pendingCreatedCodes.code;
   const button = document.getElementById(
-    which === 'viewer' ? 'sync-created-viewer-copy' : 'sync-created-manager-copy'
+    which === 'passcode' ? 'sync-created-passcode-copy' : 'sync-created-code-copy'
   );
   try {
-    await copyTransferText(code);
+    await copyTransferText(text);
     if (button) button.textContent = '已複製！';
   } catch (error) {
     setSyncStatusUi(`複製失敗：${error.message || error}`, true);
   }
+}
+// The manager-passcode-reveal fold in the active-sync box (for a device
+// that already has one) - unlike the viewer code in the old two-code
+// design, the passcode isn't a one-time secret from this device's own
+// point of view: it's sitting right there in localStorage already, so
+// there's no reason not to let a manager pull it back up to share with
+// another device without having to dig up wherever they first copied it.
+async function copySyncManagerPasscode() {
+  const passcode = getSyncManagerPasscode();
+  if (!passcode) return;
+  const button = document.getElementById('sync-manager-passcode-copy');
+  try {
+    await copyTransferText(passcode);
+    if (button) button.textContent = '已複製！';
+  } catch (error) {
+    setSyncStatusUi(`複製失敗：${error.message || error}`, true);
+  }
+}
+function toggleSyncManagerPasscodeReveal() {
+  const valueEl = document.getElementById('sync-manager-passcode-value');
+  const toggleBtn = document.getElementById('sync-manager-passcode-toggle');
+  if (!valueEl || !toggleBtn) return;
+  const showing = valueEl.hidden;
+  valueEl.hidden = !showing;
+  if (showing) valueEl.textContent = getSyncManagerPasscode();
+  toggleBtn.textContent = showing ? '隱藏' : '顯示';
 }
 
 function renderSyncPanel() {
@@ -539,19 +613,21 @@ function renderSyncPanel() {
   const styleBackupNotice = document.getElementById('sync-style-backup-notice');
   const deleteAllBtn = document.getElementById('sync-delete-all-btn');
   const createdCodesBox = document.getElementById('sync-created-codes');
+  const managerPasscodeBox = document.getElementById('sync-manager-passcode-box');
+  const upgradeBox = document.getElementById('sync-upgrade-box');
   if (!setupBox || !activeBox) return;
-  // The freshly-created two-code display takes over the whole panel until
-  // acknowledged - showing the setup/active boxes underneath it at the same
-  // time would just be confusing, and there's nothing useful to do in this
-  // panel until the user has dealt with (i.e. copied down) these codes.
+  // The freshly-created code+passcode display takes over the whole panel
+  // until acknowledged - showing the setup/active boxes underneath it at
+  // the same time would just be confusing, and there's nothing useful to do
+  // in this panel until the user has dealt with (i.e. copied down) these.
   if (createdCodesBox) createdCodesBox.hidden = !pendingCreatedCodes;
   if (pendingCreatedCodes) {
     setupBox.hidden = true;
     activeBox.hidden = true;
-    const managerCodeEl = document.getElementById('sync-created-manager-code');
-    const viewerCodeEl = document.getElementById('sync-created-viewer-code');
-    if (managerCodeEl) managerCodeEl.textContent = pendingCreatedCodes.managerCode;
-    if (viewerCodeEl) viewerCodeEl.textContent = pendingCreatedCodes.viewerCode;
+    const codeEl = document.getElementById('sync-created-code');
+    const passcodeEl = document.getElementById('sync-created-passcode');
+    if (codeEl) codeEl.textContent = pendingCreatedCodes.code;
+    if (passcodeEl) passcodeEl.textContent = pendingCreatedCodes.managerPasscode;
     applyEditorRoleLock();
     return;
   }
@@ -559,20 +635,38 @@ function renderSyncPanel() {
   setupBox.hidden = configured;
   activeBox.hidden = !configured;
   if (configured && activeCode) activeCode.textContent = getSyncCode();
+  const viewer = isSyncViewer();
   if (configured && roleLabel) {
-    const viewer = isSyncViewer();
     roleLabel.textContent = viewer
       ? '身份：僅接收（唯讀）— 課表會自動更新，但這台裝置無法編輯。'
       : '身份：管理者 — 可以編輯課表，變更會同步到其他裝置。';
     roleLabel.classList.toggle('is-viewer', viewer);
   }
+  // A manager device can always re-display its own stored passcode (see
+  // copySyncManagerPasscode's comment on why that's safe/intentional) - a
+  // viewer has nothing to show here, it gets the upgrade fold instead.
+  if (managerPasscodeBox) managerPasscodeBox.hidden = !configured || viewer;
+  const passcodeValueEl = document.getElementById('sync-manager-passcode-value');
+  const passcodeToggleBtn = document.getElementById('sync-manager-passcode-toggle');
+  if (viewer || !configured) {
+    if (passcodeValueEl) {
+      passcodeValueEl.hidden = true;
+      passcodeValueEl.textContent = '';
+    }
+    if (passcodeToggleBtn) passcodeToggleBtn.textContent = '顯示';
+  }
+  // A viewer device gets the option to unlock manager mode later by typing
+  // in the manager passcode - see orbitSyncUpgradeToManager. Not shown to
+  // an already-manager device (nothing to upgrade) or an unpaired one
+  // (nothing to upgrade *into* yet - that's what "加入同步" is for).
+  if (upgradeBox) upgradeBox.hidden = !configured || !viewer;
   // Deleting the shared document affects every paired device, not just this
   // one - only a manager gets the button at all (a viewer can't publish a
   // change either, so wiping the shared document isn't a "my data" decision
   // it should get to make). Purely a UI guardrail, same caveat as the rest
   // of this file's role locks - see orbitSyncDeleteForEveryone's own
   // isSyncViewer() check for the part that actually matters.
-  if (deleteAllBtn) deleteAllBtn.hidden = !configured || isSyncViewer();
+  if (deleteAllBtn) deleteAllBtn.hidden = !configured || viewer;
   if (keepStyleCheckbox) keepStyleCheckbox.checked = getSyncKeepLocalStyle();
   // Shown whenever a backed-up style is sitting around waiting on a
   // decision - regardless of the checkbox's current state, since the user
@@ -718,10 +812,11 @@ function promptScheduleBackupRestore() {
 // not a greyed-out shell) and out of the AI/manual import actions in the
 // separate "同步 / 匯入匯出" sheet (where the unlink button that gets a
 // viewer back to full local editing lives - that sheet itself always stays
-// reachable). This is a UX guardrail, not a real access-control boundary -
-// same as the rest of sync's design (see README's security section) - so
-// it's plain CSS (.is-disabled/.sync-viewer-locked, see styles.css) rather
-// than anything that actually removes the underlying form controls.
+// reachable). This is a UX guardrail, not a real access-control boundary on
+// its own - see README's security section - so it's plain CSS
+// (.is-disabled/.sync-viewer-locked, see styles.css) rather than anything
+// that actually removes the underlying form controls; the real boundary is
+// the Worker refusing a write/delete without the correct passcode.
 function applyEditorRoleLock() {
   const viewer = isSyncViewer();
   // A viewer is never allowed into the schedule editor at all, full stop -
@@ -737,15 +832,16 @@ function applyEditorRoleLock() {
   if (editButton) {
     editButton.classList.toggle('is-disabled', viewer);
     editButton.title = viewer
-      ? '此裝置僅接收同步，無法編輯課表。如要自行編輯，請先在「同步 / 匯入匯出」解除同步。'
+      ? '此裝置僅接收同步，無法編輯課表。輸入管理者密碼即可取得編輯權限，或先在「同步 / 匯入匯出」解除同步。'
       : '編輯課表';
   }
   // The transfer sheet itself stays open to both roles (a viewer needs to
-  // reach its sync status/unlink), but AI import and manual import are
-  // still real ways to overwrite the local schedule, so they get locked
-  // individually within it - see the matching .transfer-sheet.sync-viewer-
-  // locked rule in styles.css. Manual export stays enabled - reading out
-  // the currently-synced schedule isn't editing it.
+  // reach its sync status/unlink/upgrade-to-manager), but AI import and
+  // manual import are still real ways to overwrite the local schedule, so
+  // they get locked individually within it - see the matching
+  // .transfer-sheet.sync-viewer-locked rule in styles.css. Manual export
+  // stays enabled - reading out the currently-synced schedule isn't
+  // editing it.
   const transferSheet = document.getElementById('transfer-sheet');
   if (transferSheet) transferSheet.classList.toggle('sync-viewer-locked', viewer);
   // The style tool is a separate top-bar overlay with its own opt-out-
@@ -801,31 +897,21 @@ async function orbitSyncCreate() {
     }
     // This device becomes the manager - it already has the schedule that
     // was just published, so there's nothing left to pull.
-    setSyncPairing(result.managerCode, MANAGER_ROLE);
+    setSyncPairing(result.code, result.managerPasscode);
     writeLocal(LAST_UPDATE_TIME_KEY, result.updateTime);
     lastPushedSnapshot = snapshotForComparison(state.applicationData);
-    // The viewer code is never stored anywhere and never sent back by the
-    // server again once this response is gone - it exists nowhere but this
-    // one reply and whatever the user copies out of it now. showCreatedSyncCodes
-    // holds both codes on-screen (see renderSyncPanel) until acknowledged.
-    showCreatedSyncCodes(result.managerCode, result.viewerCode);
+    showCreatedSyncCodes(result.code, result.managerPasscode);
     renderSyncPanel();
     startSyncLoop();
   });
 }
-// A lightweight existence-and-role check, deliberately not going through
-// setSyncPairing/pullSyncSnapshot - those read the *currently paired* code
-// from localStorage, but orbitSyncJoin needs to check a code before
-// committing to anything (or showing a warning that only makes sense if the
-// code actually has data to overwrite with, and that names the right role).
-async function checkSyncCodeExists(code) {
-  try {
-    const doc = await fetchSyncDoc(code);
-    if (!doc.ok) return { ok: false, error: `同步檢查失敗：${doc.error}` };
-    return { ok: true, exists: doc.exists, role: doc.role };
-  } catch (error) {
-    return { ok: false, error: `同步檢查失敗：${error.message || error}` };
-  }
+
+// The join form's passcode field only matters once "我有管理者密碼" is
+// checked - hidden the rest of the time so an unchecked box doesn't leave a
+// dangling, obviously-irrelevant input sitting on screen.
+function toggleSyncJoinPasscodeField(checked) {
+  const row = document.getElementById('sync-join-passcode-row');
+  if (row) row.hidden = !checked;
 }
 
 async function orbitSyncJoin() {
@@ -843,20 +929,28 @@ async function orbitSyncJoin() {
     return;
   }
   const normalizedCode = code.toUpperCase();
+  // The passcode field only matters (and only needs to actually exist in
+  // the DOM as revealed) when this checkbox is checked - unlike the old
+  // "以管理者身份加入" checkbox, checking this one alone does nothing:
+  // it's the passcode that has to actually verify, below.
+  const wantsManager = !!document.getElementById('sync-join-as-manager')?.checked;
+  const passcode = wantsManager
+    ? document.getElementById('sync-join-passcode')?.value.trim() || ''
+    : '';
+  if (wantsManager && !passcode) {
+    setSyncStatusUi('請輸入管理者密碼，或取消勾選只接收更新。', true);
+    return;
+  }
 
   await withButtonDisabled('sync-join-btn', async () => {
-    // Check the code actually has something to join *before* ever showing
-    // the overwrite warning below - a nonexistent/mistyped code has nothing
-    // to overwrite with, so warning about data loss and then failing anyway
-    // (the bug performSyncJoin's own `exists` check already prevents) was
-    // just a confusing, pointless extra step. Fail fast with the real error
-    // instead. This same check also resolves which role the typed code
-    // actually is - there's no "以管理者身份加入" choice any more; the
-    // server decides that from the code itself (see the Worker's
-    // handleSyncRequest), so this is purely to tell the user what to expect
-    // before they confirm, not to ask them to pick.
+    // Checks the code actually has something to join, and - if a passcode
+    // was supplied - that it's actually correct, *before* ever showing the
+    // overwrite warning below: a nonexistent/mistyped code has nothing to
+    // overwrite with, and a wrong passcode shouldn't be discovered only
+    // after clicking through a data-loss warning. Fails fast with the real
+    // error instead either way.
     setSyncStatusUi('正在檢查配對代碼…');
-    const check = await checkSyncCodeExists(normalizedCode);
+    const check = await fetchSyncDoc(normalizedCode, passcode);
     if (!check.ok) {
       setSyncStatusUi(check.error, true);
       return;
@@ -865,24 +959,25 @@ async function orbitSyncJoin() {
       setSyncStatusUi('找不到這組配對代碼，請確認代碼是否正確，或請對方先按「建立新同步」。', true);
       return;
     }
+    if (wantsManager && check.role !== MANAGER_ROLE) {
+      setSyncStatusUi('管理者密碼不正確，請確認後再試一次。', true);
+      return;
+    }
 
     // Joining pulls whatever is already published under that code and
     // applies it immediately - overwriting this device's current schedule -
     // so this warns before doing anything, rather than silently replacing
     // data the user might not have backed up.
     setSyncStatusUi('');
-    const roleText =
-      check.role === MANAGER_ROLE
-        ? '管理者代碼（可以編輯課表）'
-        : '接收者代碼（僅能接收，無法編輯）';
+    const roleText = wantsManager ? '管理者身份（可以編輯課表）' : '僅接收身份（無法編輯課表）';
     setEditorConfirmContent(
       '加入同步？',
-      `這是一組「${roleText}」。這組代碼下已經有課表，加入後會立刻用該課表取代這台裝置目前的課表，且無法復原。建立同步的裝置目前的課表不會受影響。`,
+      `即將以「${roleText}」加入。這組代碼下已經有課表，加入後會立刻用該課表取代這台裝置目前的課表，且無法復原。建立同步的裝置目前的課表不會受影響。`,
       '',
       '仍要加入',
       () => {
         hideEditorDiscardConfirm();
-        performSyncJoin(normalizedCode);
+        performSyncJoin(normalizedCode, passcode);
       },
       '取消'
     );
@@ -890,37 +985,41 @@ async function orbitSyncJoin() {
   });
 }
 
-async function performSyncJoin(code) {
+// `passcode` is empty for a plain viewer join, or the manager passcode the
+// user typed in and had already verified once in orbitSyncJoin above - this
+// re-verifies it (see the `role` check below) rather than trusting that
+// earlier check, since this is also called directly (see performSyncJoin's
+// exports, used this way by orbitSyncUpgradeToManager's own tests and by
+// anything else that wants to join+authenticate in one call).
+async function performSyncJoin(code, passcode = '') {
   // Captured before setSyncPairing/pullSyncSnapshot can touch anything - see
   // SCHEDULE_BACKUP_KEY's comment. Not written to storage yet: only
   // committed below once the join actually replaces local data.
   const preJoinSchedule = cloneSettingsData(state.applicationData);
   setSyncStatusUi('正在加入同步…');
-  const doc = await fetchSyncDoc(code);
+  const doc = await fetchSyncDoc(code, passcode);
   if (!doc.ok) {
     setSyncStatusUi(doc.error, true);
     return;
   }
   // "加入同步" only ever joins a sync someone already created (with
-  // "建立新同步", which mints its own two codes and immediately publishes) -
-  // "not found" here means this code was mistyped or never created, not "an
-  // empty sync to adopt." Bug this used to have: this case used to report
-  // success and pair the device anyway (worse for a viewer, who'd then just
-  // sit there forever receiving nothing, thinking it was synced). Refusing
-  // outright also removes the old "join as manager silently
-  // creates/publishes under whatever code you typed" fallback - that's what
-  // "建立新同步" is for.
+  // "建立新同步", which mints its own code+passcode and immediately
+  // publishes) - "not found" here means this code was mistyped or never
+  // created, not "an empty sync to adopt."
   if (!doc.exists) {
     setSyncStatusUi('找不到這組配對代碼，請確認代碼是否正確，或請對方先按「建立新同步」。', true);
     return;
   }
-  // The role is whatever the server resolved this code to (see
-  // fetchSyncDoc) - never a choice made here. Paired immediately so the
-  // pull below (reusing this same fetch - see pullSyncSnapshot's `doc`
-  // option, which avoids a second, redundant GET for the same document)
-  // applies against the right role's local storage keys.
-  const role = doc.role === MANAGER_ROLE ? MANAGER_ROLE : VIEWER_ROLE;
-  setSyncPairing(code, role);
+  // A passcode was supplied but didn't verify as this document's manager
+  // passcode - refuse outright rather than silently falling back to a
+  // viewer join. The user explicitly asked for manager access; joining
+  // them as a viewer instead without saying so would just be confusing.
+  if (passcode && doc.role !== MANAGER_ROLE) {
+    setSyncStatusUi('管理者密碼不正確，尚未加入同步。', true);
+    return;
+  }
+  const managerPasscode = doc.role === MANAGER_ROLE ? passcode : '';
+  setSyncPairing(code, managerPasscode);
   const result = await pullSyncSnapshot({ force: true, doc });
   if (!result.ok) {
     clearSyncPairing();
@@ -933,20 +1032,71 @@ async function performSyncJoin(code) {
   // worth offering to restore later.
   if (result.applied) backUpLocalSchedule(preJoinSchedule);
   renderSyncPanel();
-  setSyncStatusUi(role === MANAGER_ROLE ? '已以管理者身份加入同步。' : '已加入同步（僅接收）。');
+  setSyncStatusUi(managerPasscode ? '已以管理者身份加入同步。' : '已加入同步（僅接收）。');
   startSyncLoop();
 }
-// Unlinking discards the only copy of the pairing code this device has -
-// there's no "undo", and no way to look the code back up afterward except
-// asking another already-paired device - so this warns first and offers a
-// one-tap copy of the code before committing, rather than silently
-// discarding something that might be needed again to rejoin.
+
+// Lets an already-joined viewer device unlock manager mode later without
+// having to unlink and rejoin - the manager passcode is the only thing that
+// was ever missing (the sync code is identical either way), so this just
+// verifies the typed passcode against the server and, if correct, adds it
+// to what's already stored (see setSyncManagerPasscode - deliberately not
+// setSyncPairing, which would also reset this device's last-known-update
+// bookkeeping for no reason).
+async function orbitSyncUpgradeToManager() {
+  if (!isSyncConfigured() || !isSyncViewer()) return;
+  if (!navigator.onLine) {
+    setSyncStatusUi('目前沒有網路連線，無法驗證管理者密碼。', true);
+    return;
+  }
+  const input = document.getElementById('sync-upgrade-passcode');
+  const passcode = input?.value.trim();
+  if (!passcode) {
+    setSyncStatusUi('請輸入管理者密碼。', true);
+    return;
+  }
+  await withButtonDisabled('sync-upgrade-btn', async () => {
+    setSyncStatusUi('正在驗證管理者密碼…');
+    const doc = await fetchSyncDoc(getSyncCode(), passcode);
+    if (!doc.ok) {
+      setSyncStatusUi(doc.error, true);
+      return;
+    }
+    if (!doc.exists) {
+      setSyncStatusUi('找不到這組配對代碼，可能已被整個刪除同步。', true);
+      return;
+    }
+    if (doc.role !== MANAGER_ROLE) {
+      setSyncStatusUi('管理者密碼不正確。', true);
+      return;
+    }
+    setSyncManagerPasscode(passcode);
+    if (input) input.value = '';
+    applyEditorRoleLock();
+    renderSyncPanel();
+    setSyncStatusUi('已取得管理者權限，現在可以編輯課表了。');
+  });
+}
+
+// Unlinking discards the only local copy of the sync code (and, for a
+// manager, the manager passcode) this device has - there's no "undo", and
+// no way to look either back up afterward except asking another device
+// that still has them - so this warns first and offers a one-tap copy
+// before committing, rather than silently discarding something that might
+// be needed again to rejoin (or, for a manager, to ever write again at
+// all - unlike the sync code, there's no separate "接收者代碼" any more
+// that could still read things back).
 function orbitSyncUnlink() {
   const code = getSyncCode();
+  const managerPasscode = getSyncManagerPasscode();
+  const isManager = !!managerPasscode;
+  const copyText = isManager ? `同步代碼：${code}\n管理者密碼：${managerPasscode}` : code;
   setEditorConfirmContent(
     '解除同步？',
-    '解除後這台裝置會變回本機課表，不再自動接收其他裝置的更新。之後如果想重新加入，需要用回這組配對代碼——建議先複製起來備用：',
-    code,
+    isManager
+      ? '解除後這台裝置會變回本機課表，不再自動接收其他裝置的更新，也會忘記這組管理者密碼。之後如果想重新加入，需要用回這組代碼與密碼——建議先複製起來備用：'
+      : '解除後這台裝置會變回本機課表，不再自動接收其他裝置的更新。之後如果想重新加入，需要用回這組配對代碼——建議先複製起來備用：',
+    copyText,
     '解除同步',
     () => {
       hideEditorDiscardConfirm();
@@ -964,7 +1114,7 @@ function orbitSyncUnlink() {
       extraHandler: async () => {
         const extraBtn = document.getElementById('editor-confirm-extra-btn');
         try {
-          await copyTransferText(code);
+          await copyTransferText(copyText);
           if (extraBtn) extraBtn.textContent = '已複製！';
         } catch (error) {
           setSyncStatusUi(`複製失敗：${error.message || error}`, true);
@@ -978,18 +1128,20 @@ function orbitSyncUnlink() {
 // only ever forgets this device's own pairing, leaving the shared document
 // (and every other device still reading it) untouched. This one reaches
 // into the server and deletes the shared document itself, so every device
-// paired under this code loses its sync target at once - the next time any
-// of them syncs, the code simply resolves to nothing any more (see
+// reading this code loses its sync target at once - the next time any of
+// them syncs, the code simply resolves to nothing any more (see
 // pullSyncSnapshot's `exists: false` path). There is no undo and no way to
 // warn the other devices first beyond what this device's own confirmation
 // text says, so this gets its own, more explicit warning than a plain
 // unlink - manager-only (see the `sync-delete-all-btn` hidden toggle in
 // renderSyncPanel, and the isSyncViewer() guard below as the real check a
 // hidden button alone never is, same reasoning as every other role lock in
-// this file).
+// this file; the Worker itself also refuses this without the correct
+// passcode - see its handleSyncRequest).
 function orbitSyncDeleteForEveryone() {
   if (isSyncViewer()) return;
   const code = getSyncCode();
+  const managerPasscode = getSyncManagerPasscode();
   if (!isSyncConfigured()) return;
   if (!navigator.onLine) {
     setSyncStatusUi('目前沒有網路連線，無法刪除同步。', true);
@@ -997,13 +1149,13 @@ function orbitSyncDeleteForEveryone() {
   }
   setEditorConfirmContent(
     '整個刪除這組同步？',
-    '這會把伺服器上的共用課表整個刪除，這組同步底下的管理者代碼與接收者代碼會一起立刻失效：所有用這兩組代碼加入的裝置（不只這一台）都會斷開連結，之後同步時會發現代碼已經不存在，各自變回自己最後一次收到的本機課表。此動作無法復原。',
+    `這會把伺服器上的共用課表整個刪除，配對代碼「${code}」與這組管理者密碼會一起立刻失效：所有讀取這組代碼的裝置（不只這一台）之後同步時都會發現代碼已經不存在，各自變回自己最後一次收到的本機課表。此動作無法復原。`,
     '',
     '整個刪除',
     async () => {
       hideEditorDiscardConfirm();
       setSyncStatusUi('正在刪除同步…');
-      const result = await deleteSyncDoc(code);
+      const result = await deleteSyncDoc(code, managerPasscode);
       if (!result.ok) {
         setSyncStatusUi(`刪除失敗：${result.error}`, true);
         return;
@@ -1022,7 +1174,9 @@ function orbitSyncDeleteForEveryone() {
 }
 
 window.orbitSyncCreate = orbitSyncCreate;
+window.toggleSyncJoinPasscodeField = toggleSyncJoinPasscodeField;
 window.orbitSyncJoin = orbitSyncJoin;
+window.orbitSyncUpgradeToManager = orbitSyncUpgradeToManager;
 window.orbitSyncUnlink = orbitSyncUnlink;
 window.orbitSyncDeleteForEveryone = orbitSyncDeleteForEveryone;
 window.orbitSyncSetKeepLocalStyle = orbitSyncSetKeepLocalStyle;
@@ -1030,15 +1184,20 @@ window.orbitSyncRestoreStyleBackup = orbitSyncRestoreStyleBackup;
 window.orbitSyncDismissStyleBackup = orbitSyncDismissStyleBackup;
 window.copySyncCreatedCode = copySyncCreatedCode;
 window.acknowledgeSyncCreatedCodes = acknowledgeSyncCreatedCodes;
+window.copySyncManagerPasscode = copySyncManagerPasscode;
+window.toggleSyncManagerPasscodeReveal = toggleSyncManagerPasscodeReveal;
 
 export {
   acknowledgeSyncCreatedCodes,
   applyEditorRoleLock,
   clearSyncPairing,
+  copySyncCreatedCode,
+  copySyncManagerPasscode,
   getScheduleBackup,
   getStyleBackup,
   getSyncCode,
   getSyncKeepLocalStyle,
+  getSyncManagerPasscode,
   getSyncRole,
   isSyncConfigured,
   isSyncProxyConfigured,
@@ -1052,6 +1211,7 @@ export {
   orbitSyncRestoreStyleBackup,
   orbitSyncSetKeepLocalStyle,
   orbitSyncUnlink,
+  orbitSyncUpgradeToManager,
   performSyncJoin,
   pullSyncSnapshot,
   pushSyncSnapshot,
@@ -1060,5 +1220,7 @@ export {
   setSyncPairing,
   setSyncStatusUi,
   startSyncLoop,
-  syncTick
+  syncTick,
+  toggleSyncJoinPasscodeField,
+  toggleSyncManagerPasscodeReveal
 };

@@ -33,6 +33,12 @@ afterEach(() => {
   // must reset it themselves.
   sync.setSyncKeepLocalStyle(false);
   document.getElementById('sync-join-code').value = '';
+  document.getElementById('sync-join-as-manager').checked = false;
+  document.getElementById('sync-join-passcode').value = '';
+  // In-memory-only state (see showCreatedSyncCodes in src/sync.js), not
+  // cleared by clearSyncPairing - dismiss it explicitly so it doesn't leak
+  // into a later test's renderSyncPanel().
+  sync.acknowledgeSyncCreatedCodes();
 });
 
 describe('sync with a proxy Worker configured', () => {
@@ -43,7 +49,7 @@ describe('sync with a proxy Worker configured', () => {
 
 describe('a local save pushes immediately; a sync-applied pull does not push back', () => {
   it('applyEditorSettingsData (a real local save) PATCHes the proxy right away and shows the "已儲存" toast', async () => {
-    sync.setSyncPairing('CODE1234');
+    sync.setSyncPairing('CODE1234', 'PASSCODE1');
     const { applyEditorSettingsData } = await import('../src/editor-backup.js');
     const fetchMock = vi.fn(async (url, options) => {
       expect(options.method).toBe('PATCH');
@@ -61,7 +67,7 @@ describe('a local save pushes immediately; a sync-applied pull does not push bac
   });
 
   it('a viewer applying an incoming sync pull never pushes back, and shows a different toast', async () => {
-    sync.setSyncPairing('CODE1234', 'viewer');
+    sync.setSyncPairing('CODE1234');
     const { encodeTransferData, normalizeSettingsData } = await import('../src/editor-backup.js');
     // A key distinct from every other test in this file's fixture mutations
     // - state.applicationData is one shared singleton for the whole file,
@@ -88,7 +94,7 @@ describe('a local save pushes immediately; a sync-applied pull does not push bac
 
 describe('a receiving device can opt out of syncing style/color', () => {
   it("keeps this device's own colors when the incoming payload has different ones, while still applying other changes", async () => {
-    sync.setSyncPairing('CODE1234', 'viewer');
+    sync.setSyncPairing('CODE1234');
     sync.setSyncKeepLocalStyle(true);
     const localAccent = state.applicationData.proAccent;
     const { encodeTransferData, normalizeSettingsData } = await import('../src/editor-backup.js');
@@ -120,7 +126,7 @@ describe('a receiving device can opt out of syncing style/color', () => {
   });
 
   it('applies incoming colors normally when the opt-out is off', async () => {
-    sync.setSyncPairing('CODE1234', 'viewer');
+    sync.setSyncPairing('CODE1234');
     expect(sync.getSyncKeepLocalStyle()).toBe(false);
     const { encodeTransferData, normalizeSettingsData } = await import('../src/editor-backup.js');
     const remoteData = normalizeSettingsData({
@@ -148,7 +154,7 @@ describe('a receiving device can opt out of syncing style/color', () => {
   // manager saving anything unrelated to style would silently overwrite the
   // shared color everyone else sees with their own kept-local one.
   it("a manager's own push never overwrites the shared style once the opt-out is checked", async () => {
-    sync.setSyncPairing('CODE1234', 'manager');
+    sync.setSyncPairing('CODE1234', 'PASSCODE1');
     const { decodeTransferData, encodeTransferData, normalizeSettingsData } =
       await import('../src/editor-backup.js');
     const sharedData = normalizeSettingsData({
@@ -246,25 +252,29 @@ describe('pushSyncSnapshot', () => {
     expect(result.error).toMatch(/請求過於頻繁/);
   });
 
-  // The actual server-side enforcement this whole two-code split exists for
-  // (see the Worker's handleSyncRequest PATCH branch): a viewer's code is
-  // now refused a write by the Worker itself, not just hidden from by the
-  // client's own UI lock - a 403 with this message is what that refusal
-  // looks like over the wire, and it must surface as an ordinary push
-  // failure, not a crash or a silently-swallowed error.
-  it('a 403 from the proxy (a viewer code somehow attempting to write) surfaces as an ordinary push failure', async () => {
-    sync.setSyncPairing('CODE1234', 'manager'); // client-side role is irrelevant here - only the Worker's answer matters
+  // The actual server-side enforcement the manager-passcode design exists
+  // for (see the Worker's handleSyncRequest PATCH branch): a missing or
+  // wrong passcode is refused by the Worker itself, not just hidden from by
+  // the client's own UI lock - a 403 with this message is what that
+  // refusal looks like over the wire, and it must surface as an ordinary
+  // push failure, not a crash or a silently-swallowed error. Pairing here
+  // has no passcode at all (a viewer somehow attempting to push, e.g. a bug
+  // upstream of this function's own callers) - pushSyncSnapshot itself
+  // never checks role, it just sends whatever passcode is stored, empty or
+  // not, and trusts the Worker to be the real check.
+  it('a 403 from the proxy (no manager passcode stored, somehow attempting to write) surfaces as an ordinary push failure', async () => {
+    sync.setSyncPairing('CODE1234');
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({
         ok: false,
         status: 403,
-        json: async () => ({ error: { message: '此代碼僅能接收，無法寫入課表。' } })
+        json: async () => ({ error: { message: '需要正確的管理者密碼才能寫入課表。' } })
       }))
     );
     const result = await sync.pushSyncSnapshot();
     expect(result.ok).toBe(false);
-    expect(result.error).toMatch(/僅能接收/);
+    expect(result.error).toMatch(/管理者密碼/);
   });
 });
 
@@ -332,24 +342,18 @@ describe('pullSyncSnapshot', () => {
 // state with no network call either way - see test/sync.test.js for that
 // coverage, not duplicated here.
 describe('orbitSyncCreate UI wiring', () => {
-  afterEach(() => {
-    // The two-code display is in-memory-only state (see showCreatedSyncCodes
-    // in src/sync.js), not cleared by clearSyncPairing - dismiss it
-    // explicitly so it doesn't leak into a later test's renderSyncPanel().
-    sync.acknowledgeSyncCreatedCodes();
-  });
-
-  it('POSTs with no manual input, pairs as manager with the returned manager code, and shows both codes once', async () => {
+  it('POSTs with no manual input, pairs as manager with the returned code+passcode, and shows both once', async () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,
-      json: async () => ({ managerCode: 'MANAGER1', viewerCode: 'VIEWER22', updateTime: 'now' })
+      json: async () => ({ code: 'CODE1234', managerPasscode: 'PASSCODE1', updateTime: 'now' })
     }));
     vi.stubGlobal('fetch', fetchMock);
 
     await sync.orbitSyncCreate();
 
     expect(sync.isSyncConfigured()).toBe(true);
-    expect(sync.getSyncCode()).toBe('MANAGER1');
+    expect(sync.getSyncCode()).toBe('CODE1234');
+    expect(sync.getSyncManagerPasscode()).toBe('PASSCODE1');
     expect(sync.getSyncRole()).toBe('manager');
     const [url, options] = fetchMock.mock.calls[0];
     expect(url).toBe(PROXY_URL); // no ?code= - there's nothing to look up yet
@@ -357,18 +361,18 @@ describe('orbitSyncCreate UI wiring', () => {
     const body = JSON.parse(options.body);
     expect(body.payload.startsWith('[ORBIT]')).toBe(true);
 
-    // Both boxes stay hidden until the codes are acknowledged - showing
-    // sync-active-box underneath the codes at the same time would bury the
-    // one-time viewer code under other UI before it's actually been copied.
+    // Both boxes stay hidden until the code/passcode are acknowledged -
+    // showing sync-active-box underneath them at the same time would bury
+    // the passcode under other UI before it's actually been copied down.
     expect(document.getElementById('sync-active-box').hidden).toBe(true);
     expect(document.getElementById('sync-created-codes').hidden).toBe(false);
-    expect(document.getElementById('sync-created-manager-code').textContent).toBe('MANAGER1');
-    expect(document.getElementById('sync-created-viewer-code').textContent).toBe('VIEWER22');
+    expect(document.getElementById('sync-created-code').textContent).toBe('CODE1234');
+    expect(document.getElementById('sync-created-passcode').textContent).toBe('PASSCODE1');
 
     sync.acknowledgeSyncCreatedCodes();
     expect(document.getElementById('sync-created-codes').hidden).toBe(true);
     expect(document.getElementById('sync-active-box').hidden).toBe(false);
-    expect(document.getElementById('sync-active-code').textContent).toBe('MANAGER1');
+    expect(document.getElementById('sync-active-code').textContent).toBe('CODE1234');
   });
 
   it('refuses while offline, without making any network request', async () => {
@@ -386,16 +390,12 @@ describe('orbitSyncCreate UI wiring', () => {
 });
 
 describe('manager/viewer roles', () => {
-  afterEach(() => {
-    sync.acknowledgeSyncCreatedCodes();
-  });
-
   it('orbitSyncCreate always pairs this device as manager', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({
         ok: true,
-        json: async () => ({ managerCode: 'MANAGER1', viewerCode: 'VIEWER22', updateTime: 'now' })
+        json: async () => ({ code: 'CODE1234', managerPasscode: 'PASSCODE1', updateTime: 'now' })
       }))
     );
     await sync.orbitSyncCreate();
@@ -422,18 +422,18 @@ describe('manager/viewer roles', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('performSyncJoin pairs as whichever role the server resolves the code to - never a client choice', async () => {
+  it('performSyncJoin pairs as a viewer when no passcode is supplied, manager once a correct one is', async () => {
     const { encodeTransferData } = await import('../src/editor-backup.js');
     const payload = await encodeTransferData(state.applicationData);
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({
         ok: true,
-        json: async () => ({ exists: true, role: 'viewer', updateTime: 'now', payload })
+        json: async () => ({ exists: true, updateTime: 'now', payload })
       }))
     );
 
-    await sync.performSyncJoin('VIEWER22');
+    await sync.performSyncJoin('CODE1234');
     expect(sync.isSyncConfigured()).toBe(true);
     expect(sync.isSyncViewer()).toBe(true);
 
@@ -445,13 +445,34 @@ describe('manager/viewer roles', () => {
         json: async () => ({ exists: true, role: 'manager', updateTime: 'now', payload })
       }))
     );
-    await sync.performSyncJoin('MANAGER1');
+    await sync.performSyncJoin('CODE1234', 'PASSCODE1');
     expect(sync.isSyncConfigured()).toBe(true);
     expect(sync.isSyncViewer()).toBe(false);
+    expect(sync.getSyncManagerPasscode()).toBe('PASSCODE1');
+  });
+
+  // A passcode was typed in but didn't actually verify - refusing outright
+  // (rather than silently joining as a viewer instead) is the whole point:
+  // the user explicitly asked for manager access, so failing quietly into a
+  // different role than requested would just be confusing.
+  it('performSyncJoin refuses outright when a supplied passcode does not verify, rather than falling back to viewer', async () => {
+    const { encodeTransferData } = await import('../src/editor-backup.js');
+    const payload = await encodeTransferData(state.applicationData);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ exists: true, updateTime: 'now', payload }) // no role - passcode didn't match
+      }))
+    );
+
+    await sync.performSyncJoin('CODE1234', 'WRONGPASS');
+    expect(sync.isSyncConfigured()).toBe(false);
+    expect(document.getElementById('sync-status').textContent).toMatch(/管理者密碼不正確/);
   });
 
   it('syncTick only pulls for a viewer, even when the local schedule has "changed"', async () => {
-    sync.setSyncPairing('CODE1234', 'viewer');
+    sync.setSyncPairing('CODE1234');
     const fetchMock = vi.fn(async (url, options) => {
       expect(options?.method).not.toBe('PATCH');
       return { ok: true, json: async () => ({ exists: false }) };
@@ -459,6 +480,64 @@ describe('manager/viewer roles', () => {
     vi.stubGlobal('fetch', fetchMock);
     await sync.syncTick();
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('orbitSyncUpgradeToManager', () => {
+  beforeEach(() => {
+    document.getElementById('sync-upgrade-passcode').value = '';
+  });
+
+  it('does nothing when not configured or already a manager', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    await sync.orbitSyncUpgradeToManager(); // not configured at all
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    sync.setSyncPairing('CODE1234', 'PASSCODE1'); // already a manager
+    document.getElementById('sync-upgrade-passcode').value = 'PASSCODE1';
+    await sync.orbitSyncUpgradeToManager();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('verifies the typed passcode against the server and, once correct, unlocks manager mode without resetting the pairing', async () => {
+    sync.setSyncPairing('CODE1234'); // viewer
+    localStorage.setItem('orbitSyncLastUpdateTime', 'already-seen');
+    document.getElementById('sync-upgrade-passcode').value = 'PASSCODE1';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ exists: true, role: 'manager', updateTime: 'now', payload: '' })
+      }))
+    );
+
+    await sync.orbitSyncUpgradeToManager();
+
+    expect(sync.isSyncViewer()).toBe(false);
+    expect(sync.getSyncManagerPasscode()).toBe('PASSCODE1');
+    // Only the passcode itself changed - unlike a fresh join/setSyncPairing,
+    // this shouldn't reset bookkeeping the device already had.
+    expect(localStorage.getItem('orbitSyncLastUpdateTime')).toBe('already-seen');
+    expect(document.getElementById('sync-status').textContent).toMatch(/已取得管理者權限/);
+    expect(document.getElementById('sync-upgrade-passcode').value).toBe('');
+  });
+
+  it('leaves the device a viewer when the typed passcode is wrong', async () => {
+    sync.setSyncPairing('CODE1234');
+    document.getElementById('sync-upgrade-passcode').value = 'WRONGPASS';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ exists: true, updateTime: 'now', payload: '' }) // no role - didn't match
+      }))
+    );
+
+    await sync.orbitSyncUpgradeToManager();
+
+    expect(sync.isSyncViewer()).toBe(true);
+    expect(document.getElementById('sync-status').textContent).toMatch(/不正確/);
   });
 });
 
@@ -494,14 +573,20 @@ describe('a pre-join schedule backup can be recovered after unlinking or deletin
       teacherDB: { ...state.applicationData.teacherDB, W: ['地科', '林老師', ''] }
     };
     const payload = await encodeTransferData(incoming);
+    const passcode = role === 'manager' ? 'PASSCODE1' : '';
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({
         ok: true,
-        json: async () => ({ exists: true, role, updateTime: 'now', payload })
+        json: async () => ({
+          exists: true,
+          ...(role === 'manager' ? { role: 'manager' } : {}),
+          updateTime: 'now',
+          payload
+        })
       }))
     );
-    await sync.performSyncJoin(code);
+    await sync.performSyncJoin(code, passcode);
   }
 
   it('backs up the pre-join schedule only when the join actually replaces local data', async () => {
@@ -723,7 +808,7 @@ describe('orbitSyncJoin checks the code exists before ever warning about overwri
 
 describe('orbitSyncDeleteForEveryone', () => {
   it('is hidden from a viewer and refuses even if called directly, with no network request', async () => {
-    sync.setSyncPairing('CODE1234', 'viewer');
+    sync.setSyncPairing('CODE1234');
     sync.renderSyncPanel();
     expect(document.getElementById('sync-delete-all-btn').hidden).toBe(true);
 
@@ -735,7 +820,7 @@ describe('orbitSyncDeleteForEveryone', () => {
   });
 
   it('is visible to a manager, warns before doing anything, and reverts nothing on cancel', async () => {
-    sync.setSyncPairing('CODE1234');
+    sync.setSyncPairing('CODE1234', 'PASSCODE1');
     sync.renderSyncPanel();
     expect(document.getElementById('sync-delete-all-btn').hidden).toBe(false);
 
@@ -745,9 +830,7 @@ describe('orbitSyncDeleteForEveryone', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(true);
     expect(document.getElementById('editor-confirm-title').textContent).toMatch(/整個刪除/);
-    expect(document.getElementById('editor-confirm-msg').textContent).toMatch(
-      /管理者代碼與接收者代碼/
-    );
+    expect(document.getElementById('editor-confirm-msg').textContent).toMatch(/管理者密碼/);
     // Unlike orbitSyncUnlink's confirm sheet, this one offers no "複製代碼"
     // button - once this succeeds the code is dead for everyone, so copying
     // it would be pointless.
@@ -758,8 +841,8 @@ describe('orbitSyncDeleteForEveryone', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('confirming sends a DELETE for this code and clears the local pairing on success', async () => {
-    sync.setSyncPairing('CODE1234');
+  it('confirming sends a DELETE with the manager passcode and clears the local pairing on success', async () => {
+    sync.setSyncPairing('CODE1234', 'PASSCODE1');
     sync.renderSyncPanel();
     const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ deleted: true }) }));
     vi.stubGlobal('fetch', fetchMock);
@@ -769,14 +852,14 @@ describe('orbitSyncDeleteForEveryone', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, options] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${PROXY_URL}?code=CODE1234`);
+    expect(url).toBe(`${PROXY_URL}?code=CODE1234&passcode=PASSCODE1`);
     expect(options.method).toBe('DELETE');
     expect(sync.isSyncConfigured()).toBe(false);
     expect(document.getElementById('sync-status').textContent).toMatch(/已整個刪除同步/);
   });
 
   it('a failed DELETE surfaces an error and leaves the device still paired', async () => {
-    sync.setSyncPairing('CODE1234');
+    sync.setSyncPairing('CODE1234', 'PASSCODE1');
     sync.renderSyncPanel();
     const fetchMock = vi.fn(async () => ({
       ok: false,
@@ -793,7 +876,7 @@ describe('orbitSyncDeleteForEveryone', () => {
   });
 
   it('refuses while offline, without making any network request', async () => {
-    sync.setSyncPairing('CODE1234');
+    sync.setSyncPairing('CODE1234', 'PASSCODE1');
     sync.renderSyncPanel();
     Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
     const fetchMock = vi.fn();

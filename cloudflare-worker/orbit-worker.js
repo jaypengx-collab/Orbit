@@ -257,37 +257,34 @@ async function handleGeminiRequest(request, env, headers, ip) {
 //      rule anyway (see point 1). See README's cross-device sync section
 //      for the exact rule text and the full one-time setup this needs.
 //
-// Two passcodes per pairing, actually enforced server-side - not just a
-// client-side role flag:
-//   - Creating a sync (POST, below) mints a random *manager* code and a
-//     separate, unrelated random *viewer* code, and returns both to the
-//     caller once - only their SHA-256 hashes are ever stored, as
-//     `managerCodeHash`/`viewerCodeHash` fields on the document, so knowing
-//     one code never lets anyone derive or recover the other, and losing
-//     both means losing access to the document (same as losing the old
-//     single code did).
-//   - The document's ID is now a Firestore-assigned random ID, not either
-//     code, so a device has to look its document up by *querying* for
-//     whichever hash matches the code it was given (see
-//     firestoreQueryByHash) rather than fetching a fixed path - the price
-//     of not being able to derive one code from the other.
-//   - GET (read/poll) accepts either code and reports back which role it
-//     resolved to, so the client never has to assert its own role - the
-//     server already knows.
-//   - PATCH (write) and DELETE only ever resolve against the *manager*
-//     hash. A well-formed code that only matches the viewer hash gets an
-//     explicit 403, not silently accepted and not confused with a
-//     nonexistent/mistyped code (which gets its own, different message) -
-//     this is the actual fix for what used to be true only by UI
-//     convention (src/sync.js's applyEditorRoleLock): previously *any*
-//     code could PATCH or DELETE, because the single code was the only key
-//     and the manager/viewer split lived entirely in the browser's
-//     localStorage.
+// One shared sync code plus a separate manager passcode, with the passcode
+// gating *only* write access - not two parallel codes:
+//   - Creating a sync (POST, below) mints a plain sync code (the document's
+//     own ID, same as the original single-code design) and a separate,
+//     unrelated *manager passcode*, returning both to the caller once. Only
+//     the passcode's SHA-256 hash is ever stored, as `managerPasscodeHash`
+//     on the document, so a leak of the Firestore data itself can't be
+//     turned back into a working passcode.
+//   - GET (read/poll) never needs the passcode - anyone with the sync code
+//     can read, exactly like the original design. Optionally supplying
+//     `&passcode=` resolves whether that passcode is *this* document's
+//     manager passcode (`role: 'manager'` in the response if so) - used at
+//     join time and by an already-joined device unlocking manager mode
+//     later, never by ordinary polling.
+//   - PATCH (write) and DELETE both require the correct passcode - in the
+//     JSON body for PATCH, as a query param for DELETE (which this app
+//     never sends a body with). Missing or wrong passcode is a 403,
+//     distinct from a nonexistent/mistyped code (its own message) - this is
+//     the actual fix for what used to be true only by UI convention
+//     (src/sync.js's applyEditorRoleLock): previously *any* holder of the
+//     single code could PATCH or DELETE, because there was nothing else to
+//     check.
 
-// Must match the code format the client (and this Worker's own
+// Must match the code/passcode format the client (and this Worker's own
 // generateSyncCode below) produce - rejecting a malformed code here means
 // it never even reaches Firestore, and the error message is the same
-// either way.
+// either way. Passcodes reuse the exact same shape - they're just another
+// random string from the same alphabet, generated the same way.
 const SYNC_CODE_PATTERN = /^[2-9A-HJ-NP-Z]{8}$/;
 const SYNC_CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 const SYNC_CODE_LENGTH = 8;
@@ -298,13 +295,13 @@ function generateSyncCode() {
   return Array.from(bytes, byte => SYNC_CODE_ALPHABET[byte % SYNC_CODE_ALPHABET.length]).join('');
 }
 
-// Codes are high-entropy and randomly generated (never user-chosen), so a
-// plain, fast SHA-256 - no salt, no slow KDF - is enough: there's no weak
+// Passcodes are high-entropy and randomly generated (never user-chosen), so
+// a plain, fast SHA-256 - no salt, no slow KDF - is enough: there's no weak
 // human-picked passphrase here for an attacker to dictionary-guess, only a
 // ~40-bit random string they'd have to brute force from scratch either way.
 // This exists purely so a leak of the Firestore data itself (e.g. project
 // access, a misconfigured export) doesn't also hand over live write access
-// - the hash can't be turned back into the code.
+// - the hash can't be turned back into the passcode.
 async function sha256Hex(text) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return Array.from(new Uint8Array(digest))
@@ -339,6 +336,14 @@ const SYNC_DELETE_RATE_LIMIT = 20;
 // Creating a brand new pairing (see src/sync.js's orbitSyncCreate) is just
 // as rare/one-off as deleting one - same tight cap, own counter.
 const SYNC_CREATE_RATE_LIMIT = 20;
+// A GET that also carries a passcode is a credential check (join-time role
+// resolution, or an existing viewer device unlocking manager mode) - unlike
+// ordinary polling there's no legitimate reason to do this often, so it
+// gets its own bucket at the same tight cap as an actual write rather than
+// sharing the generous read bucket polling needs. (Not that brute-forcing
+// an 8-character passcode is remotely feasible at any rate limit - this is
+// just not the bucket meant for high-frequency legitimate traffic.)
+const SYNC_VERIFY_RATE_LIMIT = 300;
 
 function base64UrlFromBytes(bytes) {
   let binary = '';
@@ -417,82 +422,65 @@ async function getFirebaseAccessToken(env) {
   return cachedFirebaseToken.token;
 }
 
-const FIRESTORE_COLLECTION = 'orbit-schedules';
-
-function firestoreBaseUrl(env) {
-  return `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(env.FIREBASE_PROJECT_ID)}/databases/(default)/documents`;
-}
-function firestoreDocUrlById(env, id) {
-  return `${firestoreBaseUrl(env)}/${FIRESTORE_COLLECTION}/${encodeURIComponent(id)}`;
+function firestoreDocUrl(env, code) {
+  return `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(env.FIREBASE_PROJECT_ID)}/databases/(default)/documents/orbit-schedules/${encodeURIComponent(code)}`;
 }
 async function firestoreErrorMessage(response) {
   const errorJson = await response.json().catch(() => ({}));
   return errorJson.error?.message || response.statusText || `HTTP ${response.status}`;
 }
 
-// Looks a document up by a hashed-code field instead of by ID - the
-// document's real ID is now a Firestore-assigned random string, unrelated
-// to either code (see the comment at the top of this section), so there's
-// no path to fetch directly. Firestore auto-creates single-field indexes
-// for every field by default, so this equality query works with no extra
-// per-project setup. `limit: 1` because codes are unique by construction
-// (see orbitSyncCreate's collision check) - at most one document can ever
-// match a given hash on a given field.
-async function firestoreQueryByHash(env, field, hash) {
+async function firestoreGet(env, code) {
   const token = await getFirebaseAccessToken(env);
-  const response = await fetch(`${firestoreBaseUrl(env)}:runQuery`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      structuredQuery: {
-        from: [{ collectionId: FIRESTORE_COLLECTION }],
-        where: {
-          fieldFilter: {
-            field: { fieldPath: field },
-            op: 'EQUAL',
-            value: { stringValue: hash }
-          }
-        },
-        limit: 1
-      }
-    })
+  const response = await fetch(firestoreDocUrl(env, code), {
+    headers: { Authorization: `Bearer ${token}` }
   });
+  if (response.status === 404) {
+    return { exists: false, updateTime: '', payload: '', managerPasscodeHash: '' };
+  }
   if (!response.ok) throw new Error(await firestoreErrorMessage(response));
-  const results = await response.json();
-  const hit = (Array.isArray(results) ? results : []).find(entry => entry.document);
-  if (!hit) return null;
-  const doc = hit.document;
+  const doc = await response.json();
   return {
-    id: doc.name.split('/').pop(),
+    exists: true,
     updateTime: doc.updateTime || '',
-    payload: doc.fields?.payload?.stringValue || ''
+    payload: doc.fields?.payload?.stringValue || '',
+    managerPasscodeHash: doc.fields?.managerPasscodeHash?.stringValue || ''
   };
 }
 
-// Creates a brand new pairing document with a Firestore-assigned ID (never
-// either code) holding both codes' hashes and the initial payload - see
-// handleSyncRequest's POST branch (orbitSyncCreate).
-async function firestoreCreateDoc(env, managerCodeHash, viewerCodeHash, payload) {
+// Seeds both fields the document will ever have at once - `payload` and the
+// passcode hash it'll be checked against for every future write. Explicitly
+// listing both in updateMask (rather than the single-field mask an ordinary
+// write uses - see firestorePatch below) is what makes this a real create
+// instead of a same-shaped update: without it there'd be nothing here
+// distinguishing "first write" from "later write", and no way to seed
+// managerPasscodeHash at all through the single-field write path.
+async function firestoreCreate(env, code, managerPasscodeHash, payload) {
   const token = await getFirebaseAccessToken(env);
-  const response = await fetch(`${firestoreBaseUrl(env)}/${FIRESTORE_COLLECTION}`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      fields: {
-        managerCodeHash: { stringValue: managerCodeHash },
-        viewerCodeHash: { stringValue: viewerCodeHash },
-        payload: { stringValue: payload }
-      }
-    })
-  });
+  const response = await fetch(
+    `${firestoreDocUrl(env, code)}?updateMask.fieldPaths=payload&updateMask.fieldPaths=managerPasscodeHash`,
+    {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fields: {
+          payload: { stringValue: payload },
+          managerPasscodeHash: { stringValue: managerPasscodeHash }
+        }
+      })
+    }
+  );
   if (!response.ok) throw new Error(await firestoreErrorMessage(response));
   const doc = await response.json();
   return { updateTime: doc.updateTime || '' };
 }
 
-async function firestorePatchById(env, id, payload) {
+// An ordinary write - the single-field mask means this can never touch
+// managerPasscodeHash, however it's called, so a write is never able to
+// change the passcode a document was created with.
+async function firestorePatch(env, code, payload) {
   const token = await getFirebaseAccessToken(env);
-  const response = await fetch(`${firestoreDocUrlById(env, id)}?updateMask.fieldPaths=payload`, {
+  const response = await fetch(`${firestoreDocUrl(env, code)}?updateMask.fieldPaths=payload`, {
     method: 'PATCH',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ fields: { payload: { stringValue: payload } } })
@@ -506,13 +494,13 @@ async function firestorePatchById(env, id, payload) {
 // orbitSyncDeleteForEveryone. Unlike unlinking (a purely client-side, one
 // device forgetting its own pairing code), this is the one operation that
 // actually reaches into Firestore and removes the document every paired
-// device reads from, so every device sharing either of its codes loses its
-// sync target at once. A 404 (already gone, e.g. a retry after a dropped
+// device reads from, so every device sharing this code loses its sync
+// target at once. A 404 (already gone, e.g. a retry after a dropped
 // response) is treated the same as success - deleting something that's
 // already deleted isn't an error from the caller's point of view.
-async function firestoreDeleteById(env, id) {
+async function firestoreDelete(env, code) {
   const token = await getFirebaseAccessToken(env);
-  const response = await fetch(firestoreDocUrlById(env, id), {
+  const response = await fetch(firestoreDocUrl(env, code), {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${token}` }
   });
@@ -540,19 +528,11 @@ async function handleSyncCreate(request, env, headers, ip) {
   }
 
   try {
-    const managerCode = generateSyncCode();
-    // Regenerated on the (astronomically unlikely) chance it collides with
-    // the code just generated above - two *different* codes are the whole
-    // point of this feature, so this never silently ships a manager code
-    // that doubles as its own viewer code.
-    let viewerCode = generateSyncCode();
-    while (viewerCode === managerCode) viewerCode = generateSyncCode();
-    const [managerCodeHash, viewerCodeHash] = await Promise.all([
-      sha256Hex(managerCode),
-      sha256Hex(viewerCode)
-    ]);
-    const created = await firestoreCreateDoc(env, managerCodeHash, viewerCodeHash, payload);
-    return json({ managerCode, viewerCode, updateTime: created.updateTime }, 200, headers);
+    const code = generateSyncCode();
+    const managerPasscode = generateSyncCode();
+    const managerPasscodeHash = await sha256Hex(managerPasscode);
+    const created = await firestoreCreate(env, code, managerPasscodeHash, payload);
+    return json({ code, managerPasscode, updateTime: created.updateTime }, 200, headers);
   } catch (error) {
     return json({ error: { message: error.message || 'Upstream request failed' } }, 502, headers);
   }
@@ -577,94 +557,92 @@ async function handleSyncRequest(request, env, headers, ip) {
   // method needs.
   if (request.method === 'POST') return handleSyncCreate(request, env, headers, ip);
 
-  const code = (new URL(request.url).searchParams.get('code') || '').trim().toUpperCase();
+  const url = new URL(request.url);
+  const code = (url.searchParams.get('code') || '').trim().toUpperCase();
   if (!SYNC_CODE_PATTERN.test(code)) {
     return json({ error: { message: 'Invalid pairing code' } }, 400, headers);
   }
 
-  const kind = request.method === 'GET' ? 'read' : request.method === 'PATCH' ? 'write' : 'delete';
-  const limit =
-    kind === 'write'
-      ? SYNC_WRITE_RATE_LIMIT
-      : kind === 'delete'
-        ? SYNC_DELETE_RATE_LIMIT
-        : SYNC_READ_RATE_LIMIT;
-  const rateLimit = await isRateLimited(env, ip, `sync:${kind}`, limit);
+  if (request.method === 'GET') {
+    // A passcode riding along on GET resolves whether it's *this*
+    // document's manager passcode (join-time role check, or an
+    // already-joined viewer device unlocking manager mode) - see the
+    // SYNC_VERIFY_RATE_LIMIT comment above for why that gets its own
+    // bucket instead of sharing ordinary polling's.
+    const suppliedPasscode = (url.searchParams.get('passcode') || '').trim();
+    const kind = suppliedPasscode ? 'verify' : 'read';
+    const limit = suppliedPasscode ? SYNC_VERIFY_RATE_LIMIT : SYNC_READ_RATE_LIMIT;
+    const rateLimit = await isRateLimited(env, ip, `sync:${kind}`, limit);
+    headers['X-RateLimit-Backend'] = rateLimit.backend;
+    if (rateLimit.limited) {
+      return json({ error: { message: '請求過於頻繁，請稍後再試。' } }, 429, headers);
+    }
+    try {
+      const doc = await firestoreGet(env, code);
+      if (!doc.exists) return json({ exists: false, updateTime: '', payload: '' }, 200, headers);
+      const result = { exists: true, updateTime: doc.updateTime, payload: doc.payload };
+      if (suppliedPasscode) {
+        const suppliedHash = await sha256Hex(suppliedPasscode);
+        if (suppliedHash === doc.managerPasscodeHash) result.role = 'manager';
+      }
+      return json(result, 200, headers);
+    } catch (error) {
+      return json({ error: { message: error.message || 'Upstream request failed' } }, 502, headers);
+    }
+  }
+
+  if (request.method === 'PATCH') {
+    const rateLimit = await isRateLimited(env, ip, 'sync:write', SYNC_WRITE_RATE_LIMIT);
+    headers['X-RateLimit-Backend'] = rateLimit.backend;
+    if (rateLimit.limited) {
+      return json({ error: { message: '請求過於頻繁，請稍後再試。' } }, 429, headers);
+    }
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return json({ error: { message: 'Invalid JSON body' } }, 400, headers);
+    }
+    const payload = body?.payload;
+    const passcode = typeof body?.passcode === 'string' ? body.passcode.trim() : '';
+    if (typeof payload !== 'string' || !payload || payload.length > MAX_PAYLOAD_LENGTH) {
+      return json({ error: { message: 'Missing or invalid payload' } }, 400, headers);
+    }
+    try {
+      const doc = await firestoreGet(env, code);
+      if (!doc.exists) return json({ error: { message: '找不到這組配對代碼。' } }, 404, headers);
+      const passcodeHash = passcode ? await sha256Hex(passcode) : '';
+      if (!passcode || passcodeHash !== doc.managerPasscodeHash) {
+        return json({ error: { message: '需要正確的管理者密碼才能寫入課表。' } }, 403, headers);
+      }
+      const result = await firestorePatch(env, code, payload);
+      return json(result, 200, headers);
+    } catch (error) {
+      return json({ error: { message: error.message || 'Upstream request failed' } }, 502, headers);
+    }
+  }
+
+  // DELETE - same passcode requirement as PATCH above. Takes the passcode
+  // from the query string rather than a body: this app never sends one with
+  // its DELETE requests (see src/sync.js's deleteSyncDoc), matching how
+  // `code` itself is already passed the same way.
+  const rateLimit = await isRateLimited(env, ip, 'sync:delete', SYNC_DELETE_RATE_LIMIT);
   headers['X-RateLimit-Backend'] = rateLimit.backend;
   if (rateLimit.limited) {
     return json({ error: { message: '請求過於頻繁，請稍後再試。' } }, 429, headers);
   }
-
-  const codeHash = await sha256Hex(code);
-
+  const suppliedPasscode = (url.searchParams.get('passcode') || '').trim();
   try {
-    if (request.method === 'GET') {
-      // Either code is a legitimate way to read - a viewer polling for
-      // updates is completely normal traffic, not something to restrict.
-      // Checked in parallel (rather than "try manager, then viewer") since
-      // there's no reason to expect one role to be more common than the
-      // other, and a code only ever matches at most one of the two fields.
-      const [managerDoc, viewerDoc] = await Promise.all([
-        firestoreQueryByHash(env, 'managerCodeHash', codeHash),
-        firestoreQueryByHash(env, 'viewerCodeHash', codeHash)
-      ]);
-      const hit = managerDoc || viewerDoc;
-      if (!hit) return json({ exists: false, updateTime: '', payload: '' }, 200, headers);
-      return json(
-        {
-          exists: true,
-          role: managerDoc ? 'manager' : 'viewer',
-          updateTime: hit.updateTime,
-          payload: hit.payload
-        },
-        200,
-        headers
-      );
+    const doc = await firestoreGet(env, code);
+    // Nothing to check a passcode against - already gone (or never
+    // existed), same as a 404 from the old design: not an error from the
+    // caller's point of view.
+    if (!doc.exists) return json({ deleted: true }, 200, headers);
+    const passcodeHash = suppliedPasscode ? await sha256Hex(suppliedPasscode) : '';
+    if (!suppliedPasscode || passcodeHash !== doc.managerPasscodeHash) {
+      return json({ error: { message: '需要正確的管理者密碼才能刪除整個同步。' } }, 403, headers);
     }
-
-    if (request.method === 'PATCH') {
-      let body;
-      try {
-        body = await request.json();
-      } catch {
-        return json({ error: { message: 'Invalid JSON body' } }, 400, headers);
-      }
-      const payload = body?.payload;
-      if (typeof payload !== 'string' || !payload || payload.length > MAX_PAYLOAD_LENGTH) {
-        return json({ error: { message: 'Missing or invalid payload' } }, 400, headers);
-      }
-      // Only the manager hash may ever write - checked first (not in
-      // parallel with the viewer check) so the common case, a real
-      // manager's write, costs exactly one query instead of two.
-      const managerDoc = await firestoreQueryByHash(env, 'managerCodeHash', codeHash);
-      if (managerDoc) {
-        const result = await firestorePatchById(env, managerDoc.id, payload);
-        return json(result, 200, headers);
-      }
-      // Distinguishes "this is a real code, but it's the receive-only one"
-      // from "this code doesn't exist at all" - a mistyped code and a
-      // correctly-typed viewer code should never look the same to the
-      // person trying to figure out why their write didn't go through.
-      const viewerDoc = await firestoreQueryByHash(env, 'viewerCodeHash', codeHash);
-      if (viewerDoc) {
-        return json({ error: { message: '此代碼僅能接收，無法寫入課表。' } }, 403, headers);
-      }
-      return json({ error: { message: '找不到這組配對代碼。' } }, 404, headers);
-    }
-
-    // DELETE - same manager-only rule as PATCH above, same reasoning for
-    // checking sequentially rather than in parallel.
-    const managerDoc = await firestoreQueryByHash(env, 'managerCodeHash', codeHash);
-    if (managerDoc) {
-      await firestoreDeleteById(env, managerDoc.id);
-      return json({ deleted: true }, 200, headers);
-    }
-    const viewerDoc = await firestoreQueryByHash(env, 'viewerCodeHash', codeHash);
-    if (viewerDoc) {
-      return json({ error: { message: '此代碼僅能接收，無法刪除整個同步。' } }, 403, headers);
-    }
-    // Matches neither hash - already deleted (or never existed), same as a
-    // 404 from the old by-ID delete: not an error from the caller's side.
+    await firestoreDelete(env, code);
     return json({ deleted: true }, 200, headers);
   } catch (error) {
     return json({ error: { message: error.message || 'Upstream request failed' } }, 502, headers);

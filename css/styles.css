@@ -735,15 +735,31 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .sync-style-backup-notice .editor-hint-body{margin:0}
 .sync-role-label{font-size:11px;font-weight:700;color:var(--accent);text-align:center}
 .sync-role-label.is-viewer{color:var(--sub)}
-/* The two-code display shown once right after creating a sync (see
-   src/sync.js's showCreatedSyncCodes) - a row per code, each with its own
-   copy button, so the manager and viewer codes are never visually
-   ambiguous about which is which. */
+/* The sync-code + manager-passcode display shown once right after creating
+   a sync (see src/sync.js's showCreatedSyncCodes) - a row per value, each
+   with its own copy button, so the freely-shareable code and the sensitive
+   passcode are never visually ambiguous about which is which. Reused by
+   the manager-passcode reveal in the active-sync box (see
+   .sync-manager-passcode-box below), same row shape. */
 .sync-code-row{display:flex;flex-direction:column;gap:6px}
 .sync-code-row-label{font-size:11px;font-weight:700;color:var(--sub)}
 .sync-code-row-value{display:flex;align-items:stretch;gap:8px}
 .sync-code-row-value .sync-active-code{flex:1;min-width:0;font-size:18px;padding:10px}
 .sync-code-row-value .settings-transfer-btn{flex:0 0 auto;padding:0 14px}
+/* A manager device can always redisplay its own stored passcode (see
+   copySyncManagerPasscode) - hidden by default per toggleSyncManagerPasscodeReveal,
+   so it isn't just sitting on screen in plain text every time this panel opens. */
+.sync-manager-passcode-box{display:flex;flex-direction:column;gap:8px;padding:10px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid var(--bd)}
+.sync-manager-passcode-box[hidden]{display:none}
+.sync-manager-passcode-box .editor-hint-body{margin:0}
+.sync-manager-passcode-box .sync-active-code{min-width:0}
+/* The viewer-only fold offering to unlock manager mode later by typing in
+   the manager passcode (see orbitSyncUpgradeToManager) - same shape as the
+   passcode box above, shown instead of it (never both - see
+   renderSyncPanel) since a viewer has nothing to reveal yet. */
+.sync-upgrade-box{display:flex;flex-direction:column;gap:8px;padding:10px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid var(--bd)}
+.sync-upgrade-box[hidden]{display:none}
+.sync-upgrade-box .editor-hint-body{margin:0}
 
 /* A viewer device (see src/sync.js's isSyncViewer/applyEditorRoleLock) is
    locked out of the schedule editor entirely now (#btn-edit itself is

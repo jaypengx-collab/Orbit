@@ -89,13 +89,13 @@ describe('style tool lock: a viewer still accepting synced colors cannot use it'
 
   it("window.toggleStylePanel() refuses to open the panel for a plain viewer (hasn't opted out)", async () => {
     window.closeStylePanel(); // start from a known-closed state
-    sync.setSyncPairing('CODE1234', 'viewer');
+    sync.setSyncPairing('CODE1234');
     await window.toggleStylePanel();
     expect(document.getElementById('style-panel').classList.contains('show')).toBe(false);
   });
 
   it('#btn-style is visually locked for a plain viewer, and unlocks once the opt-out is confirmed', () => {
-    sync.setSyncPairing('CODE1234', 'viewer');
+    sync.setSyncPairing('CODE1234');
     sync.applyEditorRoleLock();
     expect(document.getElementById('btn-style').classList.contains('is-disabled')).toBe(true);
 
@@ -111,7 +111,7 @@ describe('style tool lock: a viewer still accepting synced colors cannot use it'
 
   it('a manager is never locked out of the style tool, opted out or not', async () => {
     window.closeStylePanel();
-    sync.setSyncPairing('CODE1234', 'manager');
+    sync.setSyncPairing('CODE1234', 'PASSCODE1');
     sync.applyEditorRoleLock();
     expect(document.getElementById('btn-style').classList.contains('is-disabled')).toBe(false);
     await window.toggleStylePanel();

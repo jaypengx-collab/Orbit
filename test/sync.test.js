@@ -21,6 +21,8 @@ beforeAll(async () => {
 beforeEach(() => {
   sync.clearSyncPairing();
   document.getElementById('sync-join-code').value = '';
+  document.getElementById('sync-join-as-manager').checked = false;
+  document.getElementById('sync-join-passcode').value = '';
 });
 
 afterEach(() => {
@@ -176,23 +178,26 @@ describe('orbitSyncUnlink', () => {
 });
 
 describe('manager/viewer roles', () => {
-  it('a device paired before roles existed defaults to manager (no retroactive lockout)', () => {
+  it('a device with no manager passcode stored is always a viewer, even with a stray legacy role key', () => {
     sync.setSyncPairing('CODE1234');
-    localStorage.removeItem('orbitSyncRole');
-    expect(sync.getSyncRole()).toBe('manager');
-    expect(sync.isSyncViewer()).toBe(false);
+    // Left over from the earlier two-code design's role flag - must not
+    // matter any more, since role is now derived purely from whether a
+    // manager passcode is actually stored (see getSyncRole).
+    localStorage.setItem('orbitSyncRole', 'manager');
+    expect(sync.getSyncRole()).toBe('viewer');
+    expect(sync.isSyncViewer()).toBe(true);
   });
 
   it('applyEditorRoleLock disables #btn-edit and locks the transfer sheet for a viewer, unlocking both for a manager', () => {
     const editBtn = document.getElementById('btn-edit');
     const transferSheet = document.getElementById('transfer-sheet');
-    sync.setSyncPairing('CODE1234', 'viewer');
+    sync.setSyncPairing('CODE1234');
     sync.renderSyncPanel();
     expect(editBtn.classList.contains('is-disabled')).toBe(true);
     expect(transferSheet.classList.contains('sync-viewer-locked')).toBe(true);
     expect(document.getElementById('sync-role-label').textContent).toMatch(/僅接收/);
 
-    sync.setSyncPairing('CODE1234', 'manager');
+    sync.setSyncPairing('CODE1234', 'PASSCODE1');
     sync.renderSyncPanel();
     expect(editBtn.classList.contains('is-disabled')).toBe(false);
     expect(transferSheet.classList.contains('sync-viewer-locked')).toBe(false);
@@ -200,7 +205,7 @@ describe('manager/viewer roles', () => {
   });
 
   it('openEditor() itself refuses for a viewer, as a second line of defense', () => {
-    sync.setSyncPairing('CODE1234', 'viewer');
+    sync.setSyncPairing('CODE1234');
     sync.renderSyncPanel();
     document.getElementById('editor-sheet').classList.remove('show');
     window.openEditor();
@@ -208,7 +213,7 @@ describe('manager/viewer roles', () => {
   });
 
   it('saveEditor refuses to save while locked as a viewer, as a second line of defense', async () => {
-    sync.setSyncPairing('CODE1234', 'viewer');
+    sync.setSyncPairing('CODE1234');
     sync.renderSyncPanel();
     document.getElementById('sync-status').textContent = '';
     window.saveEditor();
@@ -216,7 +221,7 @@ describe('manager/viewer roles', () => {
   });
 
   it('requestTransferAction refuses a manual import while locked as a viewer, but leaves export alone', () => {
-    sync.setSyncPairing('CODE1234', 'viewer');
+    sync.setSyncPairing('CODE1234');
     sync.renderSyncPanel();
     document.getElementById('sync-status').textContent = '';
 

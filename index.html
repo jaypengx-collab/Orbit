@@ -281,14 +281,21 @@
     <button type="button" class="editor-close" onclick="closeTransferSheet()" aria-label="關閉">×</button>
   </div>
   <div class="settings-transfer-box" id="sync-setup-box">
-    <div class="editor-hint-body" id="sync-setup-hint">同步會把課表存到 Orbit AI 內建的同步伺服器，讓多台裝置自動保持一致，不需要自己申請任何帳號。建立同步後會拿到兩組代碼：「管理者代碼」可以編輯課表，變更會同步到其他裝置；「接收者代碼」只會收到更新，無法編輯——用哪一組代碼加入，就決定了那台裝置的身份，加入時不用另外選擇。</div>
+    <div class="editor-hint-body" id="sync-setup-hint">同步會把課表存到 Orbit AI 內建的同步伺服器，讓多台裝置自動保持一致，不需要自己申請任何帳號。建立同步後會拿到一組「同步代碼」跟一組「管理者密碼」：同步代碼可以自由分享，任何裝置拿到都能接收更新；管理者密碼才是編輯課表的唯一憑證，只給你想讓它也能編輯的裝置。</div>
     <div class="settings-transfer-actions">
       <button type="button" id="sync-create-btn" class="settings-transfer-btn" onclick="orbitSyncCreate()">
         建立新同步
       </button>
     </div>
     <div class="sync-divider">或加入現有同步</div>
-    <input id="sync-join-code" class="settings-transfer-text sync-input" type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="輸入管理者或接收者代碼">
+    <input id="sync-join-code" class="settings-transfer-text sync-input" type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="輸入同步代碼">
+    <label class="sync-role-checkbox">
+      <input type="checkbox" id="sync-join-as-manager" onchange="toggleSyncJoinPasscodeField(this.checked)">
+      我有管理者密碼，我想要能編輯課表
+    </label>
+    <div id="sync-join-passcode-row" hidden>
+      <input id="sync-join-passcode" class="settings-transfer-text sync-input" type="text" inputmode="text" autocapitalize="none" autocomplete="off" spellcheck="false" placeholder="輸入管理者密碼">
+    </div>
     <div class="settings-transfer-actions">
       <button type="button" id="sync-join-btn" class="settings-transfer-btn primary" onclick="orbitSyncJoin()">
         加入同步
@@ -296,35 +303,56 @@
     </div>
   </div>
   <div class="settings-transfer-box" id="sync-created-codes" hidden>
-    <div class="editor-hint-body">同步已建立！請先把兩組代碼分別存好——離開這個畫面後就不會再顯示，尤其是接收者代碼，遺失後無法再次查看，只能整個刪除同步重建。</div>
+    <div class="editor-hint-body">同步已建立！同步代碼會留在下方畫面隨時看得到，但請務必先把管理者密碼另外存好——離開這個畫面後不會直接顯示，只有這台裝置之後可以在已配對畫面重新顯示它。</div>
     <div class="sync-code-row">
-      <div class="sync-code-row-label">管理者代碼（可以編輯課表）</div>
+      <div class="sync-code-row-label">同步代碼（可自由分享，任何裝置拿到都能接收更新）</div>
       <div class="sync-code-row-value">
-        <div id="sync-created-manager-code" class="sync-active-code"></div>
-        <button type="button" id="sync-created-manager-copy" class="settings-transfer-btn" onclick="copySyncCreatedCode('manager')">
+        <div id="sync-created-code" class="sync-active-code"></div>
+        <button type="button" id="sync-created-code-copy" class="settings-transfer-btn" onclick="copySyncCreatedCode('code')">
           複製
         </button>
       </div>
     </div>
     <div class="sync-code-row">
-      <div class="sync-code-row-label">接收者代碼（僅能接收，無法編輯）</div>
+      <div class="sync-code-row-label">管理者密碼（請妥善保管，只分享給想讓它也能編輯的裝置）</div>
       <div class="sync-code-row-value">
-        <div id="sync-created-viewer-code" class="sync-active-code"></div>
-        <button type="button" id="sync-created-viewer-copy" class="settings-transfer-btn" onclick="copySyncCreatedCode('viewer')">
+        <div id="sync-created-passcode" class="sync-active-code"></div>
+        <button type="button" id="sync-created-passcode-copy" class="settings-transfer-btn" onclick="copySyncCreatedCode('passcode')">
           複製
         </button>
       </div>
     </div>
     <div class="settings-transfer-actions">
       <button type="button" class="settings-transfer-btn primary" onclick="acknowledgeSyncCreatedCodes()">
-        我已保存好兩組代碼
+        我已保存好代碼與密碼
       </button>
     </div>
   </div>
   <div class="settings-transfer-box" id="sync-active-box" hidden>
-    <div class="editor-hint-body">此裝置已配對同步。把下方這組代碼分享給其他裝置，對方就能以跟這台裝置一樣的身份加入：</div>
+    <div class="editor-hint-body">此裝置已配對同步。把下方這組代碼分享給其他裝置，對方就能加入接收更新：</div>
     <div id="sync-active-code" class="sync-active-code"></div>
     <div id="sync-role-label" class="sync-role-label"></div>
+    <div id="sync-manager-passcode-box" class="sync-manager-passcode-box" hidden>
+      <div class="editor-hint-body">管理者密碼（分享給想讓它也能編輯的裝置）</div>
+      <div class="sync-code-row-value">
+        <div id="sync-manager-passcode-value" class="sync-active-code" hidden></div>
+        <button type="button" id="sync-manager-passcode-toggle" class="settings-transfer-btn" onclick="toggleSyncManagerPasscodeReveal()">
+          顯示
+        </button>
+        <button type="button" id="sync-manager-passcode-copy" class="settings-transfer-btn" onclick="copySyncManagerPasscode()">
+          複製
+        </button>
+      </div>
+    </div>
+    <div id="sync-upgrade-box" class="sync-upgrade-box" hidden>
+      <div class="editor-hint-body">這台裝置目前僅能接收，無法編輯。輸入管理者密碼即可取得編輯權限：</div>
+      <input id="sync-upgrade-passcode" class="settings-transfer-text sync-input" type="text" inputmode="text" autocapitalize="none" autocomplete="off" spellcheck="false" placeholder="輸入管理者密碼">
+      <div class="settings-transfer-actions">
+        <button type="button" id="sync-upgrade-btn" class="settings-transfer-btn primary" onclick="orbitSyncUpgradeToManager()">
+          取得編輯權限
+        </button>
+      </div>
+    </div>
     <label class="sync-role-checkbox">
       <input type="checkbox" id="sync-keep-local-style" onchange="orbitSyncSetKeepLocalStyle(this.checked)">
       不同步樣式顏色（保留這台裝置目前的配色）
