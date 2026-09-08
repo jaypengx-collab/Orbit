@@ -24,6 +24,15 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @keyframes orbit-boot-spin{to{transform:rotate(360deg)}}
 @keyframes orbit-row-in{from{opacity:0;transform:translateY(16px) scale(.97);filter:blur(3px)}to{opacity:1;transform:translateY(0) scale(1);filter:blur(0)}}
 @keyframes orbit-card-in{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+/* The press/release pair for a class card (see initSchedulePressFeedback in
+   src/dashboard-render.js). :active alone was doing this job and, on iOS
+   Safari specifically, frequently never painted at all - a tap that opens a
+   sheet is short enough that the :active state can come and go inside a
+   single frame, so the card just sat there and the sheet appeared out of
+   nowhere. The press is a class the pointer handlers hold for as long as the
+   finger is actually down; the release is this animation, which always runs
+   its full length no matter how brief the tap was. */
+@keyframes orbit-row-tap{0%{transform:scale(.965)}42%{transform:scale(1.014)}100%{transform:scale(1)}}
 @keyframes orbit-nav-slide{from{opacity:0;transform:translateX(calc(var(--nav-dir,1) * 48px))}to{opacity:1;transform:translateX(0)}}
 #schedule-list.nav-slide{animation:orbit-nav-slide .6s var(--ease-glass)}
 
@@ -102,6 +111,15 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
     inset 0 8px 22px rgba(0,0,0,.08);
   --glass-shadow:var(--glass-edge-shadow),0 22px 54px rgba(0,8,16,.4),0 2px 10px rgba(0,0,0,.28);
   --glass-shadow-soft:var(--glass-edge-shadow),0 10px 24px rgba(0,8,16,.26),0 1px 5px rgba(0,0,0,.18);
+  /* The same material as --glass-fill, tuned for surfaces that repeat: a
+     day-nav row and a screenful of class cards are a dozen-odd blur layers
+     rather than the two or three the dashboard/sheets ever add, so the blur
+     radius is smaller (cheaper to composite on a phone) and the fill a
+     little denser (these carry the app's smallest text, so they can't lean
+     on the backdrop showing through as heavily as a big empty panel can). */
+  --glass-blur-card:14px;
+  --glass-fill-card:color-mix(in srgb,var(--orbit-panel) 42%,transparent);
+  --glass-well-fallback:linear-gradient(135deg,color-mix(in srgb,var(--row-accent,var(--pro-accent)) 11%,var(--orbit-panel)),var(--orbit-panel) 65%);
   --well-fill:rgba(3,9,13,.4);
   --well-shadow:inset 0 1px 4px rgba(0,0,0,.4),inset 0 -1px 0 rgba(255,255,255,.03);
   --ease-glass:cubic-bezier(.16,1,.3,1);
@@ -217,11 +235,18 @@ body.orbit-booting .dashboard-boot-loader{visibility:visible;display:flex;positi
   touch-action:pan-y;cursor:grab;display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);align-items:center;justify-self:center;
   gap:10px;padding:8px 14px;min-height:60px;width:clamp(210px,60vw,248px);max-width:100%;
   border-left:3px solid var(--pro-accent);
-  border-radius:0 12px 12px 0;background:color-mix(in srgb,var(--orbit-panel-strong) 46%,transparent);
-  backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%);
-  box-shadow:var(--glass-edge-shadow);
+  border-radius:0 14px 14px 0;
+  /* Glass, on the app's own tokens rather than its former one-off blur
+     values - it floats over the dashboard's backdrop the same way every
+     other floating control does, and the accent tint in the fill is what
+     ties it to the theme now that the flat panel color is gone. */
+  background:linear-gradient(135deg,color-mix(in srgb,var(--pro-accent) 15%,transparent),var(--glass-fill-card) 70%);
+  backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  -webkit-backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  box-shadow:var(--glass-shadow-soft);
   transition:box-shadow .15s,transform .12s var(--ease-glass);
 }
+@supports not (backdrop-filter:blur(1px)){.exam-countdown{background:color-mix(in srgb,var(--pro-accent) 14%,var(--orbit-panel-strong))}}
 /* Grabbing cursor only - no press-scale here. A tap alone does nothing (only
    an actual swipe changes the active event), so animating on every press
    would be feedback for an action that didn't happen; .is-swapping below is
@@ -441,21 +466,30 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
      otherwise-plain day (not today, not tomorrow, not the active tab)
      shows. */
   border:1px solid var(--orbit-line);
-  box-shadow:none;outline:none;
-  font-size:clamp(13px,3.6vw,15px);cursor:pointer;transition:transform .12s var(--ease-glass);
-  border-radius:11px;padding:8px 3px;font-weight:700;color:var(--orbit-muted);
+  /* Glass, like every other control floating directly on the page
+     backdrop. Only the inset rim from --glass-edge-shadow, never an outer
+     drop shadow: iOS Safari drew none here while desktop Chrome drew a soft
+     one, so the drop layer stays dropped everywhere (see the .active note
+     below) - the rim is what gives the pill its edge on both. */
+  background:var(--glass-fill-card);
+  backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  -webkit-backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  box-shadow:var(--glass-edge-shadow);outline:none;
+  font-size:clamp(13px,3.6vw,15px);cursor:pointer;transition:transform .12s var(--ease-glass),background .2s,border-color .2s;
+  border-radius:13px;padding:8px 3px;font-weight:700;color:var(--orbit-muted);
 }
-.nav-item:active,.nav-item:focus{box-shadow:none;outline:none}
+@supports not (backdrop-filter:blur(1px)){.nav-item{background:var(--orbit-panel)}}
+.nav-item:active,.nav-item:focus{outline:none}
 /* Restores a real ring for keyboard/switch-control focus specifically - the
    blanket outline:none above (and its own former :focus-visible in this
    same rule) was written to kill the residual outline a plain mouse click
    can leave in some browsers, but it also silently removed the one signal a
    keyboard user tabbing across five identical day buttons had for which one
    is focused. */
-.nav-item:focus-visible{box-shadow:none;outline:2px solid var(--accent);outline-offset:2px}
+.nav-item:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .nav-item:active{transform:scale(.95)}
-.nav-item.is-today{color:#fff;border:2px solid var(--day-today-border);background:color-mix(in srgb,var(--pro-accent) 24%,transparent)}
-.nav-item.is-tomorrow{color:#fff;border:2px solid var(--day-tomorrow-border);background:color-mix(in srgb,var(--pro-secondary) 26%,transparent)}
+.nav-item.is-today{color:#fff;border:2px solid var(--day-today-border);background:linear-gradient(135deg,color-mix(in srgb,var(--pro-accent) 26%,transparent),var(--glass-fill-card) 78%)}
+.nav-item.is-tomorrow{color:#fff;border:2px solid var(--day-tomorrow-border);background:linear-gradient(135deg,color-mix(in srgb,var(--pro-secondary) 28%,transparent),var(--glass-fill-card) 78%)}
 /* .active always wins the fill when combined with is-today/is-tomorrow — the
    selected tab reads as the solid pill; the today/tomorrow state only needs
    its 2px border while browsing a different day, no additional shadow/ring
@@ -513,11 +547,30 @@ body.orbit-suppress-list-animation .animate-list .row{animation:none}
   --row-accent:var(--pro-accent);
   transition:transform .2s var(--ease-glass),border-color .2s,background .2s,box-shadow .2s;
   cursor:pointer;height:76px;padding:11px 13px;margin-bottom:8px;display:flex;align-items:center;gap:10px;overflow:hidden;
-  border-radius:var(--orbit-radius-md);border:1px solid color-mix(in srgb,var(--row-accent) 14%,transparent);box-shadow:none;
-  background:linear-gradient(135deg,color-mix(in srgb,var(--row-accent) 11%,var(--orbit-panel)),var(--orbit-panel) 65%);
+  border-radius:var(--orbit-radius-md);border:1px solid color-mix(in srgb,var(--row-accent) 20%,transparent);
+  /* Glass, not the flat well it used to be. These cards float directly on
+     the page backdrop (the list sits outside .dashboard entirely), so by the
+     design system's own rule at the top of this file they're floating
+     controls, not content sitting inside a glass panel - the well material
+     was making them read as holes punched in a background that isn't there.
+     The accent tint stays in the fill so a card is still visibly the app's
+     theme color, just refracted rather than painted on. */
+  background:linear-gradient(135deg,color-mix(in srgb,var(--row-accent) 16%,transparent),var(--glass-fill-card) 68%);
+  backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  -webkit-backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  box-shadow:var(--glass-shadow-soft);
 }
+@supports not (backdrop-filter:blur(1px)){.row{background:var(--glass-well-fallback)}}
 .row:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.row:active{transform:scale(.98)}
+/* :active is kept as the desktop/mouse path, but .is-pressed (held by the
+   pointer handlers in src/dashboard-render.js for exactly as long as the
+   finger is down) is what actually shows up on touch - see the
+   orbit-row-tap keyframe's comment for why :active alone wasn't enough. */
+.row:active,.row.is-pressed{transform:scale(.965);border-color:color-mix(in srgb,var(--row-accent) 46%,transparent);box-shadow:var(--glass-edge-shadow),0 4px 12px rgba(0,8,16,.3)}
+/* Wins over .animate-list .row's entry animation, which is why it's scoped
+   to the list rather than left as a bare .row.is-tapped. */
+#schedule-list .row.is-tapped{animation:orbit-row-tap .32s var(--ease-glass)}
+@media (prefers-reduced-motion:reduce){#schedule-list .row.is-tapped{animation:none}.row:active,.row.is-pressed{transform:none}}
 @media (hover:hover){.row:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--row-accent) 34%,transparent)}}
 /* The accent stripe lives on .content (spanning both the name and meta
    lines) rather than just .row-name, so the meta line's left edge lines up
@@ -548,18 +601,22 @@ body.orbit-suppress-list-animation .animate-list .row{animation:none}
 .row.is-next{
   --row-accent:var(--pro-accent);
   border-radius:var(--orbit-radius-md);
-  background:linear-gradient(135deg,color-mix(in srgb,var(--pro-accent) 26%,var(--orbit-panel-strong)),color-mix(in srgb,var(--pro-accent) 8%,var(--orbit-panel-strong)));
+  background:linear-gradient(135deg,color-mix(in srgb,var(--pro-accent) 34%,transparent),color-mix(in srgb,var(--orbit-panel-strong) 46%,transparent) 74%);
   border:1.5px solid color-mix(in srgb,var(--pro-accent) 55%,transparent);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.09);
+  box-shadow:var(--glass-shadow-soft);
   border-left:4px solid var(--pro-accent);padding-left:10px;
 }
 .row.is-now{
   --row-accent:var(--pro-secondary);
   border-radius:var(--orbit-radius-md);
-  background:linear-gradient(135deg,color-mix(in srgb,var(--pro-secondary) 28%,var(--orbit-panel-strong)),color-mix(in srgb,var(--pro-secondary) 9%,var(--orbit-panel-strong)));
+  background:linear-gradient(135deg,color-mix(in srgb,var(--pro-secondary) 36%,transparent),color-mix(in srgb,var(--orbit-panel-strong) 46%,transparent) 74%);
   border:1.5px solid color-mix(in srgb,var(--pro-secondary) 58%,transparent);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.09);
+  box-shadow:var(--glass-shadow-soft);
   border-left:4px solid var(--pro-secondary);padding-left:10px;
+}
+@supports not (backdrop-filter:blur(1px)){
+  .row.is-next{background:linear-gradient(135deg,color-mix(in srgb,var(--pro-accent) 26%,var(--orbit-panel-strong)),color-mix(in srgb,var(--pro-accent) 8%,var(--orbit-panel-strong)))}
+  .row.is-now{background:linear-gradient(135deg,color-mix(in srgb,var(--pro-secondary) 28%,var(--orbit-panel-strong)),color-mix(in srgb,var(--pro-secondary) 9%,var(--orbit-panel-strong)))}
 }
 .row.is-next .content,.row.is-now .content{border-left-color:transparent}
 .row.is-next .period-badge{border-color:transparent;background:var(--pro-accent);color:var(--pro-accent-text)}
@@ -847,11 +904,16 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .countdown-event-fields .countdown-event-start,.countdown-event-fields .countdown-event-end{display:block;-webkit-appearance:none;appearance:none;width:100%;max-width:100%;flex:1 1 0;min-height:38px;padding:7px 8px}
 .countdown-event-fields .countdown-event-name{height:38px;min-height:38px;padding:7px 8px}
 
-.settings-transfer-box{display:flex;flex-direction:column;gap:9px}
+/* The sync sheet stacks a dozen of these boxes, rows, folds and status
+   lines on top of each other, so every gap in here is paid for twelve times
+   over - what read as breathing room in isolation added up to a panel you
+   had to scroll through to find the one control you came for. The whole
+   group below is deliberately tighter than the editor sheet's spacing. */
+.settings-transfer-box{display:flex;flex-direction:column;gap:7px}
 .settings-transfer-box[hidden]{display:none}
 .settings-transfer-text{width:100%;min-height:142px;resize:vertical;padding:10px 11px;border-radius:12px;border:1px solid var(--bd);background:rgba(0,0,0,.18);color:var(--txt);font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;line-height:1.45;outline:none}
 .settings-transfer-text:focus{border-color:color-mix(in srgb,var(--accent) 58%,transparent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)}
-.settings-transfer-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.settings-transfer-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px}
 .settings-transfer-actions>.settings-transfer-btn:only-child{grid-column:1/-1}
 /* A sibling button hidden via the `hidden` attribute (e.g. sync-delete-all-btn
    for a viewer) still counts as a DOM child, so :only-child above never
@@ -865,13 +927,17 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .settings-transfer-btn.danger{background:rgba(255,69,58,.08);color:#ff453a;border-color:rgba(255,69,58,.35)}
 .settings-transfer-btn.danger:active{background:rgba(255,69,58,.16)}
 .settings-transfer-btn.primary:active{box-shadow:0 3px 10px color-mix(in srgb,var(--pro-accent) 20%,transparent)}
-.settings-transfer-status{min-height:18px;font-size:11px;line-height:1.35;color:var(--sub);white-space:pre-line}
+/* Height only while it has something to say: an always-reserved 18px line
+   under every box was most of this sheet's dead space, since the status
+   lines are empty the overwhelming majority of the time. */
+.settings-transfer-status{font-size:11px;line-height:1.35;color:var(--sub);white-space:pre-line}
+.settings-transfer-status:empty{display:none}
 
 .sync-input{min-height:auto;height:42px;font-family:inherit;font-size:13px}
-.sync-divider{font-size:11px;color:var(--sub);text-align:center;margin:2px 0}
-.sync-active-code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:22px;font-weight:800;letter-spacing:.14em;text-align:center;padding:12px;border-radius:12px;background:rgba(0,0,0,.18);border:1px solid var(--bd);color:var(--accent);word-break:break-all}
-.sync-role-checkbox{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--sub);padding:2px 2px 4px}
-.sync-role-label{font-size:11px;font-weight:700;color:var(--accent);text-align:center}
+.sync-divider{font-size:11px;color:var(--sub);text-align:center;margin:0}
+.sync-active-code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:22px;font-weight:800;letter-spacing:.14em;text-align:center;padding:10px;border-radius:12px;background:rgba(0,0,0,.18);border:1px solid var(--bd);color:var(--accent);word-break:break-all}
+.sync-role-checkbox{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--sub);padding:0 2px}
+.sync-role-label{font-size:11px;font-weight:700;color:var(--accent);text-align:center;line-height:1.35}
 .sync-role-label.is-viewer{color:var(--sub)}
 /* The sync-code + manager-passcode display shown once right after creating
    a sync (see src/sync.js's showCreatedSyncCodes) - a row per value, each
@@ -879,7 +945,7 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
    passcode are never visually ambiguous about which is which. Reused by
    the manager-passcode reveal in the active-sync box (see
    .sync-manager-passcode-box below), same row shape. */
-.sync-code-row{display:flex;flex-direction:column;gap:6px}
+.sync-code-row{display:flex;flex-direction:column;gap:5px}
 .sync-code-row-label{font-size:11px;font-weight:700;color:var(--sub)}
 .sync-code-row-value{display:flex;align-items:center;gap:8px}
 .sync-code-row-value .sync-active-code{flex:1;min-width:0;font-size:18px;padding:11px}
@@ -893,7 +959,7 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 /* A manager device can always redisplay its own stored passcode (see
    copySyncManagerPasscode) - hidden by default per toggleSyncManagerPasscodeReveal,
    so it isn't just sitting on screen in plain text every time this panel opens. */
-.sync-manager-passcode-box{display:flex;flex-direction:column;gap:8px;padding:10px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid var(--bd)}
+.sync-manager-passcode-box{display:flex;flex-direction:column;gap:7px;padding:9px 10px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid var(--bd)}
 .sync-manager-passcode-box[hidden]{display:none}
 .sync-manager-passcode-box .editor-hint-body{margin:0}
 .sync-manager-passcode-box .sync-active-code{min-width:0}
@@ -901,7 +967,7 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
    the manager passcode (see orbitSyncUpgradeToManager) - same shape as the
    passcode box above, shown instead of it (never both - see
    renderSyncPanel) since a viewer has nothing to reveal yet. */
-.sync-upgrade-box{display:flex;flex-direction:column;gap:8px;padding:10px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid var(--bd)}
+.sync-upgrade-box{display:flex;flex-direction:column;gap:7px;padding:9px 10px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid var(--bd)}
 .sync-upgrade-box[hidden]{display:none}
 .sync-upgrade-box .editor-hint-body{margin:0}
 
@@ -941,13 +1007,13 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
    stay outside the paged-editor/accordion machinery that .editor-fold hooks
    into (initEditorAccordion, openEditorFold, etc.), since it's just a
    disclosure inside a standalone sheet, not a page of the schedule editor. */
-.legacy-fold{margin-top:4px;border-radius:12px;border:1px solid var(--bd);overflow:hidden}
-.legacy-fold-summary{list-style:none;cursor:pointer;font-size:12px;font-weight:700;color:var(--sub);padding:10px 12px;user-select:none;-webkit-tap-highlight-color:transparent}
+.legacy-fold{margin-top:0;border-radius:12px;border:1px solid var(--bd);overflow:hidden}
+.legacy-fold-summary{list-style:none;cursor:pointer;font-size:12px;font-weight:700;color:var(--sub);padding:9px 12px;user-select:none;-webkit-tap-highlight-color:transparent}
 .legacy-fold-summary::-webkit-details-marker{display:none}
-.legacy-fold-body{padding:0 12px 12px;display:flex;flex-direction:column;gap:9px}
+.legacy-fold-body{padding:0 12px 10px;display:flex;flex-direction:column;gap:7px}
 
-.ocr-import-box{display:flex;flex-direction:column;gap:9px;margin-top:14px;padding-top:14px;border-top:1px solid var(--bd)}
-.ocr-import-heading{font-size:10px;margin-bottom:3px;letter-spacing:.3px;font-weight:700;color:var(--sub);text-transform:uppercase}
+.ocr-import-box{display:flex;flex-direction:column;gap:8px;margin-top:8px;padding-top:11px;border-top:1px solid var(--bd)}
+.ocr-import-heading{font-size:10px;margin-bottom:0;letter-spacing:.3px;font-weight:700;color:var(--sub);text-transform:uppercase}
 .ocr-import-file-input{display:none}
 .ocr-import-file-row{display:flex;align-items:center;gap:10px}
 .ocr-import-file-row .settings-transfer-btn{width:auto;flex:0 0 auto;min-height:38px;display:inline-flex;align-items:center;justify-content:center;text-align:center;font-size:12.5px;padding:0 18px}
@@ -981,7 +1047,12 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
    scrolled through (and, in layered mode, drilled into) the section they
    came to edit, same as any other "confirm" button at the end of a form. */
 .editor-sheet .save-btn{border-radius:var(--action-btn-radius);padding:13px 18px;margin-top:12px;box-shadow:0 6px 20px color-mix(in srgb,var(--pro-accent) 24%,transparent);font-size:var(--action-btn-font);font-weight:700;min-height:var(--action-btn-h)}
-.save-toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ok);color:var(--pro-secondary-text);padding:10px 20px;border-radius:20px;font-size:14px;font-weight:700;opacity:0;z-index:300;transition:opacity .3s,transform .3s;pointer-events:none}
+/* Glass rather than a solid accent pill: it floats over the dashboard and
+   list with nothing of its own behind it, which is the exact case the glass
+   material is for. The accent survives as a tint in the fill and as the
+   text color, so it still reads as the app's "saved" confirmation. */
+.save-toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:linear-gradient(135deg,color-mix(in srgb,var(--pro-secondary) 34%,transparent),var(--glass-fill-strong) 76%);backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));box-shadow:var(--glass-shadow-soft);color:#fff;padding:10px 20px;border-radius:20px;font-size:14px;font-weight:700;opacity:0;z-index:300;transition:opacity .3s,transform .3s;pointer-events:none}
+@supports not (backdrop-filter:blur(1px)){.save-toast{background:var(--ok);color:var(--pro-secondary-text)}}
 .save-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
 .assign-sheet{position:fixed;z-index:1000001;top:50%;left:50%;width:min(94vw,520px);max-height:88dvh;overflow:auto;transform:translate(-50%,-50%) scale(.96);opacity:0;visibility:hidden;pointer-events:none;background:var(--glass-fill-strong);backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat));-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat));border-radius:26px;padding:18px;box-shadow:0 24px 60px rgba(0,0,0,.5);transition:opacity .2s,transform .2s,visibility .2s}
@@ -1116,7 +1187,7 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .transfer-sheet{
   width:min(calc(100vw - 24px),480px);max-width:480px;border-radius:28px;
   left:50%;right:auto;transform:translate(-50%,calc(100% + 24px));height:min(660px,calc(100dvh - 160px));overscroll-behavior:contain;
-  padding:14px 15px 0;gap:11px;background:var(--glass-fill-strong);box-shadow:var(--glass-shadow);overflow:hidden;
+  padding:13px 15px 0;gap:7px;background:var(--glass-fill-strong);box-shadow:var(--glass-shadow);overflow:hidden;
   backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
 }
 .transfer-sheet.show{transform:translate(-50%,0)}
@@ -1128,7 +1199,7 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .transfer-sheet-body{
   flex:1 1 auto;min-width:0;min-height:0;overflow-y:auto;overflow-x:hidden;
   -webkit-overflow-scrolling:touch;overscroll-behavior:contain;
-  padding:0 0 15px;display:flex;flex-direction:column;gap:11px;
+  padding:0 0 13px;display:flex;flex-direction:column;gap:7px;
 }
 /* Same fix as .editor-sheet-body>* below: flex items shrink to fit a
    constrained cross-container by default, and .transfer-sheet-body's own

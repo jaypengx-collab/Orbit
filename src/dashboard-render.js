@@ -102,6 +102,70 @@ function syncTestPlayPauseUi() {
   });
 })();
 
+// Press feedback for the class cards. The CSS :active state that used to be
+// the whole of this is unreliable on exactly the platform that needs it
+// most: on iOS Safari a tap that opens the detail sheet is often short
+// enough that :active is applied and removed inside a single frame, so the
+// card never visibly reacts at all and the sheet appears out of nowhere.
+// Splitting it in two fixes both halves - .is-pressed is held for exactly as
+// long as the finger is actually down (so a long press stays depressed), and
+// .is-tapped runs a fixed-length release animation that can't be cut short
+// by how quickly the tap ended.
+//
+// One delegated listener rather than per-row ones: renderList() rebuilds
+// every card from scratch on each update, so anything bound to a row would
+// have to be re-bound several times a minute.
+(function initSchedulePressFeedback() {
+  const list = document.getElementById('schedule-list');
+
+  if (!list) return;
+
+  let pressedRow = null;
+  const rowFrom = event =>
+    event.target instanceof Element ? event.target.closest('#schedule-list .row') : null;
+  const release = () => {
+    if (!pressedRow) return;
+    pressedRow.classList.remove('is-pressed');
+    pressedRow = null;
+  };
+
+  list.addEventListener(
+    'pointerdown',
+    event => {
+      const row = rowFrom(event);
+      if (!row) return;
+      release();
+      pressedRow = row;
+      row.classList.add('is-pressed');
+    },
+    { passive: true }
+  );
+  // Released on anything that ends the press, including ones that never
+  // reach the list itself: a finger lifted after dragging off the card, a
+  // scroll turning the touch into a pan (pointercancel), or the sheet the
+  // tap opened stealing the pointer.
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(type =>
+    window.addEventListener(type, release, { passive: true })
+  );
+  list.addEventListener('scroll', release, { passive: true });
+
+  list.addEventListener('click', event => {
+    const row = rowFrom(event);
+    if (!row) return;
+    release();
+    // Restart rather than extend, so a second tap on the same card animates
+    // again instead of being swallowed by the still-running first one.
+    row.classList.remove('is-tapped');
+    void row.offsetWidth;
+    row.classList.add('is-tapped');
+  });
+  // Name-checked because the cards' own entry animation (orbit-row-in) ends
+  // on these same elements and must not clear a tap that is still running.
+  list.addEventListener('animationend', event => {
+    if (event.animationName === 'orbit-row-tap') event.target.classList.remove('is-tapped');
+  });
+})();
+
 /* Dashboard sizing and accessible list rendering. */
 // Shrinks el's font-size (assumed already single-line/nowrap with visible
 // overflow) to fit within `available` px, binary-searching between minSize
