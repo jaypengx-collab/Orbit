@@ -358,53 +358,46 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
    trying to time it: with nothing painted here before the buttons exist,
    there's nothing left to flash regardless of how slowly they load. */
 .nav-bar{
-  width:min(420px,100%);flex:0 0 auto;display:flex;gap:2px;padding:3px;margin-bottom:7px;
+  width:min(420px,100%);flex:0 0 auto;display:flex;gap:2px;padding:2px 4px;margin-bottom:9px;
   transition:filter .35s ease,opacity .35s ease,transform .35s ease;
-  border-radius:var(--orbit-radius-md);
 }
+/* Floating-text day tabs: no pill/box fill in any state (unselected, today,
+   tomorrow, or active) - just the label itself, sized and colored to read as
+   the control. The GPU-layer hints (translateZ/backface-visibility/
+   will-change) are kept from the old pill design defensively even though
+   there's no color-mix() gradient left to mis-rasterize, since they cost
+   nothing and this button still animates on :active. */
 .nav-item{
-  /* Removing the background/color/border-color transition (see git history)
-     did not fix this on a real Safari device, which rules out "gradient
-     transition interpolation" as the actual cause. What's left, and what
-     real WebKit engines are specifically known to get wrong, is compositing:
-     :active applies `transform:scale()`, which promotes the button to its
-     own GPU layer only while pressed and drops it back afterward. Safari can
-     fail to rasterize this button's color-mix()-based gradient background
-     onto that layer in time, so the button paints blank for a frame - then
-     "reappears" once the transform transition ends and the layer is torn
-     down and repainted from scratch. Forcing the button onto a GPU layer
-     permanently (not just while :active) keeps that layer alive across the
-     whole press, so there's nothing to promote/demote and nothing to
-     mis-rasterize. Every earlier fix here (is-today/is-tomorrow ring,
-     -webkit-appearance:none, dropping .nav-bar's background, box-shadow/
-     tap-highlight resets, the background transition itself) targeted a
-     different layer of this than the actual compositing glitch. */
   -webkit-appearance:none;appearance:none;
   -webkit-tap-highlight-color:transparent;
   -webkit-transform:translateZ(0);transform:translateZ(0);
   -webkit-backface-visibility:hidden;backface-visibility:hidden;
   will-change:transform;
-  flex:1;min-width:0;min-height:46px;height:46px;border:none;background:transparent;
+  position:relative;flex:1;min-width:0;min-height:48px;height:48px;border:none;background:transparent;
   box-shadow:none;outline:none;
-  font-size:clamp(13px,3.6vw,15px);cursor:pointer;transition:transform .12s var(--ease-glass);
-  border-radius:11px;padding:8px 3px;font-weight:700;color:var(--orbit-muted);
+  display:flex;align-items:center;justify-content:center;
+  font-size:clamp(14px,3.9vw,16.5px);cursor:pointer;transition:transform .12s var(--ease-glass),color .15s;
+  border-radius:11px;padding:8px 3px;font-weight:750;color:var(--orbit-muted);
+  letter-spacing:-.01em;
 }
 .nav-item:active,.nav-item:focus,.nav-item:focus-visible{box-shadow:none;outline:none}
-.nav-item:active{transform:scale(.95)}
-.nav-item.is-today{color:#fff;border:2px solid var(--day-today-border);background:color-mix(in srgb,var(--pro-accent) 24%,transparent)}
-.nav-item.is-tomorrow{color:#fff;border:2px solid var(--day-tomorrow-border);background:color-mix(in srgb,var(--pro-secondary) 26%,transparent)}
-/* .active always wins the fill when combined with is-today/is-tomorrow — the
-   selected tab reads as the solid pill; the today/tomorrow state only needs
-   its 2px border while browsing a different day, no additional shadow/ring
-   on top of it. No drop shadow anywhere on these buttons: iOS Safari was
-   rendering this pill with no shadow at all while desktop Chrome drew a soft
-   one, so any shadow layer is dropped everywhere to match the flatter look
-   consistently across platforms. */
-.nav-item.active{background:linear-gradient(135deg,color-mix(in srgb,var(--pro-accent) 58%,#ffffff),color-mix(in srgb,var(--pro-accent) 28%,#ffffff));color:var(--pro-accent-text)}
-.nav-item.active.is-today{border-color:color-mix(in srgb,var(--pro-accent) 34%,transparent)}
-.nav-item.active.is-tomorrow{border-color:color-mix(in srgb,var(--pro-secondary) 72%,#ffffff 28%)}
-@media (max-width:480px){.nav-bar{gap:6px;padding:4px}.nav-item{font-size:14px;padding:0 10px;min-height:44px;height:44px}}
-@media (max-width:430px){.nav-bar{margin-bottom:10px}}
+.nav-item:active{transform:scale(.94)}
+/* Today/tomorrow read purely through text color while browsing a different
+   day - no border/fill box. The active (currently viewed) tab layers a
+   bright color, bolder weight, and a small floating underline bar on top of
+   whichever of those colors already applies. */
+.nav-item.is-today{color:var(--pro-accent-readable)}
+.nav-item.is-tomorrow{color:var(--pro-secondary-readable)}
+.nav-item::after{
+  content:"";position:absolute;left:50%;bottom:3px;width:18px;height:3px;border-radius:3px;
+  background:var(--pro-accent);transform:translateX(-50%) scaleX(0);opacity:0;
+  transition:transform .3s var(--ease-glass),opacity .2s;
+}
+.nav-item.active{color:#fff;font-weight:900}
+.nav-item.active::after{transform:translateX(-50%) scaleX(1);opacity:1}
+.nav-item.active.is-tomorrow::after{background:var(--pro-secondary)}
+@media (max-width:480px){.nav-bar{gap:4px;padding:2px}.nav-item{font-size:15px;min-height:46px;height:46px}}
+@media (max-width:430px){.nav-bar{margin-bottom:11px}}
 
 /* ============================================================================
    Schedule list & rows
@@ -584,14 +577,14 @@ body.editor-open .dashboard,body.transfer-open .dashboard{pointer-events:none}
 .editor-sheet.is-layered .editor-fold.active{display:block}
 .editor-inline-options{margin-bottom:9px}
 .editor-header{display:flex;align-items:center;justify-content:space-between;min-height:32px;margin-bottom:12px;padding-top:0}
-.editor-sheet .editor-title{font-size:20px;font-weight:800;letter-spacing:-.4px}
+.editor-sheet .editor-title{font-size:21px;font-weight:800;letter-spacing:-.4px}
 .editor-title{color:var(--pro-accent);font-weight:800;letter-spacing:-.04em}
 .editor-close{font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;width:32px;height:32px;background:rgba(255,255,255,.06);color:var(--orbit-white);border:1px solid color-mix(in srgb,var(--pro-accent) 18%,transparent);border-radius:12px;transition:transform .15s,background .15s}
 .editor-close:active{transform:scale(.9);background:rgba(255,255,255,.12)}
 
 .editor-fold{margin-bottom:10px;overflow:hidden;border-radius:16px;border:1px solid color-mix(in srgb,var(--pro-accent) 18%,transparent);background:#172f39}
 .editor-sheet .editor-fold{margin-bottom:14px;border-radius:14px}
-.editor-fold-summary{list-style:none;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:space-between;gap:8px;user-select:none;font-weight:700;color:rgba(236,245,255,.92);-webkit-tap-highlight-color:transparent;padding:12px 14px;transition:opacity .12s,background .15s}
+.editor-fold-summary{list-style:none;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:space-between;gap:8px;user-select:none;font-weight:700;color:rgba(236,245,255,.92);-webkit-tap-highlight-color:transparent;padding:13px 14px;transition:opacity .12s,background .15s}
 .editor-fold-summary:active{opacity:.7;background:rgba(255,255,255,.04)}
 .editor-fold-summary::-webkit-details-marker{display:none}
 .editor-fold-summary::after{content:"";width:7px;height:7px;border-right:2px solid var(--sub);border-bottom:2px solid var(--sub);transform:rotate(45deg);transition:transform .2s;flex-shrink:0;opacity:.9}
@@ -651,7 +644,7 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
   display:flex;flex-direction:column;gap:0;border-radius:16px;
   border:1px solid var(--bd);background:rgba(255,255,255,.04);overflow:hidden;
 }
-.teacher-card{background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,.08);border-radius:0;padding:12px;width:100%;max-width:100%;display:flex;flex-wrap:wrap;align-items:center;gap:8px;box-sizing:border-box;transition:box-shadow .15s,transform .15s,opacity .15s,background .15s}
+.teacher-card{background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,.08);border-radius:0;padding:13px 12px;width:100%;max-width:100%;display:flex;flex-wrap:wrap;align-items:center;gap:9px;box-sizing:border-box;transition:box-shadow .15s,transform .15s,opacity .15s,background .15s}
 .teacher-card:last-child{border-bottom:none}
 .teacher-card.is-dragging{transform:scale(.985);box-shadow:0 8px 24px rgba(0,0,0,.25);opacity:.55;background:rgba(255,255,255,.07);outline:2px solid var(--accent)}
 .teacher-avatar{--avatar-hue:210;width:28px;height:28px;border-radius:50%;background:hsla(var(--avatar-hue),70%,55%,.18);color:hsl(var(--avatar-hue),70%,60%);font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1px solid hsla(var(--avatar-hue),70%,55%,.35)}
@@ -676,36 +669,49 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
    onto a line of its own beneath it - full name width, full time-input
    width, instead of both fighting over one row. */
 .break-row .break-name{flex-basis:100%}
-.editor-input{flex:1;background:rgba(255,255,255,.07);border:1px solid var(--bd);color:var(--txt);padding:7px 10px;border-radius:10px;font-size:13px;font-family:inherit;min-width:0;transition:border-color .2s,box-shadow .2s;line-height:1.25;text-align:left;text-align-last:left}
+.editor-input{flex:1;background:rgba(255,255,255,.07);border:1px solid var(--bd);color:var(--txt);padding:9px 11px;border-radius:11px;font-size:14.5px;font-family:inherit;min-width:0;transition:border-color .2s,box-shadow .2s;line-height:1.25;text-align:left;text-align-last:left}
 .editor-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
-.editor-input::placeholder{opacity:.55;color:var(--sub);font-size:13px}
+.editor-input::placeholder{opacity:.55;color:var(--sub);font-size:14px}
 .editor-sheet input,.editor-sheet select,.editor-sheet textarea{text-align:left;text-align-last:left}
-.editor-sheet .editor-input{padding:7px 10px;border-radius:10px;font-size:13px;min-height:40px}
+.editor-sheet .editor-input{padding:9px 11px;border-radius:11px;font-size:14.5px;min-height:44px}
 
-.add-btn{width:100%;padding:10px 12px;border-radius:12px;border:none;background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent);font-size:13px;font-weight:700;cursor:pointer;transition:transform .12s,opacity .15s,background .15s;display:flex;align-items:center;justify-content:center;gap:6px;margin-top:8px}
+.add-btn{width:100%;padding:11px 12px;border-radius:13px;border:none;background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent);font-size:14px;font-weight:700;cursor:pointer;transition:transform .12s,opacity .15s,background .15s;display:flex;align-items:center;justify-content:center;gap:6px;margin-top:8px}
 .add-btn:active{transform:scale(.97);opacity:.85;background:color-mix(in srgb,var(--accent) 24%,transparent)}
-.editor-sheet .add-btn{min-height:46px;padding:10px 12px;margin-top:8px;font-size:13px;border-radius:14px}
-.delete-btn{width:26px;height:26px;border-radius:8px;border:1px solid rgba(255,69,58,.42);background:rgba(255,69,58,.18);color:#ff6a5c;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:transform .12s,background .15s}
+.editor-sheet .add-btn{min-height:48px;padding:11px 12px;margin-top:8px;font-size:14px;border-radius:14px}
+.delete-btn{width:28px;height:28px;border-radius:8px;border:1px solid rgba(255,69,58,.42);background:rgba(255,69,58,.18);color:#ff6a5c;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:transform .12s,background .15s}
 .delete-btn:active{background:rgba(255,69,58,.36);transform:scale(.9)}
-.editor-sheet .delete-btn{width:22px;height:22px;font-size:12px;border-radius:6px;flex-shrink:0}
+.editor-sheet .delete-btn{width:26px;height:26px;font-size:13px;border-radius:7px;flex-shrink:0}
 
-.schedule-day-row{background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,.08);border-radius:0;padding:12px}
+/* A day row is a fixed-width label column beside the period grid, the same
+   two-column shape .assign-day-row already uses for the assign sheet - one
+   consistent "weekday + its slots" grammar across both editors instead of
+   the label sitting stacked above its own row here but beside it there. */
+.schedule-day-row{background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,.08);border-radius:0;padding:12px;display:grid;grid-template-columns:40px minmax(0,1fr);gap:10px;align-items:start}
 .schedule-day-row:last-child{border-bottom:none}
-.schedule-day-label{font-size:12px;font-weight:700;color:var(--sub);margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px}
-.schedule-periods{display:flex;gap:6px;flex-wrap:wrap}
-.period-select{flex:1;min-width:64px;max-width:132px;background:rgba(255,255,255,.07);border:1px solid var(--bd);color:var(--txt);padding:6px 8px;border-radius:10px;font-size:12px;font-family:inherit;text-overflow:ellipsis;cursor:pointer;transition:border-color .2s;text-align:left;text-align-last:left}
+.schedule-day-label{font-size:13px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:.3px;padding-top:11px}
+/* auto-fill (not flex-wrap, not a fixed column count) so the browser packs
+   as many equal-width >=70px columns as actually fit - every schedule-periods
+   block in the grid shares the exact same available width, so they all
+   resolve to the same column count and period 1/2/3... lines up in the same
+   column across every day row underneath it, reading as a real timetable
+   grid. A hard repeat(N,...) briefly replaced this and overflowed a native
+   <select>'s minimum chrome width off the sheet's edge on a real iPhone-
+   width viewport - auto-fill can't overflow the same way since it only ever
+   picks a column count its minmax(70px,...) floor actually fits. */
+.schedule-periods{display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:8px}
+.period-select{width:100%;min-width:0;background:rgba(255,255,255,.07);border:1px solid var(--bd);color:var(--txt);padding:8px 9px;border-radius:11px;font-size:13px;font-family:inherit;text-overflow:ellipsis;cursor:pointer;transition:border-color .2s;text-align:left;text-align-last:left}
 .period-select:focus{outline:none;border-color:var(--accent)}
-.editor-sheet .period-select{padding:6px 8px;font-size:12px;min-width:64px;max-width:132px;border-radius:10px;min-height:40px}
+.editor-sheet .period-select{padding:8px 9px;font-size:13px;border-radius:11px;min-height:44px}
 
-.bell-row{background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,.08);border-radius:0;padding:12px;display:flex;gap:8px;align-items:center}
+.bell-row{background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,.08);border-radius:0;padding:13px;display:flex;gap:9px;align-items:center}
 .bell-row:last-child{border-bottom:none}
-.editor-sheet .bell-row{gap:8px;padding:14px 14px 14px 12px}
-.bell-num{width:26px;height:26px;border-radius:7px;background:rgba(255,255,255,.05);color:var(--sub);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.editor-sheet .bell-num{width:24px;height:24px;font-size:12px}
-.bell-inputs{display:flex;align-items:center;gap:7px;flex:1}
-.time-input{flex:1;background:rgba(255,255,255,.07);border:1px solid var(--bd);color:var(--txt);padding:7px 9px;border-radius:10px;font-size:13px;font-family:ui-monospace,SFMono-Regular,monospace;text-align:center;min-width:0;transition:border-color .2s}
+.editor-sheet .bell-row{gap:9px;padding:14px 14px 14px 12px}
+.bell-num{width:29px;height:29px;border-radius:8px;background:rgba(255,255,255,.05);color:var(--sub);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.editor-sheet .bell-num{width:28px;height:28px;font-size:13px}
+.bell-inputs{display:flex;align-items:center;gap:8px;flex:1}
+.time-input{flex:1;background:rgba(255,255,255,.07);border:1px solid var(--bd);color:var(--txt);padding:9px 9px;border-radius:11px;font-size:14.5px;font-family:ui-monospace,SFMono-Regular,monospace;text-align:center;min-width:0;transition:border-color .2s}
 .time-input:focus{outline:none;border-color:var(--accent)}
-.editor-sheet .time-input{padding:7px 9px;border-radius:10px;font-size:13px;min-height:40px}
+.editor-sheet .time-input{padding:9px 9px;border-radius:11px;font-size:14.5px;min-height:44px}
 .time-sep{color:var(--sub);font-weight:700;font-size:14px}
 
 .countdown-event-row{position:relative;display:block;box-sizing:border-box;padding:12px;border:none;border-bottom:1px solid rgba(255,255,255,.08);border-radius:0;background:transparent;min-width:0;max-width:100%}
@@ -764,9 +770,15 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
    .sync-manager-passcode-box below), same row shape. */
 .sync-code-row{display:flex;flex-direction:column;gap:6px}
 .sync-code-row-label{font-size:11px;font-weight:700;color:var(--sub)}
-.sync-code-row-value{display:flex;align-items:stretch;gap:8px}
-.sync-code-row-value .sync-active-code{flex:1;min-width:0;font-size:18px;padding:10px}
-.sync-code-row-value .settings-transfer-btn{flex:0 0 auto;padding:0 14px}
+.sync-code-row-value{display:flex;align-items:center;gap:8px}
+.sync-code-row-value .sync-active-code{flex:1;min-width:0;font-size:18px;padding:11px}
+/* The show/copy actions next to a code value are secondary, inline
+   controls, not full-size primary buttons (.settings-transfer-btn's default
+   46px/15px is sized for a standalone tap target like "建立新同步" or
+   "儲存樣式") - scaled down here so they read as compact code-row actions
+   that don't visually outweigh the code itself, while staying comfortably
+   tappable. */
+.sync-code-row-value .settings-transfer-btn{flex:0 0 auto;min-height:40px;padding:0 13px;font-size:12.5px;border-radius:11px}
 /* A manager device can always redisplay its own stored passcode (see
    copySyncManagerPasscode) - hidden by default per toggleSyncManagerPasscodeReveal,
    so it isn't just sitting on screen in plain text every time this panel opens. */
@@ -895,7 +907,7 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .editor-hint-title{font-size:10px;color:var(--accent);font-weight:700;margin-bottom:3px;letter-spacing:.35px}
 .editor-hint-body{font-size:11px;color:var(--sub);line-height:1.4}
 
-@media (max-width:480px){.editor-fold-summary{padding:11px 12px}.schedule-day-row{padding:11px 11px 11px 9px;border-radius:14px;display:block;overflow:hidden}.schedule-day-label{display:block}.schedule-periods{width:100%;overflow-x:auto;overflow-y:hidden;padding:1px 1px 6px;scroll-snap-type:x proximity;display:flex;flex-wrap:nowrap}.schedule-periods .period-select{width:108px;flex:0 0 108px;min-height:38px;box-sizing:border-box;scroll-snap-align:start}.teacher-card{position:relative;margin-bottom:10px;display:block;width:100%;border-radius:14px;padding:14px 14px 14px 12px}.teacher-card .teacher-fields{display:grid;margin:0;grid-template-columns:minmax(0,1fr) minmax(0,1fr);margin-top:0;gap:10px;width:calc(100% - 44px)}.teacher-card .tc-subject{grid-column:1 / -1}.teacher-card .teacher-fields .editor-input{display:block;width:100%;max-width:100%;box-sizing:border-box;min-height:44px}.teacher-card .teacher-avatar{margin:0 0 8px}.teacher-card .delete-btn{position:absolute;min-width:28px;width:28px;height:28px;padding:0;top:auto;right:11px;bottom:11px}.teacher-card .teacher-order-actions{align-items:center;margin-top:10px;display:flex;gap:7px}.teacher-card .teacher-order-actions .teacher-drag-handle{order:-1}.countdown-event-row{margin-bottom:9px;padding:12px 12px 12px 14px}.countdown-event-header{margin-bottom:10px}.countdown-event-fields{gap:9px}}
+@media (max-width:480px){.editor-fold-summary{padding:11px 12px}.schedule-day-row{padding:13px 13px 13px 11px;border-radius:16px;display:block;overflow:hidden}.schedule-day-label{display:block}.schedule-periods{width:100%;overflow-x:auto;overflow-y:hidden;padding:2px 2px 7px;scroll-snap-type:x proximity;display:flex;flex-wrap:nowrap}.schedule-periods .period-select{width:126px;flex:0 0 126px;min-height:46px;font-size:14px;box-sizing:border-box;scroll-snap-align:start}.teacher-card{position:relative;margin-bottom:10px;display:block;width:100%;border-radius:14px;padding:14px 14px 14px 12px}.teacher-card .teacher-fields{display:grid;margin:0;grid-template-columns:minmax(0,1fr) minmax(0,1fr);margin-top:0;gap:10px;width:calc(100% - 44px)}.teacher-card .tc-subject{grid-column:1 / -1}.teacher-card .teacher-fields .editor-input{display:block;width:100%;max-width:100%;box-sizing:border-box;min-height:44px}.teacher-card .teacher-avatar{margin:0 0 8px}.teacher-card .delete-btn{position:absolute;min-width:28px;width:28px;height:28px;padding:0;top:auto;right:11px;bottom:11px}.teacher-card .teacher-order-actions{align-items:center;margin-top:10px;display:flex;gap:7px}.teacher-card .teacher-order-actions .teacher-drag-handle{order:-1}.countdown-event-row{margin-bottom:9px;padding:12px 12px 12px 14px}.countdown-event-header{margin-bottom:10px}.countdown-event-fields{gap:9px}}
 
 /* ============================================================================
    Test panel (time simulation) and style panel
