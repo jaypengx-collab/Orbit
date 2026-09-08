@@ -352,23 +352,23 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
   border-radius:var(--orbit-radius-md);
 }
 .nav-item{
-  /* Every previous attempt here (removing the is-today/is-tomorrow ring,
-     -webkit-appearance:none alone, dropping .nav-bar's own background) still
-     left a shadow/glass look on these buttons that specifically vanishes on
-     click - that's the tell of a *pressed-state* native control effect,
-     not a static one any of those earlier fixes were actually built to
-     touch: browsers commonly render a plain <button> "raised" at rest and
-     flatten it on :active, and separately, mobile Safari overlays its own
-     translucent tap-highlight on top of a tapped element regardless of
-     appearance. appearance:none alone doesn't reliably suppress either of
-     those on every WebKit version, so this now resets both explicitly
-     (box-shadow:none in every state, plus killing the tap-highlight
-     overlay outright) instead of relying on appearance reset alone. */
+  /* Frame-by-frame analysis of a screen recording of the actual bug (the
+     button going blank mid-tap, then redrawing once the click animation
+     finished) showed the real cause: .active sets a linear-gradient
+     background while every other state uses a flat color/transparent, and a
+     gradient can't be smoothly interpolated against a flat color the way two
+     solid colors can. Animating `background` here made the browser render a
+     garbage/blank frame on the button mid-transition. None of the earlier
+     fixes (removing the is-today/is-tomorrow ring, -webkit-appearance:none,
+     dropping .nav-bar's own background, resetting box-shadow/tap-highlight)
+     touched this because the bug was never about shadows, native button
+     styling, or tap highlights - it was this one non-animatable background
+     transition. Only `transform` is safe to animate here. */
   -webkit-appearance:none;appearance:none;
   -webkit-tap-highlight-color:transparent;
   flex:1;min-width:0;min-height:46px;height:46px;border:none;background:transparent;
   box-shadow:none;outline:none;
-  font-size:clamp(13px,3.6vw,15px);cursor:pointer;transition:transform .12s var(--ease-glass),background .2s,border-color .2s,color .2s,box-shadow .2s;
+  font-size:clamp(13px,3.6vw,15px);cursor:pointer;transition:transform .12s var(--ease-glass);
   border-radius:11px;padding:8px 3px;font-weight:700;color:var(--orbit-muted);
 }
 .nav-item:active,.nav-item:focus,.nav-item:focus-visible{box-shadow:none;outline:none}
