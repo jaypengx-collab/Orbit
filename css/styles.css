@@ -910,17 +910,27 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
    Unlike .style-panel, height here is fixed (not max-height) - this sheet's
    content is a stack of <details> folds a viewer opens and closes while
    the sheet is open, and a height that tracked their expanded/collapsed
-   total would make the sheet itself grow and shrink under them. Fixing the
-   height and scrolling the overflow internally (same trick as
-   .editor-sheet.is-layered's fixed height) keeps the sheet's own size
-   stable regardless of what's expanded inside it. */
+   total would make the sheet itself grow and shrink under them. Picked to
+   comfortably fit the common (folds collapsed) content rather than the
+   fully-expanded one - sizing for the expanded case would mean a mostly
+   empty sheet the rest of the time, so any state taller than this just
+   scrolls internally instead. */
 .transfer-sheet{
   width:min(calc(100vw - 24px),480px);max-width:480px;border-radius:28px;
-  left:50%;right:auto;transform:translate(-50%,calc(100% + 24px));height:calc(100dvh - 20px - env(safe-area-inset-top));overscroll-behavior:contain;
+  left:50%;right:auto;transform:translate(-50%,calc(100% + 24px));height:min(660px,calc(100dvh - 160px));overscroll-behavior:contain;
   padding:14px 15px 15px;gap:11px;background:var(--glass-fill-strong);box-shadow:var(--glass-shadow);overflow-y:auto;
   backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
 }
 .transfer-sheet.show{transform:translate(-50%,0)}
+/* Same fix as .editor-sheet-body>* below: flex items shrink to fit a
+   constrained cross-container by default, and .transfer-sheet's own fixed
+   height is regularly shorter than its total content. Without this, that
+   shrank #legacy-transfer-fold/#test-mode-fold down toward nothing instead
+   of letting the sheet scroll - their own overflow:hidden makes their
+   automatic minimum size 0, so they were the first thing the shrink
+   algorithm reached for. flex-shrink:0 makes every child keep its natural
+   height so there is real overflow for the sheet's own scrolling to use. */
+.transfer-sheet>*{flex-shrink:0}
 
 /* .editor-sheet's own padding/overflow, finished here (after .test-panel) so
    they actually win the cascade tie - see the comment on .editor-sheet's
