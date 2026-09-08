@@ -416,7 +416,15 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
    rendering this pill with no shadow at all while desktop Chrome drew a soft
    one, so any shadow layer is dropped everywhere to match the flatter look
    consistently across platforms. */
-.nav-item.active{background:linear-gradient(135deg,color-mix(in srgb,var(--pro-accent) 58%,#ffffff),color-mix(in srgb,var(--pro-accent) 28%,#ffffff));color:var(--pro-accent-text)}
+/* Fixed dark text, not var(--pro-accent-text): that variable is picked
+   against the *raw* accent color, but this pill's own background is that
+   accent heavily bleached with white (58%/28% accent, the rest white) -
+   even the darkest possible accent color comes out light gray to near-
+   white once mixed that far toward #fff, so the raw color's own text pick
+   (which can and does land on white for a dark accent) was landing white
+   text on what's actually always a light pill, unreadable regardless of
+   theme. */
+.nav-item.active{background:linear-gradient(135deg,color-mix(in srgb,var(--pro-accent) 58%,#ffffff),color-mix(in srgb,var(--pro-accent) 28%,#ffffff));color:#10171A}
 .nav-item.active.is-today{border-color:color-mix(in srgb,var(--pro-accent) 34%,transparent)}
 .nav-item.active.is-tomorrow{border-color:color-mix(in srgb,var(--pro-secondary) 72%,#ffffff 28%)}
 @media (max-width:480px){.nav-bar{gap:6px;padding:4px}.nav-item{font-size:14px;padding:0 10px;min-height:44px;height:44px}}
