@@ -33,7 +33,7 @@ compatibility_date = "2025-01-01"
 # bundle) - kept as a plain var here so it's easy to see/change in the
 # dashboard without needing "reveal secret".
 [vars]
-FIREBASE_PROJECT_ID = "<your Firebase project ID, only needed for /sync>"
+FIREBASE_PROJECT_ID = "orbit-project-76897"
 
 # GEMINI_API_KEY (for /gemini) and FIREBASE_CLIENT_EMAIL / FIREBASE_PRIVATE_KEY
 # (for /sync, from Firebase Console -> Project Settings -> Service accounts
@@ -53,6 +53,6 @@ FIREBASE_PROJECT_ID = "<your Firebase project ID, only needed for /sync>"
 # & Pages -> KV -> Create namespace -> name it anything -> back on this
 # Worker's Settings -> Bindings -> Add -> KV Namespace -> variable name
 # RATE_LIMIT_KV -> pick the namespace you just created.
-# [[kv_namespaces]]
-# binding = "RATE_LIMIT_KV"
-# id = "<paste the namespace id here>"
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "8b24d75fbe0a4a69aef0f35cb7a8d847"
