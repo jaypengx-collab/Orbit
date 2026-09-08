@@ -23,7 +23,13 @@
 # placeholders below. Secrets (GEMINI_API_KEY etc., set via `wrangler
 # secret put` or the dashboard) are stored separately and are NOT touched
 # by a plain `wrangler deploy` - only [vars] and bindings live here.
-name = "orbit-worker"
+name = "orbit-workers-proxy"
+# ^ Must match the Worker's actual name in the Cloudflare dashboard exactly -
+# `wrangler deploy` targets whatever's named here, and a mismatch silently
+# creates/updates an unrelated second Worker instead of erroring. Confirmed
+# against the real deployed URL (see VITE_ORBIT_SYNC_PROXY_URL) rather than
+# assumed from the filename - orbit-worker.js is just this repo's source
+# file name, not necessarily the deployed Worker's name.
 main = "orbit-worker.js"
 compatibility_date = "2025-01-01"
 
