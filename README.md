@@ -290,6 +290,7 @@ src/onboarding.js      第一次使用的提示流程
 src/bootstrap.js       啟動流程：讀資料、建課表、開每秒計時器
 src/testsim-runtime.js 時間模擬狀態機
 src/state.js           跨模組共用的可變狀態
+src/constants.js       跨模組共用的常數（星期名稱、預設色）
 src/strings.js         畫面文字對照表
 src/main.js            進入點，依序 import 以上每個模組
 ```
@@ -302,6 +303,7 @@ src/main.js            進入點，依序 import 以上每個模組
 - **`window.update()` 是刻意的動態呼叫**。`testsim-runtime.js` 執行期會把它換成包了時間模擬邏輯的包裝函式。要觸發重新渲染一律呼叫 `window.update()`，不要 `import { update }`，否則會呼叫到還沒被換掉的版本，時間模擬會失效。`window.openTestPanel` 同理。
 - **`update()` 分成純計算與渲染兩層**：`schedule-calc.js` 的 `computeDashboardViewModel()` 不碰 DOM，只吐出畫面該長怎樣的物件；`dashboard.js` 的 `renderDashboard()` 再把結果寫進畫面（跟上一輪比對，沒變的欄位不重寫）。改課表計算邏輯通常改 `schedule-calc.js`，可以直接針對這個純函式寫測試。
 - **`src/strings.js` 是文字對照表**，目前只有 `zh-TW`，透過 `t('some.key')` 取用。不是要馬上做多語系，是先把文字跟邏輯分開；新增畫面文字比照這個慣例加進去。
+- **`src/constants.js` 放跨模組共用的常數**，而且刻意不 import 任何東西——`data.js` 跟 `appearance.js` 互相 import，常數放在其中一邊會踩到循環 import 的 TDZ 錯誤。星期名稱（`WEEKDAY_LABELS`）跟兩種星期順序（`WEEKDAYS_DISPLAY_ORDER` 週一開頭、用於畫面；`WEEKDAYS_INDEX_ORDER` 週日開頭、對應 `Date.getDay()` 與儲存格式）都在這裡，需要時 import，不要在各檔案裡重新寫一份。
 
 ---
 

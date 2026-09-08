@@ -5,15 +5,8 @@
 // and all the actual DOM writes) specifically so this part - the part with
 // real branching logic worth getting right - can be unit tested and
 // reasoned about without booting the whole app.
-import { parseTime, processSplitName } from './schedule.js';
+import { pad2, parseTime, processSplitName } from './schedule.js';
 import { t } from './strings.js';
-
-// Pads a number to two digits for clock display (kept local: schedule.js's
-// pad2 is exported for the editor's bell-number labels, this is the same
-// job for a different caller, no need to route through there).
-function pad2(n) {
-  return String(n).padStart(2, '0');
-}
 
 function formatCountdown(diffSeconds) {
   return `${Math.floor(diffSeconds / 60)}:${pad2(diffSeconds % 60)}`;
