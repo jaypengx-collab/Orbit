@@ -170,10 +170,46 @@ function openEditor() {
     state.editorBaselineSnapshot = editorFormSnapshotString();
     state.editorBaselineData = settingsDataForExport();
     setTransferStatus('');
+    applyOfflineLock();
   } catch (error) {
     console.error(error);
   }
 }
+
+// AI import and setting up sync (creating or joining) both need a real
+// network request the moment they're used; there's no point leaving them
+// looking usable while there's plainly no connection at all. Checked right
+// when the settings sheet opens (openEditor's actual moment of interest),
+// and kept live afterward via the online/offline listeners below in case
+// connectivity changes while it's still open - no need to close and reopen
+// to notice. navigator.onLine only reliably catches "no network interface
+// at all" (e.g. airplane mode), not "connected but no real internet", but
+// that's still worth catching for free - the actual network calls
+// underneath still have their own error handling for everything else.
+// Unlinking an existing sync (pure local state) and manual export/import
+// (also pure local) are deliberately left alone - neither needs a network.
+const OFFLINE_MESSAGE = '目前沒有網路連線，AI 匯入與跨裝置同步暫時無法使用。';
+function applyOfflineLock() {
+  const sheet = document.getElementById('editor-sheet');
+  if (!sheet) return;
+  const offline = !navigator.onLine;
+  const wasOffline = sheet.classList.contains('is-offline');
+  sheet.classList.toggle('is-offline', offline);
+  const ocrStatus = document.getElementById('ocr-import-status');
+  const syncStatus = document.getElementById('sync-status');
+  if (offline) {
+    if (ocrStatus) ocrStatus.textContent = OFFLINE_MESSAGE;
+    if (syncStatus) syncStatus.textContent = OFFLINE_MESSAGE;
+  } else if (wasOffline) {
+    // Only clear it if it's still showing our own message - connectivity
+    // could have come back after some other, more recent status (a real
+    // recognition error, a sync result) already replaced it.
+    if (ocrStatus?.textContent === OFFLINE_MESSAGE) ocrStatus.textContent = '';
+    if (syncStatus?.textContent === OFFLINE_MESSAGE) syncStatus.textContent = '';
+  }
+}
+window.addEventListener('online', applyOfflineLock);
+window.addEventListener('offline', applyOfflineLock);
 
 function orderEditorFolds() {
   const body = document.getElementById('editor-sheet-body');
@@ -665,6 +701,7 @@ window.openEditorFold = openEditorFold;
 window.toggleReverse = toggleReverse;
 
 export {
+  applyOfflineLock,
   bindEditorDragReorder,
   closeEditor,
   discardEditorChangesAndClose,

@@ -94,12 +94,17 @@ describe('style tool lock: a viewer still accepting synced colors cannot use it'
     expect(document.getElementById('style-panel').classList.contains('show')).toBe(false);
   });
 
-  it('#btn-style is visually locked for a plain viewer, and unlocks the moment the opt-out is checked', () => {
+  it('#btn-style is visually locked for a plain viewer, and unlocks once the opt-out is confirmed', () => {
     sync.setSyncPairing('CODE1234', 'viewer');
     sync.applyEditorRoleLock();
     expect(document.getElementById('btn-style').classList.contains('is-disabled')).toBe(true);
 
+    // orbitSyncSetKeepLocalStyle now warns before taking effect - confirm it.
     sync.orbitSyncSetKeepLocalStyle(true);
+    document
+      .getElementById('editor-confirm-sheet')
+      .querySelectorAll('.editor-confirm-btn')[1]
+      .onclick();
     expect(document.getElementById('btn-style').classList.contains('is-disabled')).toBe(false);
     sync.setSyncKeepLocalStyle(false);
   });

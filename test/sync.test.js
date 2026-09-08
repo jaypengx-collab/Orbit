@@ -244,3 +244,47 @@ describe('sync-setup-box / sync-active-box hidden-state toggling', () => {
     expect(document.getElementById('sync-active-box').hidden).toBe(true);
   });
 });
+
+describe('orbitSyncSetKeepLocalStyle warns before either direction takes effect', () => {
+  beforeEach(() => {
+    sync.setSyncPairing('CODE1234');
+    document.getElementById('sync-keep-local-style').checked = false;
+  });
+
+  it('checking it does nothing until confirmed, and reverts the checkbox on cancel', () => {
+    const checkbox = document.getElementById('sync-keep-local-style');
+    checkbox.checked = true;
+    sync.orbitSyncSetKeepLocalStyle(true);
+    expect(sync.getSyncKeepLocalStyle()).toBe(false);
+    expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(true);
+    expect(document.getElementById('editor-confirm-title').textContent).toMatch(/不再同步樣式/);
+
+    document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[0].onclick(); // 取消
+    expect(sync.getSyncKeepLocalStyle()).toBe(false);
+    expect(checkbox.checked).toBe(false); // reverted
+    expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(false);
+  });
+
+  it('confirming actually checking it takes effect', () => {
+    const checkbox = document.getElementById('sync-keep-local-style');
+    checkbox.checked = true;
+    sync.orbitSyncSetKeepLocalStyle(true);
+    document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[1].onclick(); // 不再同步樣式
+    expect(sync.getSyncKeepLocalStyle()).toBe(true);
+    expect(checkbox.checked).toBe(true);
+  });
+
+  it('unchecking it also warns first, and reverts the checkbox on cancel', () => {
+    sync.setSyncKeepLocalStyle(true);
+    const checkbox = document.getElementById('sync-keep-local-style');
+    checkbox.checked = false;
+    sync.orbitSyncSetKeepLocalStyle(false);
+    expect(sync.getSyncKeepLocalStyle()).toBe(true); // unchanged until confirmed
+    expect(document.getElementById('editor-confirm-title').textContent).toMatch(/恢復同步樣式/);
+
+    document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[0].onclick(); // 取消
+    expect(sync.getSyncKeepLocalStyle()).toBe(true);
+    expect(checkbox.checked).toBe(true); // reverted back to checked
+    sync.setSyncKeepLocalStyle(false);
+  });
+});

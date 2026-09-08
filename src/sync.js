@@ -323,7 +323,7 @@ function setSyncStatusUi(message, isError) {
 // src/editor-core.js's applyEditorRoleLock). It only ever pulls, so it stays
 // a pure mirror of whatever a manager device published.
 async function syncTick() {
-  if (!isSyncConfigured() || document.hidden || syncInFlight) return false;
+  if (!isSyncConfigured() || !navigator.onLine || document.hidden || syncInFlight) return false;
   syncInFlight = true;
   try {
     if (isEditorDirty()) return false;
@@ -413,12 +413,41 @@ function renderSyncPanel() {
   if (keepStyleCheckbox) keepStyleCheckbox.checked = getSyncKeepLocalStyle();
   applyEditorRoleLock();
 }
+// Warns before either direction of this toggle takes effect - a native
+// checkbox's onchange fires *after* the browser already flipped its visual
+// state, so cancelling has to explicitly flip it back, not just leave the
+// confirm sheet without acting.
 function orbitSyncSetKeepLocalStyle(checked) {
-  setSyncKeepLocalStyle(!!checked);
-  // The style tool's own lock (see applyEditorRoleLock) depends on this
-  // setting too, not just role - refresh it immediately so ticking the box
-  // unlocks the style button right away, no reload or re-pair needed.
-  applyEditorRoleLock();
+  const wantsKeepLocal = !!checked;
+  const checkbox = document.getElementById('sync-keep-local-style');
+  const revertCheckbox = () => {
+    if (checkbox) checkbox.checked = !wantsKeepLocal;
+  };
+  setEditorConfirmContent(
+    wantsKeepLocal ? '不再同步樣式顏色？' : '恢復同步樣式顏色？',
+    wantsKeepLocal
+      ? '這台裝置會保留目前的配色：其他裝置改樣式不會再套用過來，這台裝置的配色也不會覆蓋共用樣式。課表內容仍會照常同步。'
+      : '這台裝置會恢復接收共用樣式——下次同步時，目前保留的配色會立刻被共用樣式取代，且無法復原。',
+    '',
+    wantsKeepLocal ? '不再同步樣式' : '恢復同步',
+    () => {
+      hideEditorDiscardConfirm();
+      setSyncKeepLocalStyle(wantsKeepLocal);
+      // The style tool's own lock (see applyEditorRoleLock) depends on this
+      // setting too, not just role - refresh it immediately so confirming
+      // unlocks/locks the style button right away, no reload or re-pair
+      // needed.
+      applyEditorRoleLock();
+    },
+    '取消',
+    {
+      cancelHandler: () => {
+        hideEditorDiscardConfirm();
+        revertCheckbox();
+      }
+    }
+  );
+  showEditorConfirmSheet();
 }
 
 // Locks the rest of the editor down to view-only for a viewer device -
@@ -470,6 +499,10 @@ async function orbitSyncCreate() {
     setSyncStatusUi('跨裝置同步功能尚未設定，請聯絡課表管理者。', true);
     return;
   }
+  if (!navigator.onLine) {
+    setSyncStatusUi('目前沒有網路連線，無法建立同步。', true);
+    return;
+  }
   await withButtonDisabled('sync-create-btn', async () => {
     setSyncPairing(generateSyncCode());
     setSyncStatusUi('正在建立同步…');
@@ -502,6 +535,10 @@ async function checkSyncCodeExists(code) {
 async function orbitSyncJoin() {
   if (!isSyncProxyConfigured()) {
     setSyncStatusUi('跨裝置同步功能尚未設定，請聯絡課表管理者。', true);
+    return;
+  }
+  if (!navigator.onLine) {
+    setSyncStatusUi('目前沒有網路連線，無法加入同步。', true);
     return;
   }
   const code = document.getElementById('sync-join-code')?.value.trim();

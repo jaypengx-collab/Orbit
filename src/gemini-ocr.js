@@ -88,6 +88,7 @@ class AIVisionProcessor {
       }
     };
     if (!GEMINI_PROXY_URL) throw new Error('AI 匯入功能尚未設定，請聯絡課表管理者。');
+    if (!navigator.onLine) throw new Error('目前沒有網路連線，AI 匯入暫時無法使用。');
 
     report('正在壓縮並編碼圖片…');
     const base64Data = canvas.toDataURL('image/jpeg', 0.9).replace(/^data:image\/jpeg;base64,/, '');
@@ -619,6 +620,10 @@ function mountOCRImporter({
     // lock, not real access control.
     if (isSyncViewer()) {
       status('此裝置為僅接收模式，無法使用 AI 匯入。如要自行編輯，請先解除同步。', true);
+      return;
+    }
+    if (!navigator.onLine) {
+      status('目前沒有網路連線，AI 匯入暫時無法使用。', true);
       return;
     }
     if (!isGeminiProxyConfigured()) {

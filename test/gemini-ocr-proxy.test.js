@@ -85,4 +85,17 @@ describe('AIVisionProcessor.recognizeSchedule with a configured proxy', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     vi.unstubAllGlobals();
   });
+
+  it('refuses to run while offline, without making any network request', async () => {
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+    const processor = new AIVisionProcessor();
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(processor.recognizeSchedule(fakeCanvas(), () => {})).rejects.toThrow(
+      /沒有網路連線/
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+  });
 });

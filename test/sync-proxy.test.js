@@ -325,6 +325,19 @@ describe('orbitSyncCreate UI wiring', () => {
     expect(url).toBe(`${PROXY_URL}?code=${sync.getSyncCode()}`);
     expect(options.method).toBe('PATCH');
   });
+
+  it('refuses while offline, without making any network request', async () => {
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await sync.orbitSyncCreate();
+
+    expect(sync.isSyncConfigured()).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(document.getElementById('sync-status').textContent).toMatch(/沒有網路連線/);
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+  });
 });
 
 describe('manager/viewer roles', () => {

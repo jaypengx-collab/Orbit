@@ -341,7 +341,7 @@ body.editor-open .top-actions{opacity:0;visibility:hidden;pointer-events:none;tr
   width:min(420px,100%);flex:0 0 auto;display:flex;gap:2px;padding:3px;margin-bottom:7px;
   transition:filter .35s ease,opacity .35s ease,transform .35s ease;
   border-radius:var(--orbit-radius-md);
-  background:var(--glass-fill-strong);box-shadow:var(--glass-shadow-soft);
+  background:var(--glass-fill-strong);
   backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat));-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat));
 }
 .nav-item{
@@ -739,6 +739,18 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
    saveEditor(). */
 .editor-sheet.sync-viewer-locked #ocr-import-box,
 .editor-sheet.sync-viewer-locked #settings-import-btn{
+  pointer-events:none;
+  opacity:.5;
+}
+
+/* No network at all (navigator.onLine, checked on opening the editor and
+   kept live via the online/offline listeners - see editor-core.js's
+   applyOfflineLock): AI import and setting up sync (create/join) both need
+   a real request the moment they're used, so there's no point leaving them
+   looking usable. Unlinking an existing sync and manual export/import are
+   pure local operations and stay enabled either way. */
+.editor-sheet.is-offline #ocr-import-box,
+.editor-sheet.is-offline #sync-setup-box{
   pointer-events:none;
   opacity:.5;
 }
