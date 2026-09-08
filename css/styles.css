@@ -716,7 +716,17 @@ body.orbit-suppress-list-animation .animate-list .row{animation:none}
    color silently fell back to plain --accent regardless of anything here. */
 .row{
   --row-accent:var(--pro-accent);
-  transition:transform .34s var(--ease-liquid),border-color .2s,background .2s,box-shadow .2s;
+  /* border-color/background/box-shadow at .1s, not .2s: a card tapped and
+     released still had its accent border and glow fading back to rest over
+     .2s even after the transform bounce (.is-tapped, below) finished its own
+     shorter run - so the whole release kept reading as slow no matter how
+     quickly the bounce itself was cut, because this was the part actually
+     still visible in the frame. .34s var(--ease-liquid) on transform is
+     unrelated - it's only the hover lift's own pacing (see .row:hover),
+     not something on the tap path (the keyframe below owns transform
+     during a real tap, and CSS animations win over transitions on the same
+     property). */
+  transition:transform .34s var(--ease-liquid),border-color .1s,background .1s,box-shadow .1s;
   cursor:pointer;height:76px;padding:11px 13px;margin-bottom:8px;display:flex;align-items:center;gap:10px;overflow:hidden;
   border-radius:var(--orbit-radius-md);border:1px solid color-mix(in srgb,var(--row-accent) 20%,transparent);
   /* Glass, not the flat well it used to be. These cards float directly on
@@ -747,11 +757,15 @@ body.orbit-suppress-list-animation .animate-list .row{animation:none}
 /* .32s used to be roughly as long as the detail sheet's own .35s slide-in
    (see .modal-sheet), so the tap felt like it was pacing the popup rather
    than acknowledging the tap and getting out of the way - two animations
-   of comparable length reading as one sluggish one. Cut to .15s (still the
-   same dip-then-settle shape, just compressed) so it's clearly done before
-   the sheet has barely started moving, without slowing the sheet itself
-   down to match - it was never the sheet that was too slow. */
-#schedule-list .row.is-tapped{animation:orbit-row-tap .15s var(--ease-glass)}
+   of comparable length reading as one sluggish one. An initial cut to .15s
+   still wasn't fast enough - most of what was left was the .row transition
+   above's own border-color/box-shadow release lingering past this
+   animation's end, not this animation itself, so both got shortened
+   together. .09s (same dip-then-settle shape, just compressed further) is
+   about as low as this can go and still read as a bounce instead of a
+   flicker - under three frames shorter risks not being perceptible as
+   motion at all at 60fps. */
+#schedule-list .row.is-tapped{animation:orbit-row-tap .09s var(--ease-glass)}
 @media (prefers-reduced-motion:reduce){#schedule-list .row.is-tapped{animation:none}.row:active,.row.is-pressed{transform:none}}
 @media (hover:hover){.row:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--row-accent) 34%,transparent)}}
 /* The accent stripe lives on .content (spanning both the name and meta
