@@ -21,7 +21,6 @@ beforeAll(async () => {
 beforeEach(() => {
   sync.clearSyncPairing();
   document.getElementById('sync-join-code').value = '';
-  document.getElementById('sync-join-as-manager').checked = false;
   document.getElementById('sync-join-passcode').value = '';
 });
 

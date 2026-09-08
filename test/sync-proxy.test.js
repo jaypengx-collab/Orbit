@@ -33,7 +33,6 @@ afterEach(() => {
   // must reset it themselves.
   sync.setSyncKeepLocalStyle(false);
   document.getElementById('sync-join-code').value = '';
-  document.getElementById('sync-join-as-manager').checked = false;
   document.getElementById('sync-join-passcode').value = '';
   // In-memory-only state (see showCreatedSyncCodes in src/sync.js), not
   // cleared by clearSyncPairing - dismiss it explicitly so it doesn't leak

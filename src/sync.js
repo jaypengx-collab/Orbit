@@ -906,14 +906,6 @@ async function orbitSyncCreate() {
   });
 }
 
-// The join form's passcode field only matters once "我有管理者密碼" is
-// checked - hidden the rest of the time so an unchecked box doesn't leave a
-// dangling, obviously-irrelevant input sitting on screen.
-function toggleSyncJoinPasscodeField(checked) {
-  const row = document.getElementById('sync-join-passcode-row');
-  if (row) row.hidden = !checked;
-}
-
 async function orbitSyncJoin() {
   if (!isSyncProxyConfigured()) {
     setSyncStatusUi('跨裝置同步功能尚未設定，請聯絡課表管理者。', true);
@@ -929,18 +921,14 @@ async function orbitSyncJoin() {
     return;
   }
   const normalizedCode = code.toUpperCase();
-  // The passcode field only matters (and only needs to actually exist in
-  // the DOM as revealed) when this checkbox is checked - unlike the old
-  // "以管理者身份加入" checkbox, checking this one alone does nothing:
-  // it's the passcode that has to actually verify, below.
-  const wantsManager = !!document.getElementById('sync-join-as-manager')?.checked;
-  const passcode = wantsManager
-    ? document.getElementById('sync-join-passcode')?.value.trim() || ''
-    : '';
-  if (wantsManager && !passcode) {
-    setSyncStatusUi('請輸入管理者密碼，或取消勾選只接收更新。', true);
-    return;
-  }
+  // Whether this is a manager join is decided purely by whether a passcode
+  // was actually typed in - the passcode field lives inside a collapsible
+  // fold (see index.html's #sync-join-manager-fold) rather than behind its
+  // own separate checkbox, so there's no extra "did they mean to" state to
+  // track: an empty field (fold left closed, or opened but left blank) is
+  // simply a plain viewer join, no error needed either way.
+  const passcode = document.getElementById('sync-join-passcode')?.value.trim() || '';
+  const wantsManager = !!passcode;
 
   await withButtonDisabled('sync-join-btn', async () => {
     // Checks the code actually has something to join, and - if a passcode
@@ -1174,7 +1162,6 @@ function orbitSyncDeleteForEveryone() {
 }
 
 window.orbitSyncCreate = orbitSyncCreate;
-window.toggleSyncJoinPasscodeField = toggleSyncJoinPasscodeField;
 window.orbitSyncJoin = orbitSyncJoin;
 window.orbitSyncUpgradeToManager = orbitSyncUpgradeToManager;
 window.orbitSyncUnlink = orbitSyncUnlink;
@@ -1221,6 +1208,5 @@ export {
   setSyncStatusUi,
   startSyncLoop,
   syncTick,
-  toggleSyncJoinPasscodeField,
   toggleSyncManagerPasscodeReveal
 };
