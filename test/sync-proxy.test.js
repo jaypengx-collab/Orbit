@@ -142,6 +142,56 @@ describe('a receiving device can opt out of syncing style/color', () => {
     expect(result.applied).toBe(true);
     expect(state.applicationData.proAccent).toBe('#123456');
   });
+
+  // Not a viewer-only feature: a manager who checks the opt-out also has
+  // their own device's color kept out of the shared document entirely, in
+  // both directions. The push side is the tricky half - without this, a
+  // manager saving anything unrelated to style would silently overwrite the
+  // shared color everyone else sees with their own kept-local one.
+  it("a manager's own push never overwrites the shared style once the opt-out is checked", async () => {
+    sync.setSyncPairing('CODE1234', 'manager');
+    const { decodeTransferData, encodeTransferData, normalizeSettingsData } =
+      await import('../src/editor-backup.js');
+    const sharedData = normalizeSettingsData({
+      ...state.applicationData,
+      proAccent: '#ABCDEF',
+      proSecondary: '#FEDCBA'
+    });
+    const sharedPayload = await encodeTransferData(sharedData);
+    // First, a normal pull picks up the shared style and caches it - this
+    // manager hasn't touched the opt-out yet, so it applies like anyone else's.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ exists: true, updateTime: 'now', payload: sharedPayload })
+      }))
+    );
+    await sync.pullSyncSnapshot();
+    expect(state.applicationData.proAccent).toBe('#ABCDEF');
+    vi.unstubAllGlobals();
+
+    // Now opt out and change this device's own color locally (simulating
+    // the style tool, without needing its full DOM flow here).
+    sync.setSyncKeepLocalStyle(true);
+    state.applicationData.proAccent = '#111111';
+    state.applicationData.proSecondary = '#222222';
+
+    const fetchMock = vi.fn(async (url, options) => {
+      const body = JSON.parse(options.body);
+      const pushed = await decodeTransferData(body.payload);
+      // The shared color from before the opt-out, not this device's own
+      // #111111 - it must never leak into what gets pushed.
+      expect(pushed.proAccent).toBe('#ABCDEF');
+      return { ok: true, json: async () => ({ updateTime: 'now' }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const result = await sync.pushSyncSnapshot();
+    expect(result.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // Locally, this device still shows its own kept color.
+    expect(state.applicationData.proAccent).toBe('#111111');
+  });
 });
 
 describe('pushSyncSnapshot', () => {

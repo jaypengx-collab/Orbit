@@ -51,6 +51,12 @@ const LEGACY_PROJECT_ID_KEY = 'orbitSyncProjectId';
 // clearSyncPairing/setSyncPairing, since it's about *this device's own*
 // taste in colors, not something tied to any one pairing code.
 const KEEP_LOCAL_STYLE_KEY = 'orbitSyncKeepLocalStyle';
+// The last style actually seen coming from the shared document - separate
+// from this device's own (possibly deliberately different) applicationData
+// once KEEP_LOCAL_STYLE_KEY is set. Pairing-scoped, unlike the preference
+// above: it's "what this pairing's shared style is", so it's cleared
+// alongside the rest of the pairing state.
+const LAST_KNOWN_SHARED_STYLE_KEY = 'orbitSyncLastKnownStyle';
 const MANAGER_ROLE = 'manager';
 const VIEWER_ROLE = 'viewer';
 // 0/O/1/I excluded so a hand-copied or read-aloud code is never ambiguous.
@@ -109,6 +115,24 @@ function getSyncKeepLocalStyle() {
 function setSyncKeepLocalStyle(value) {
   writeLocal(KEEP_LOCAL_STYLE_KEY, value ? '1' : '');
 }
+function getLastKnownSharedStyle() {
+  try {
+    return JSON.parse(readLocal(LAST_KNOWN_SHARED_STYLE_KEY) || 'null');
+  } catch {
+    return null;
+  }
+}
+function setLastKnownSharedStyle(data) {
+  writeLocal(
+    LAST_KNOWN_SHARED_STYLE_KEY,
+    JSON.stringify({
+      proAccent: data.proAccent,
+      proSecondary: data.proSecondary,
+      proTertiary: data.proTertiary,
+      styleSlots: data.styleSlots
+    })
+  );
+}
 function generateSyncCode() {
   const bytes = new Uint8Array(CODE_LENGTH);
   crypto.getRandomValues(bytes);
@@ -124,6 +148,7 @@ function setSyncPairing(code, role = MANAGER_ROLE) {
   writeLocal(ROLE_KEY, role === VIEWER_ROLE ? VIEWER_ROLE : MANAGER_ROLE);
   writeLocal(LAST_UPDATE_TIME_KEY, '');
   writeLocal(LEGACY_PROJECT_ID_KEY, '');
+  writeLocal(LAST_KNOWN_SHARED_STYLE_KEY, '');
   lastPushedSnapshot = null;
 }
 function clearSyncPairing() {
@@ -131,6 +156,7 @@ function clearSyncPairing() {
   writeLocal(ROLE_KEY, '');
   writeLocal(LAST_UPDATE_TIME_KEY, '');
   writeLocal(LEGACY_PROJECT_ID_KEY, '');
+  writeLocal(LAST_KNOWN_SHARED_STYLE_KEY, '');
   lastPushedSnapshot = null;
 }
 function proxyUrl(code) {
@@ -177,13 +203,43 @@ async function writeSyncDoc(code, payload) {
   return { ok: true, updateTime: doc.updateTime || '' };
 }
 
+// The "has anything actually changed" check syncTick uses to decide whether
+// to push ignores style fields entirely once this device has opted out of
+// style sync - otherwise its own permanently-different local color would
+// look like a pending change forever, and every activity tick would push
+// again for no reason. When the opt-out is off this is just a plain
+// snapshot, identical to before.
+function snapshotForComparison(data) {
+  if (!getSyncKeepLocalStyle()) return JSON.stringify(data);
+  const rest = { ...data };
+  delete rest.proAccent;
+  delete rest.proSecondary;
+  delete rest.proTertiary;
+  delete rest.styleSlots;
+  return JSON.stringify(rest);
+}
+// What actually gets uploaded. Once opted out, this device's own style is
+// purely local and must never leak into the shared document - a manager who
+// checked the opt-out and then saves *anything* (even something unrelated
+// to style) still shouldn't overwrite the shared color scheme everyone else
+// sees with their own kept-local one. Substitutes the last style actually
+// seen from the shared document instead (see pullSyncSnapshot, which caches
+// it on every real pull); falls back to this device's own style if nothing
+// has ever been pulled yet (e.g. the very first push right after creating a
+// brand new sync, where this device's style *is* what becomes shared).
+function dataForPush() {
+  if (!getSyncKeepLocalStyle()) return state.applicationData;
+  const sharedStyle = getLastKnownSharedStyle();
+  return sharedStyle ? { ...state.applicationData, ...sharedStyle } : state.applicationData;
+}
+
 // Uploads the currently-saved schedule as-is (never the live, possibly
 // unsaved editor form) so sync can never publish a half-edited draft.
 async function pushSyncSnapshot() {
   const code = getSyncCode();
   if (!isSyncProxyConfigured() || !code) return { ok: false, error: '尚未設定同步。' };
   try {
-    const payload = await encodeTransferData(state.applicationData);
+    const payload = await encodeTransferData(dataForPush());
     const result = await writeSyncDoc(code, payload);
     if (!result.ok) throw new Error(result.error);
     writeLocal(LAST_UPDATE_TIME_KEY, result.updateTime);
@@ -192,7 +248,7 @@ async function pushSyncSnapshot() {
     // poll both funnel through this one function, so this is the one place
     // that reliably knows "what we last actually pushed matches what's live
     // right now" regardless of which caller triggered it.
-    lastPushedSnapshot = JSON.stringify(state.applicationData);
+    lastPushedSnapshot = snapshotForComparison(state.applicationData);
     return { ok: true };
   } catch (error) {
     return { ok: false, error: `同步上傳失敗：${error.message || error}` };
@@ -222,6 +278,11 @@ async function pullSyncSnapshot({ force = false } = {}) {
     const next = normalizeSettingsData(await decodeTransferData(doc.payload), {
       requireMarker: true
     });
+    // Cache the *real* shared style before any local override below
+    // overwrites it on `next` - dataForPush (used by pushSyncSnapshot) needs
+    // this to avoid ever pushing this device's kept-local color back out as
+    // if it were the shared one.
+    setLastKnownSharedStyle(next);
     if (getSyncKeepLocalStyle()) {
       next.proAccent = state.applicationData.proAccent;
       next.proSecondary = state.applicationData.proSecondary;
@@ -234,7 +295,7 @@ async function pullSyncSnapshot({ force = false } = {}) {
     }
     applyEditorSettingsData(next, { statusMessage: '已從其他裝置同步課表。', fromSync: true });
     writeLocal(LAST_UPDATE_TIME_KEY, doc.updateTime);
-    lastPushedSnapshot = JSON.stringify(state.applicationData);
+    lastPushedSnapshot = snapshotForComparison(state.applicationData);
     return { ok: true, applied: true, exists: true };
   } catch (error) {
     return { ok: false, error: `同步下載失敗：${error.message || error}` };
@@ -271,7 +332,7 @@ async function syncTick() {
       if (!result.ok) setSyncStatusUi(result.error, true);
       return !!result.applied;
     }
-    const currentSnapshot = JSON.stringify(state.applicationData);
+    const currentSnapshot = snapshotForComparison(state.applicationData);
     if (currentSnapshot !== lastPushedSnapshot) {
       const result = await pushSyncSnapshot();
       if (!result.ok) setSyncStatusUi(result.error, true);
@@ -320,7 +381,7 @@ let syncLoopStarted = false;
 function startSyncLoop() {
   if (syncLoopStarted) return;
   syncLoopStarted = true;
-  lastPushedSnapshot = JSON.stringify(state.applicationData);
+  lastPushedSnapshot = snapshotForComparison(state.applicationData);
   syncOnAppActive();
   ACTIVITY_EVENT_TYPES.forEach(type =>
     document.addEventListener(type, onUserActivity, { passive: true })
