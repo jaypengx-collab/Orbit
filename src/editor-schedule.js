@@ -25,9 +25,8 @@ import {
 import { pad2 } from './schedule.js';
 import { isSyncViewer, setSyncStatusUi } from './sync.js';
 
-// ---- js/editor-schedule.js ----
-// Renders the day-by-day period dropdowns in the editor.
-// Renders day-by-day period selectors from the saved or currently edited schedule.
+// Renders the day-by-day period selectors from the saved or currently edited
+// schedule.
 function renderEditorSchedule(weeklyScheduleOverride) {
   const container = document.getElementById('schedule-grid');
   const entries = getEditorTeacherEntriesFromDom();

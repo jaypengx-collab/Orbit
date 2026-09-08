@@ -11,12 +11,8 @@ import { buildSchedule } from './schedule.js';
 import { state } from './state.js';
 import { renderSyncPanel, startSyncLoop } from './sync.js';
 
-// ---- js/bootstrap.js ----
-// Runs once every module below has finished defining its functions: loads saved
-// settings, builds the runtime schedule from them, applies the saved theme, and
-// starts the live clock that drives the dashboard.
-// (state.applicationData is set here, not in state.js's own initial value -
-// see the comment on state.js for why.)
+// state.applicationData is set here, not in state.js's own initial value -
+// see the comment on state.js for why.
 // loadData() (data.js) is what actually guards against a corrupt/unexpected
 // saved schedule - any failure there clears the stored key and returns a
 // clean default schedule, so buildSchedule() below always has valid data to

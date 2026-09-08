@@ -13,7 +13,6 @@ import { formatClassLabel } from './editor-core.js';
 import { updateTeacherCardAvatar } from './editor-teachers.js';
 import { isSyncViewer } from './sync.js';
 
-// ---- js/gemini-ocr.js ----
 // Loads a chosen photo into a plain canvas at its native colour (no destructive filtering),
 // capped to a sane max dimension so later steps stay fast.
 class ImagePreprocessor {

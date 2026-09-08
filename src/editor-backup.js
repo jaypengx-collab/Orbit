@@ -43,7 +43,6 @@ import { renderEditorTeachers } from './editor-teachers.js';
 import { buildSchedule } from './schedule.js';
 import { isSyncConfigured, isSyncViewer, pushSyncSnapshot, setSyncStatusUi } from './sync.js';
 
-// ---- js/editor-backup.js ----
 // Reads the editor form and converts it into the app data shape.
 function collectEditorFormState() {
   const newDB = {},

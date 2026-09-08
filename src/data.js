@@ -15,7 +15,6 @@ import {
   WEEKDAYS_INDEX_ORDER
 } from './constants.js';
 
-// ---- js/data.js ----
 // App defaults and live simulator state.
 const REVERSE_WEEK_LOGIC_DEFAULT = false;
 window.MANUALLY_TEST = false;

@@ -9,7 +9,6 @@ import {
 } from './constants.js';
 import { state } from './state.js';
 
-// ---- js/schedule.js ----
 // Builds the runtime schedule rows from teacher, location, and bell-time data.
 function buildSchedule() {
   state.runtimeSchedule = {};

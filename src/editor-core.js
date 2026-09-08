@@ -33,7 +33,6 @@ import {
 // module-evaluation time.
 import { clearSyncInputFields, isSyncViewer } from './sync.js';
 
-// ---- js/editor-core.js ----
 // Builds a short display label for a class from its subject/teacher text.
 // Teacher is appended in parentheses whenever the subject alone would be
 // ambiguous (shared by another class) or when the subject is blank.

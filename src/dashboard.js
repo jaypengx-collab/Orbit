@@ -33,7 +33,6 @@ import {
 } from './schedule.js';
 import { computeDashboardViewModel } from './schedule-calc.js';
 
-// ---- js/dashboard.js ----
 // Opens or closes the manual time simulation panel.
 // Modal and toolbar state is separate from saved schedule settings.
 async function toggleTestPanel() {

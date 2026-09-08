@@ -16,7 +16,6 @@ import {
 } from './editor-core.js';
 import { subjectHue } from './schedule.js';
 
-// ---- js/editor-teachers.js ----
 // Renders the editable teacher list.
 function renderEditorTeachers() {
   const container = document.getElementById('teacher-list');

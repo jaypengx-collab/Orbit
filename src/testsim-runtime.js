@@ -9,7 +9,6 @@ import { closeTestPanel, syncTestToolbar } from './dashboard.js';
 import { syncTestPlayPauseUi } from './dashboard-render.js';
 import { parseTime } from './schedule.js';
 
-// ---- js/testsim-runtime.js ----
 // Everything below is module-private already - this file used to wrap it all
 // in an IIFE, which a module doesn't need: nothing here is exported, so
 // module scope is exactly the privacy the wrapper was providing.

@@ -7,9 +7,8 @@ import { keepActiveClassVisible, openModal } from './dashboard.js';
 import { openEditorFold } from './editor-core.js';
 import { getNextSchoolDay, processSplitName } from './schedule.js';
 
-// ---- js/dashboard-render.js ----
-// Manual simulator controls change the displayed clock without changing saved data.
-// Updates the simulation play/pause button and indicator.
+// Updates the simulation play/pause button and indicator. (Simulator controls
+// change the displayed clock only - never the saved schedule data.)
 function syncTestPlayPauseUi() {
   const btn = document.getElementById('test-play-pause-btn');
   const indicator = document.getElementById('sim-indicator');
