@@ -24,15 +24,6 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @keyframes orbit-boot-spin{to{transform:rotate(360deg)}}
 @keyframes orbit-row-in{from{opacity:0;transform:translateY(16px) scale(.97);filter:blur(3px)}to{opacity:1;transform:translateY(0) scale(1);filter:blur(0)}}
 @keyframes orbit-card-in{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
-/* The press/release pair for a class card (see initSchedulePressFeedback in
-   src/dashboard-render.js). :active alone was doing this job and, on iOS
-   Safari specifically, frequently never painted at all - a tap that opens a
-   sheet is short enough that the :active state can come and go inside a
-   single frame, so the card just sat there and the sheet appeared out of
-   nowhere. The press is a class the pointer handlers hold for as long as the
-   finger is actually down; the release is this animation, which always runs
-   its full length no matter how brief the tap was. */
-@keyframes orbit-row-tap{0%{transform:scale(.965)}42%{transform:scale(1.014)}100%{transform:scale(1)}}
 @keyframes orbit-nav-slide{from{opacity:0;transform:translateX(calc(var(--nav-dir,1) * 48px))}to{opacity:1;transform:translateX(0)}}
 #schedule-list.nav-slide{animation:orbit-nav-slide .6s var(--ease-glass)}
 
@@ -716,17 +707,7 @@ body.orbit-suppress-list-animation .animate-list .row{animation:none}
    color silently fell back to plain --accent regardless of anything here. */
 .row{
   --row-accent:var(--pro-accent);
-  /* border-color/background/box-shadow at .1s, not .2s: a card tapped and
-     released still had its accent border and glow fading back to rest over
-     .2s even after the transform bounce (.is-tapped, below) finished its own
-     shorter run - so the whole release kept reading as slow no matter how
-     quickly the bounce itself was cut, because this was the part actually
-     still visible in the frame. .34s var(--ease-liquid) on transform is
-     unrelated - it's only the hover lift's own pacing (see .row:hover),
-     not something on the tap path (the keyframe below owns transform
-     during a real tap, and CSS animations win over transitions on the same
-     property). */
-  transition:transform .34s var(--ease-liquid),border-color .1s,background .1s,box-shadow .1s;
+  transition:transform .3s var(--ease-liquid),border-color .2s,background .2s,box-shadow .2s;
   cursor:pointer;height:76px;padding:11px 13px;margin-bottom:8px;display:flex;align-items:center;gap:10px;overflow:hidden;
   border-radius:var(--orbit-radius-md);border:1px solid color-mix(in srgb,var(--row-accent) 20%,transparent);
   /* Glass, not the flat well it used to be. These cards float directly on
@@ -743,30 +724,22 @@ body.orbit-suppress-list-animation .animate-list .row{animation:none}
 }
 @supports not (backdrop-filter:blur(1px)){.row{background:var(--glass-well-fallback)}}
 .row:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-/* :active is kept as the desktop/mouse path, but .is-pressed (held by the
-   pointer handlers in src/dashboard-render.js for exactly as long as the
-   finger is down) is what actually shows up on touch - see the
-   orbit-row-tap keyframe's comment for why :active alone wasn't enough.
-   transition-duration:.08s snaps the press down quickly, same as every
-   other tappable glass surface's :active state - only the release (the
-   base .row transition, or the orbit-row-tap keyframe below) gets the
-   slower spring-back. */
-.row:active,.row.is-pressed{transform:scale(.965);border-color:color-mix(in srgb,var(--row-accent) 46%,transparent);box-shadow:var(--glass-edge-shadow),0 4px 12px rgba(0,8,16,.3);transition-duration:.08s}
-/* Wins over .animate-list .row's entry animation, which is why it's scoped
-   to the list rather than left as a bare .row.is-tapped. */
-/* .32s used to be roughly as long as the detail sheet's own .35s slide-in
-   (see .modal-sheet), so the tap felt like it was pacing the popup rather
-   than acknowledging the tap and getting out of the way - two animations
-   of comparable length reading as one sluggish one. An initial cut to .15s
-   still wasn't fast enough - most of what was left was the .row transition
-   above's own border-color/box-shadow release lingering past this
-   animation's end, not this animation itself, so both got shortened
-   together. .09s (same dip-then-settle shape, just compressed further) is
-   about as low as this can go and still read as a bounce instead of a
-   flicker - under three frames shorter risks not being perceptible as
-   motion at all at 60fps. */
-#schedule-list .row.is-tapped{animation:orbit-row-tap .09s var(--ease-glass)}
-@media (prefers-reduced-motion:reduce){#schedule-list .row.is-tapped{animation:none}.row:active,.row.is-pressed{transform:none}}
+/* Plain size change on press/release, nothing else - the same shape as the
+   day-nav buttons' own :active (see .nav-item above): scale down, scale
+   back, one property, one transition. An earlier version paired a custom
+   bounce keyframe with its own border-color/box-shadow flourish on release,
+   which kept reading as slow no matter how far each piece got cut - a
+   multi-phase bounce-then-fade is just a busier motion than one plain
+   transform easing back, even at a shorter total duration. :active is kept
+   as the desktop/mouse path, but .is-pressed (held by the pointer handlers
+   in src/dashboard-render.js for exactly as long as the finger is down) is
+   what actually paints reliably on iOS Safari specifically - see that
+   file's comment for why :active alone wasn't enough there.
+   transition-duration:.08s snaps the press down quickly, matching every
+   other tappable glass surface's :active state; release uses the base
+   .row transition above, same as .nav-item's release does. */
+.row:active,.row.is-pressed{transform:scale(.965);transition-duration:.08s}
+@media (prefers-reduced-motion:reduce){.row:active,.row.is-pressed{transform:none}}
 @media (hover:hover){.row:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--row-accent) 34%,transparent)}}
 /* The accent stripe lives on .content (spanning both the name and meta
    lines) rather than just .row-name, so the meta line's left edge lines up

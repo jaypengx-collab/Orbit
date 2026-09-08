@@ -104,12 +104,13 @@ describe('dashboard update() against the real app', () => {
     expect(days).toEqual([1, 3]); // only Monday and Wednesday have classes
   });
 
-  // The CSS :active state these classes replace was routinely never painted
+  // The CSS :active state .is-pressed backs up was routinely never painted
   // on iOS Safari - a tap short enough to open the detail sheet can start
-  // and end inside one frame. .is-pressed is held for as long as the finger
-  // is down; .is-tapped is a fixed-length release animation a short tap
-  // can't cut off.
-  describe('class cards react to being pressed and tapped', () => {
+  // and end inside one frame. .is-pressed is held for exactly as long as
+  // the finger is down instead, giving the CSS (a plain size change, same
+  // shape as the day-nav buttons' own :active) something reliable to key
+  // off - see the transform rule on .row:active,.row.is-pressed.
+  describe('class cards react to being pressed', () => {
     const firstRow = () => {
       setSimTime(8, 20);
       state.viewDay = 1;
@@ -130,25 +131,6 @@ describe('dashboard update() against the real app', () => {
       row.dispatchEvent(new window.PointerEvent('pointerdown', { bubbles: true }));
       window.dispatchEvent(new window.PointerEvent('pointercancel', { bubbles: true }));
       expect(row.classList.contains('is-pressed')).toBe(false);
-    });
-
-    it('runs the release animation on tap, and restarts it on a repeat tap', () => {
-      const row = firstRow();
-      row.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-      expect(row.classList.contains('is-tapped')).toBe(true);
-      // The cards' own entry animation ends on these same elements and must
-      // not clear a tap that is still running.
-      // jsdom has no AnimationEvent constructor, so the name it dispatches
-      // on is set by hand - the handler only ever reads that one property.
-      const animationEnd = name => {
-        const event = new window.Event('animationend', { bubbles: true });
-        Object.defineProperty(event, 'animationName', { value: name });
-        row.dispatchEvent(event);
-      };
-      animationEnd('orbit-row-in');
-      expect(row.classList.contains('is-tapped')).toBe(true);
-      animationEnd('orbit-row-tap');
-      expect(row.classList.contains('is-tapped')).toBe(false);
     });
   });
 });
