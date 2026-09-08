@@ -146,6 +146,15 @@ npm run format       # Prettier 格式化（不含 index.html／css/styles.css�
 
 也可以用 Wrangler CLI 部署（見 `cloudflare-worker/wrangler.toml` 開頭註解，含 KV 命名空間的 CLI 建立指令），效果相同。想調整每小時限制次數，改 `orbit-worker.js` 裡的 `GEMINI_RATE_LIMIT` 常數即可。
 
+**選用：改用 GitHub Actions 自動部署 Worker**，這樣以後改 `cloudflare-worker/orbit-worker.js` 推送到 `main` 就會自動部署，不用每次手動貼到 Cloudflare 後台（`.github/workflows/deploy-worker.yml`，`cloudflare-worker/**` 有變更且推到 `main` 才會觸發，也可以在 Actions 分頁手動觸發）：
+
+1. [Cloudflare Dashboard](https://dash.cloudflare.com/) → 右上角帳號 → My Profile → API Tokens → Create Token → 用 **Edit Cloudflare Workers** 範本 → 建立。複製產生的 token（只會顯示一次）。
+2. GitHub 專案 Settings → Secrets and variables → Actions → **Secrets**（這次是 Secrets，不是 Variables——這個值不該進公開程式碼），新增 `CLOUDFLARE_API_TOKEN`，貼上一步的 token。
+3. 同一頁再新增一個 Secret：`CLOUDFLARE_ACCOUNT_ID`，值是 Cloudflare Dashboard 右側欄（或網址列）看到的 Account ID。
+4. **關鍵一步**：`wrangler deploy` 會把 `cloudflare-worker/wrangler.toml` 裡的 `[vars]`／`[[kv_namespaces]]` 整組覆蓋上去，不是跟後台現有設定合併。推送前先把 `wrangler.toml` 改成跟後台現況一致——`FIREBASE_PROJECT_ID` 填實際的 Firebase 專案 ID（不是檔案裡的預留文字），有設定 `RATE_LIMIT_KV` 的話把對應的 `[[kv_namespaces]]` 區塊取消註解並填入真正的 namespace id——不然第一次自動部署會把後台設定蓋掉，導致同步失效或流量限制變弱。`GEMINI_API_KEY`／`FIREBASE_CLIENT_EMAIL`／`FIREBASE_PRIVATE_KEY` 這些 Secret 不受影響，本來就不存在這個檔案裡。
+
+設定好以上兩個 GitHub Secret 並確認 `wrangler.toml` 內容無誤後，之後編輯 `cloudflare-worker/orbit-worker.js` 只要跟平常一樣推送到 `main`，就會自動部署，不用再手動開 Cloudflare 後台貼程式碼。
+
 ---
 
 ## 備份、匯出與跨裝置轉移

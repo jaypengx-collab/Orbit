@@ -11,6 +11,18 @@
 #   npx wrangler secret put FIREBASE_PRIVATE_KEY
 #   npx wrangler kv namespace create RATE_LIMIT_KV
 #     (then uncomment the [[kv_namespaces]] block below with the printed id)
+#
+# CI path (.github/workflows/deploy-worker.yml deploys this file with
+# Wrangler on every push to main that touches cloudflare-worker/**): a
+# `wrangler deploy` pushes THIS FILE's [vars]/[[kv_namespaces]] as the
+# worker's whole config, replacing whatever's live on Cloudflare - it does
+# not merge with dashboard-made changes. Before ever relying on that
+# workflow, fill in the real values below (FIREBASE_PROJECT_ID, and the
+# kv_namespaces block if you use RATE_LIMIT_KV) to match what's already
+# live, or the first automated deploy will overwrite them with the
+# placeholders below. Secrets (GEMINI_API_KEY etc., set via `wrangler
+# secret put` or the dashboard) are stored separately and are NOT touched
+# by a plain `wrangler deploy` - only [vars] and bindings live here.
 name = "orbit-worker"
 main = "orbit-worker.js"
 compatibility_date = "2025-01-01"
