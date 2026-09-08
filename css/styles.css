@@ -160,7 +160,13 @@ body::before{
 @media (max-width:360px){.dashboard{max-height:clamp(252px,38dvh,294px);padding-bottom:11px;height:clamp(252px,38dvh,294px);gap:6px}}
 
 .dashboard-boot-loader{display:none}
-body.orbit-booting .dashboard{visibility:hidden}
+/* .nav-bar is empty in the static HTML (schedule.js fills it in with day
+   buttons on first render) but already gets its dark glass background from
+   CSS, so a cold/standalone-PWA launch can paint the empty bar first and
+   pop the buttons in a beat later - seen as a dark flash on top of the
+   buttons. Hide it alongside .dashboard until boot finishes. */
+body.orbit-booting .dashboard,
+body.orbit-booting .nav-bar{visibility:hidden}
 body.orbit-booting .dashboard-boot-loader{visibility:visible;display:flex;position:absolute;inset:0;align-items:center;justify-content:center;background:linear-gradient(145deg,#2c2c2e,#1c1c1e);border-radius:var(--v31-radius-xl);z-index:5}
 .dashboard-boot-spinner{width:26px;height:26px;border-radius:50%;border:3px solid rgba(255,255,255,.18);border-top-color:rgba(255,255,255,.78);animation:orbit-boot-spin .8s linear infinite}
 
