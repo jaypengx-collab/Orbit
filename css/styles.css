@@ -393,7 +393,15 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
   -webkit-transform:translateZ(0);transform:translateZ(0);
   -webkit-backface-visibility:hidden;backface-visibility:hidden;
   will-change:transform;
-  flex:1;min-width:0;min-height:46px;height:46px;border:none;background:transparent;
+  flex:1;min-width:0;min-height:46px;height:46px;background:transparent;
+  /* A real, always-visible border - without it an unselected day is just
+     text sitting on the bare background with nothing marking its tap
+     target, which read as broken rather than intentionally minimal. The
+     is-today/is-tomorrow/active states below all set their own bolder
+     border on top of this same property, so this is only ever what an
+     otherwise-plain day (not today, not tomorrow, not the active tab)
+     shows. */
+  border:1px solid var(--orbit-line);
   box-shadow:none;outline:none;
   font-size:clamp(13px,3.6vw,15px);cursor:pointer;transition:transform .12s var(--ease-glass);
   border-radius:11px;padding:8px 3px;font-weight:700;color:var(--orbit-muted);
@@ -434,20 +442,21 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
 body.orbit-suppress-list-animation .animate-list .row{animation:none}
 @media (prefers-reduced-motion:reduce){.animate-list .row{animation:none}#schedule-list.nav-slide{animation:none}}
 
-/* --row-accent drives the whole card's identity color: a subject-hashed hue
-   for an ordinary period (see subjectHue() in schedule.js and dashboard-
-   render.js's renderList - the same hash the teacher/subject editor's
-   avatars use, so a subject reads as the same color in both places),
-   overridden back to the theme accent/secondary for the is-now/is-next
-   cards below since those signal live status, not subject identity. This
-   replaces the old single global --class-color (every card, every subject,
-   painted the same flat theme blue) and a second variable
-   (--current-class-color) .meta-location referenced but nothing ever set on
-   these rows, which silently fell back to plain --accent regardless of
-   subject. */
+/* --row-accent is the one variable every card-identity color below reads
+   from: the theme accent normally, overridden to the theme secondary for
+   the is-now card below (is-next stays on the accent) so "happening now"
+   and "up next" read as distinct at a glance. An earlier version of this
+   hashed a different hue per subject instead - closer to the teacher/
+   subject editor's per-avatar colors, but on a real day's worth of cards it
+   read as a chaotic rainbow rather than an organized list, so this went
+   back to one consistent accent tying every card to the app's actual theme
+   color. Kept as a variable (not just var(--pro-accent) inline everywhere)
+   purely so is-now can still override it in one place. This also fixes a
+   real bug from before either of those: .meta-location used to reference a
+   variable (--current-class-color) nothing on these rows ever set, so its
+   color silently fell back to plain --accent regardless of anything here. */
 .row{
-  --row-hue:210;
-  --row-accent:hsl(var(--row-hue) 74% 60%);
+  --row-accent:var(--pro-accent);
   transition:transform .2s var(--ease-glass),border-color .2s,background .2s,box-shadow .2s;
   cursor:pointer;height:76px;padding:11px 13px;margin-bottom:8px;display:flex;align-items:center;gap:10px;overflow:hidden;
   border-radius:var(--orbit-radius-md);border:1px solid color-mix(in srgb,var(--row-accent) 14%,transparent);box-shadow:none;
@@ -477,8 +486,9 @@ body.orbit-suppress-list-animation .animate-list .row{animation:none}
 
 /* Current/next class highlight — the whole point of bug #4: keep these as
    the last, most specific word on .row so nothing generic can stomp them.
-   --row-accent is reset to the theme accent/secondary here (status, not
-   subject, is what these two cards communicate), and .content's own inline
+   is-next's own --row-accent is redundant with .row's own default (both
+   the theme accent) but kept explicit for symmetry with is-now, which does
+   need it to actually switch to the secondary. .content's own inline
    stripe is hidden so it doesn't double up on the card's own left-edge
    accent border right next to it. */
 .row.is-next{
