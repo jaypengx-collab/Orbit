@@ -12,7 +12,12 @@
 // first). Moving the constants to a module neither side needs anything
 // else from removes the cycle entirely instead of just working around one
 // symptom of it.
-const DEFAULT_STYLE_PRIMARY = '#0A84FF';
-const DEFAULT_STYLE_SECONDARY = '#5856D6';
+// A rich indigo-violet paired with a vivid rose-magenta, not the generic
+// iOS-system blue this used to be (#0A84FF/#5856D6) - that read as a stock
+// system color rather than something Orbit actually chose, especially once
+// it's the *only* color a first-time user sees before ever opening the
+// style tool's other presets.
+const DEFAULT_STYLE_PRIMARY = '#6C5DD3';
+const DEFAULT_STYLE_SECONDARY = '#E8497B';
 
 export { DEFAULT_STYLE_PRIMARY, DEFAULT_STYLE_SECONDARY };

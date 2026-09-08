@@ -131,7 +131,10 @@ const PRO_PALETTE_PRESETS = {
   rose: { primary: '#F06F61', secondary: '#C44C78' },
   ocean: { primary: '#18B7A0', secondary: '#2E6FD8' },
   midnight: { primary: '#263B68', secondary: '#6A4C93' },
-  graphite: { primary: '#A7C957', secondary: '#557A3E' }
+  graphite: { primary: '#A7C957', secondary: '#557A3E' },
+  amber: { primary: '#E8A33D', secondary: '#B34A2C' },
+  ruby: { primary: '#E23D5B', secondary: '#7A1F3D' },
+  lilac: { primary: '#9B7EDE', secondary: '#D88FC2' }
 };
 function applyProAccent(data = state.applicationData) {
   const accent = normalizeProAccent(data.proAccent);
