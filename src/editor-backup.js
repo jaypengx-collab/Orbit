@@ -1120,13 +1120,21 @@ function resetOCRImporterUI() {
   if (input) input.value = '';
   const wrap = document.getElementById('ocr-import-image-wrap');
   wrap?.classList.remove('has-image');
-  const img = document.getElementById('ocr-import-image-preview');
-  if (img) {
-    img.hidden = true;
-    img.removeAttribute('src');
-  }
+  // Several files can be picked at once, and each decodable one gets its own
+  // thumbnail cloned from the first (see mountOCRImporter's renderPreviews) -
+  // so the clones have to go too, not just the original from the markup.
+  wrap?.querySelectorAll('.ocr-import-image-preview').forEach((node, index) => {
+    if (index > 0) {
+      node.remove();
+      return;
+    }
+    node.hidden = true;
+    node.removeAttribute('src');
+  });
   const filename = document.getElementById('ocr-import-filename');
   if (filename) filename.textContent = '尚未選擇檔案';
+  const eta = document.getElementById('ocr-import-eta');
+  if (eta) eta.textContent = '';
   const status = document.getElementById('ocr-import-status');
   if (status) {
     status.textContent = '';
