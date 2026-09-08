@@ -51,8 +51,13 @@ import { parseTime } from './schedule.js';
   // index.html's ?v= query strings and public/sw.js's cache name, both
   // derived from the same commit's hash - always matches what's actually
   // deployed without anyone having to remember to bump anything by hand.
-  var APP_VERSION_DATE = __APP_VERSION_DATE__;
-  var APP_VERSION_HASH = __APP_VERSION_HASH__;
+  // typeof, not a direct reference: Vite text-replaces this literal token at
+  // build time, so it's simply an undeclared identifier if these unbuilt
+  // source files ever get served directly - a bare reference would throw a
+  // ReferenceError and abort the whole boot chain before the spinner clears
+  // (see the matching import.meta.env guards in sync.js/gemini-ocr.js).
+  var APP_VERSION_DATE = typeof __APP_VERSION_DATE__ !== 'undefined' ? __APP_VERSION_DATE__ : '?';
+  var APP_VERSION_HASH = typeof __APP_VERSION_HASH__ !== 'undefined' ? __APP_VERSION_HASH__ : '?';
   function syncAppVersion() {
     var version = el('app-version');
     if (version) version.textContent = '版本 ' + APP_VERSION_DATE + ' · ' + APP_VERSION_HASH;

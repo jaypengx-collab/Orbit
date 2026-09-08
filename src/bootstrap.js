@@ -50,7 +50,7 @@ setTimeout(showOnboardingPrompt, 400);
 // worker would just fight the dev server's own module reloading.
 // updateViaCache:'none' stops the browser's own HTTP cache from ever
 // serving a stale copy of sw.js itself when checking for an update.
-if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+if (import.meta.env?.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
   });

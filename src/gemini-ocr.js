@@ -60,7 +60,12 @@ function capCanvasDimension(canvas, maxDimension = 1600) {
 // the client) and forwards the request, so users never need a Gemini key of their
 // own. A fork built from source without the proxy deployed just leaves the feature
 // unavailable (see isGeminiProxyConfigured's callers) rather than asking for a key.
-const GEMINI_PROXY_URL = (import.meta.env.VITE_ORBIT_GEMINI_PROXY_URL || '').trim();
+// `?.` matters here: import.meta.env only exists once Vite has processed this
+// module - if these unbuilt source files ever get served directly (e.g. a
+// Pages misconfiguration bypassing the build), a plain `.env.X` throws at
+// module-evaluation time and silently aborts the whole boot chain before it
+// reaches the code that clears the boot spinner.
+const GEMINI_PROXY_URL = (import.meta.env?.VITE_ORBIT_GEMINI_PROXY_URL || '').trim();
 function isGeminiProxyConfigured() {
   return !!GEMINI_PROXY_URL;
 }

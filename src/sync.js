@@ -45,7 +45,9 @@ import {
   showEditorConfirmSheet
 } from './editor-core.js';
 
-const SYNC_PROXY_URL = (import.meta.env.VITE_ORBIT_SYNC_PROXY_URL || '').trim();
+// `?.` guards against import.meta.env itself being undefined (unbuilt source
+// served directly, bypassing Vite) - see the matching note in gemini-ocr.js.
+const SYNC_PROXY_URL = (import.meta.env?.VITE_ORBIT_SYNC_PROXY_URL || '').trim();
 const CODE_KEY = 'orbitSyncCode';
 // Empty/absent means this device is a viewer; a non-empty value is the
 // actual manager passcode, kept in plaintext (there's nothing else it could
