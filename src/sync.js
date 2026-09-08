@@ -26,6 +26,7 @@
 import { state } from './state.js';
 import {
   applyEditorSettingsData,
+  copyTransferText,
   decodeTransferData,
   encodeTransferData,
   isEditorDirty,
@@ -297,22 +298,39 @@ function applyEditorRoleLock() {
 }
 
 // ---- UI entry points, exposed on window for index.html's onclick="..." ----
+
+// Greys the triggering button out for the duration of its own async work, so
+// a slow connection can't be double-clicked into firing the same
+// create/join request twice. Re-enables in `finally` regardless of which
+// branch the wrapped work took (success, a friendly rejection, or an error).
+async function withButtonDisabled(buttonId, fn) {
+  const button = document.getElementById(buttonId);
+  if (button) button.disabled = true;
+  try {
+    await fn();
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 async function orbitSyncCreate() {
   if (!isSyncProxyConfigured()) {
     setSyncStatusUi('跨裝置同步功能尚未設定，請聯絡課表管理者。', true);
     return;
   }
-  setSyncPairing(generateSyncCode());
-  setSyncStatusUi('正在建立同步…');
-  const result = await pushSyncSnapshot();
-  if (!result.ok) {
-    clearSyncPairing();
-    setSyncStatusUi(result.error, true);
-    return;
-  }
-  renderSyncPanel();
-  setSyncStatusUi('同步已建立，可在另一台裝置輸入代碼加入。');
-  startSyncLoop();
+  await withButtonDisabled('sync-create-btn', async () => {
+    setSyncPairing(generateSyncCode());
+    setSyncStatusUi('正在建立同步…');
+    const result = await pushSyncSnapshot();
+    if (!result.ok) {
+      clearSyncPairing();
+      setSyncStatusUi(result.error, true);
+      return;
+    }
+    renderSyncPanel();
+    setSyncStatusUi('同步已建立，可在另一台裝置輸入代碼加入。');
+    startSyncLoop();
+  });
 }
 // A lightweight existence check, deliberately not going through
 // setSyncPairing/pullSyncSnapshot - those read the *currently paired* code
@@ -347,40 +365,42 @@ async function orbitSyncJoin() {
   const asManager = !!document.getElementById('sync-join-as-manager')?.checked;
   const normalizedCode = code.toUpperCase();
 
-  // Check the code actually has something to join *before* ever showing
-  // the overwrite warning below - a nonexistent/mistyped code has nothing
-  // to overwrite with, so warning about data loss and then failing anyway
-  // (the bug performSyncJoin's own `exists` check already prevents) was
-  // just a confusing, pointless extra step. Fail fast with the real error
-  // instead.
-  setSyncStatusUi('正在檢查配對代碼…');
-  const check = await checkSyncCodeExists(normalizedCode);
-  if (!check.ok) {
-    setSyncStatusUi(check.error, true);
-    return;
-  }
-  if (!check.exists) {
-    setSyncStatusUi('找不到這組配對代碼，請確認代碼是否正確，或請對方先按「建立新同步」。', true);
-    return;
-  }
+  await withButtonDisabled('sync-join-btn', async () => {
+    // Check the code actually has something to join *before* ever showing
+    // the overwrite warning below - a nonexistent/mistyped code has nothing
+    // to overwrite with, so warning about data loss and then failing anyway
+    // (the bug performSyncJoin's own `exists` check already prevents) was
+    // just a confusing, pointless extra step. Fail fast with the real error
+    // instead.
+    setSyncStatusUi('正在檢查配對代碼…');
+    const check = await checkSyncCodeExists(normalizedCode);
+    if (!check.ok) {
+      setSyncStatusUi(check.error, true);
+      return;
+    }
+    if (!check.exists) {
+      setSyncStatusUi('找不到這組配對代碼，請確認代碼是否正確，或請對方先按「建立新同步」。', true);
+      return;
+    }
 
-  // Joining pulls whatever is already published under that code and
-  // applies it immediately - overwriting this device's current schedule -
-  // so this warns before doing anything, rather than silently replacing
-  // data the user might not have backed up.
-  setSyncStatusUi('');
-  setEditorConfirmContent(
-    '加入同步？',
-    '這組代碼下已經有課表，加入後會立刻用該課表取代這台裝置目前的課表，且無法復原。建立同步的裝置目前的課表不會受影響。',
-    '',
-    '仍要加入',
-    () => {
-      hideEditorDiscardConfirm();
-      performSyncJoin(normalizedCode, asManager);
-    },
-    '取消'
-  );
-  showEditorConfirmSheet();
+    // Joining pulls whatever is already published under that code and
+    // applies it immediately - overwriting this device's current schedule -
+    // so this warns before doing anything, rather than silently replacing
+    // data the user might not have backed up.
+    setSyncStatusUi('');
+    setEditorConfirmContent(
+      '加入同步？',
+      '這組代碼下已經有課表，加入後會立刻用該課表取代這台裝置目前的課表，且無法復原。建立同步的裝置目前的課表不會受影響。',
+      '',
+      '仍要加入',
+      () => {
+        hideEditorDiscardConfirm();
+        performSyncJoin(normalizedCode, asManager);
+      },
+      '取消'
+    );
+    showEditorConfirmSheet();
+  });
 }
 
 async function performSyncJoin(code, asManager) {
@@ -410,10 +430,42 @@ async function performSyncJoin(code, asManager) {
   setSyncStatusUi(asManager ? '已以管理者身份加入同步。' : '已加入同步（僅接收）。');
   startSyncLoop();
 }
+// Unlinking discards the only copy of the pairing code this device has -
+// there's no "undo", and no way to look the code back up afterward except
+// asking another already-paired device - so this warns first and offers a
+// one-tap copy of the code before committing, rather than silently
+// discarding something that might be needed again to rejoin.
 function orbitSyncUnlink() {
-  clearSyncPairing();
-  renderSyncPanel();
-  setSyncStatusUi('已解除同步（不影響本機課表）。');
+  const code = getSyncCode();
+  setEditorConfirmContent(
+    '解除同步？',
+    '解除後這台裝置會變回本機課表，不再自動接收其他裝置的更新。之後如果想重新加入，需要用回這組配對代碼——建議先複製起來備用：',
+    code,
+    '解除同步',
+    () => {
+      hideEditorDiscardConfirm();
+      clearSyncPairing();
+      renderSyncPanel();
+      setSyncStatusUi('已解除同步（不影響本機課表）。');
+    },
+    '取消',
+    {
+      extraLabel: '複製代碼',
+      // Deliberately doesn't close the sheet (unlike the default
+      // extraHandler) - copying is meant to happen *before* deciding
+      // whether to actually confirm the unlink, not instead of it.
+      extraHandler: async () => {
+        const extraBtn = document.getElementById('editor-confirm-extra-btn');
+        try {
+          await copyTransferText(code);
+          if (extraBtn) extraBtn.textContent = '已複製！';
+        } catch (error) {
+          setSyncStatusUi(`複製失敗：${error.message || error}`, true);
+        }
+      }
+    }
+  );
+  showEditorConfirmSheet();
 }
 
 window.orbitSyncCreate = orbitSyncCreate;

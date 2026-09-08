@@ -119,13 +119,52 @@ describe('the sync panel is merged into import/export, not a separate paged fold
 });
 
 describe('orbitSyncUnlink', () => {
-  it('clears pairing and restores the setup panel', () => {
+  it('warns before unlinking and only clears pairing once confirmed', () => {
     sync.setSyncPairing('CODE1234');
     sync.renderSyncPanel();
     sync.orbitSyncUnlink();
+    // Nothing happens yet - just the warning sheet, with a chance to copy
+    // the code first.
+    expect(sync.isSyncConfigured()).toBe(true);
+    expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(true);
+    expect(document.getElementById('editor-confirm-title').textContent).toMatch(/解除同步/);
+    expect(document.getElementById('editor-confirm-msg').textContent).toMatch(/複製/);
+    expect(document.getElementById('editor-import-diff').textContent).toBe('CODE1234');
+
+    const confirmBtn = document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[1];
+    confirmBtn.onclick();
     expect(sync.isSyncConfigured()).toBe(false);
     expect(document.getElementById('sync-setup-box').hidden).toBe(false);
     expect(document.getElementById('sync-active-box').hidden).toBe(true);
+    expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(false);
+  });
+
+  it('cancelling leaves the device still paired', () => {
+    sync.setSyncPairing('CODE1234');
+    sync.renderSyncPanel();
+    sync.orbitSyncUnlink();
+    const cancelBtn = document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[0];
+    cancelBtn.onclick();
+    expect(sync.isSyncConfigured()).toBe(true);
+    expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(false);
+  });
+
+  it('the extra button copies the code without closing the sheet or unlinking', async () => {
+    // jsdom has neither a real Clipboard API nor execCommand by default -
+    // force the fast path in editor-backup.js's copyTransferText so this
+    // exercises the actual clipboard.writeText call instead of falling
+    // through to a fallback jsdom can't support at all.
+    vi.stubGlobal('isSecureContext', true);
+    Object.assign(navigator, { clipboard: { writeText: vi.fn(async () => {}) } });
+    sync.setSyncPairing('CODE1234');
+    sync.renderSyncPanel();
+    sync.orbitSyncUnlink();
+    const extraBtn = document.getElementById('editor-confirm-extra-btn');
+    await extraBtn.onclick();
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('CODE1234');
+    expect(extraBtn.textContent).toMatch(/已複製/);
+    expect(sync.isSyncConfigured()).toBe(true);
+    expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(true);
   });
 });
 
@@ -195,10 +234,12 @@ describe('sync-setup-box / sync-active-box hidden-state toggling', () => {
     expect(document.getElementById('sync-active-box').hidden).toBe(false);
   });
 
-  it('unlinking immediately re-shows the setup box and hides the active box', () => {
+  it('confirming the unlink warning re-shows the setup box and hides the active box', () => {
     sync.setSyncPairing('CODE1234');
     sync.renderSyncPanel();
     sync.orbitSyncUnlink();
+    const confirmBtn = document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[1];
+    confirmBtn.onclick();
     expect(document.getElementById('sync-setup-box').hidden).toBe(false);
     expect(document.getElementById('sync-active-box').hidden).toBe(true);
   });

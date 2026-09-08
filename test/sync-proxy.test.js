@@ -152,8 +152,11 @@ describe('pullSyncSnapshot', () => {
   });
 });
 
-describe('orbitSyncCreate / orbitSyncUnlink UI wiring', () => {
-  it('orbitSyncCreate pairs with no manual input, PATCHing the proxy immediately', async () => {
+// orbitSyncUnlink itself (the confirm-and-copy warning flow) is pure local
+// state with no network call either way - see test/sync.test.js for that
+// coverage, not duplicated here.
+describe('orbitSyncCreate UI wiring', () => {
+  it('pairs with no manual input, PATCHing the proxy immediately', async () => {
     const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ updateTime: 'now' }) }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -165,15 +168,6 @@ describe('orbitSyncCreate / orbitSyncUnlink UI wiring', () => {
     const [url, options] = fetchMock.mock.calls[0];
     expect(url).toBe(`${PROXY_URL}?code=${sync.getSyncCode()}`);
     expect(options.method).toBe('PATCH');
-  });
-
-  it('orbitSyncUnlink clears pairing and restores the setup panel', () => {
-    sync.setSyncPairing('CODE1234');
-    sync.renderSyncPanel();
-    sync.orbitSyncUnlink();
-    expect(sync.isSyncConfigured()).toBe(false);
-    expect(document.getElementById('sync-setup-box').hidden).toBe(false);
-    expect(document.getElementById('sync-active-box').hidden).toBe(true);
   });
 });
 

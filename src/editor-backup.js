@@ -1104,6 +1104,7 @@ export {
   beginEditorImport,
   cloneSettingsData,
   collectEditorFormState,
+  copyTransferText,
   dayDiffLabel,
   decodeTransferData,
   describeSettingsDiff,
