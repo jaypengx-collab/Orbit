@@ -343,6 +343,50 @@ describe('manager/viewer roles', () => {
   });
 });
 
+// startSyncLoop() itself only ever runs once for the whole module (guarded
+// by a "started" flag) and is already triggered once at app boot via
+// bootstrap.js (see loadApp()), so its activity listeners are already bound
+// by the time any test here runs - no need to call it again.
+describe('activity-driven sync: reads only happen when the user touches the UI', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('a click triggers a check, but another click within the throttle window does not', async () => {
+    sync.setSyncPairing('CODE1234');
+    vi.useFakeTimers();
+    // Jump well clear of whatever real-time click/boot activity earlier
+    // tests (or the app's own boot) may have left lastActivitySyncAt at -
+    // that's module-level state shared across every test in this file.
+    vi.setSystemTime(Date.now() + 3_600_000);
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ exists: false }) }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    document.dispatchEvent(new Event('click'));
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    document.dispatchEvent(new Event('click'));
+    await vi.advanceTimersByTimeAsync(10);
+    expect(fetchMock).toHaveBeenCalledTimes(1); // still just the one - throttled
+
+    // Past the throttle window, the next touch checks again.
+    vi.setSystemTime(Date.now() + 6000);
+    document.dispatchEvent(new Event('keydown'));
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  });
+
+  it('idle time alone - no interaction at all - never triggers a check', async () => {
+    sync.setSyncPairing('CODE1234');
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.now() + 3_600_000);
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ exists: false }) }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await vi.advanceTimersByTimeAsync(120_000); // a full two minutes, untouched
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
 describe('orbitSyncJoin checks the code exists before ever warning about overwriting data', () => {
   it('shows the confirm sheet (and pairs nothing yet) only once the code is confirmed to exist', async () => {
     document.getElementById('sync-join-code').value = 'CODE1234';

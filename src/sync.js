@@ -51,8 +51,6 @@ const LEGACY_PROJECT_ID_KEY = 'orbitSyncProjectId';
 // clearSyncPairing/setSyncPairing, since it's about *this device's own*
 // taste in colors, not something tied to any one pairing code.
 const KEEP_LOCAL_STYLE_KEY = 'orbitSyncKeepLocalStyle';
-const MIN_POLL_INTERVAL_MS = 8000;
-const MAX_POLL_INTERVAL_MS = 60000;
 const MANAGER_ROLE = 'manager';
 const VIEWER_ROLE = 'viewer';
 // 0/O/1/I excluded so a hand-copied or read-aloud code is never ambiguous.
@@ -253,20 +251,16 @@ function setSyncStatusUi(message, isError) {
   status.style.color = isError ? '#ff6b6b' : 'var(--sub)';
 }
 
-// One poll does at most one round trip: push when this device changed since
-// its last push, otherwise pull to pick up any change from elsewhere. Never
-// both in the same tick - there's nothing to reconcile since a push always
-// means "we are already current" and a pull that changes anything updates
-// lastPushedSnapshot itself.
+// One check does at most one round trip: push when this device changed
+// since its last push, otherwise pull to pick up any change from
+// elsewhere. Never both in the same tick - there's nothing to reconcile
+// since a push always means "we are already current" and a pull that
+// changes anything updates lastPushedSnapshot itself.
 //
 // A viewer never pushes, full stop - not even as a fallback if a local
 // mutation somehow slipped past the editor's UI lock (see
 // src/editor-core.js's applyEditorRoleLock). It only ever pulls, so it stays
 // a pure mirror of whatever a manager device published.
-//
-// Returns whether anything actually changed (a successful push, or a pull
-// that applied something) - runScheduledSyncTick uses that to decide
-// whether to keep polling quickly or back off, see below.
 async function syncTick() {
   if (!isSyncConfigured() || document.hidden || syncInFlight) return false;
   syncInFlight = true;
@@ -291,52 +285,51 @@ async function syncTick() {
   }
 }
 
-let syncTimer = null;
-let currentPollIntervalMs = MIN_POLL_INTERVAL_MS;
-
-function scheduleSyncTick(delayMs) {
-  clearTimeout(syncTimer);
-  syncTimer = setTimeout(runScheduledSyncTick, delayMs);
+// No background timer at all - a device nobody is touching has no reason to
+// keep asking whether something changed. Instead, an actual interaction
+// with the page triggers a check, throttled to at most once per
+// ACTIVITY_SYNC_THROTTLE_MS so a burst of clicks or typing collapses into
+// one check instead of one per event. The result: genuinely zero network
+// requests while the app just sits open and idle, at the cost of a receiving
+// device that's left completely untouched only picking up a change the
+// next time someone actually interacts with it (or reopens/refocuses the
+// tab - see syncOnAppActive below, which isn't subject to this throttle).
+// A real local save is unaffected by any of this either way - it pushes
+// immediately regardless (see editor-backup.js's applyEditorSettingsData).
+const ACTIVITY_SYNC_THROTTLE_MS = 5000;
+const ACTIVITY_EVENT_TYPES = ['click', 'pointerdown', 'keydown', 'touchstart'];
+let lastActivitySyncAt = 0;
+function onUserActivity() {
+  const now = Date.now();
+  if (now - lastActivitySyncAt < ACTIVITY_SYNC_THROTTLE_MS) return;
+  lastActivitySyncAt = now;
+  syncTick();
 }
-// Backs off after ticks that find nothing to do, instead of polling at a
-// fixed cadence forever - two idle devices sitting on an unchanged schedule
-// for hours have no reason to keep checking every few seconds (reading that
-// often is most of sync's actual request volume - pushes only ever happen
-// right after a real edit). Any real change - a push, or a pull that
-// applied something - resets straight back to the fast interval, since
-// that's exactly when the other side is most likely to change something
-// again soon. See triggerImmediateSync below for the other half of this:
-// resetting the backoff the moment the app becomes active again, so a long
-// idle interval never shows up as felt staleness.
-async function runScheduledSyncTick() {
-  const changed = await syncTick();
-  currentPollIntervalMs = changed
-    ? MIN_POLL_INTERVAL_MS
-    : Math.min(currentPollIntervalMs * 1.5, MAX_POLL_INTERVAL_MS);
-  scheduleSyncTick(currentPollIntervalMs);
+// The moment the app becomes active - first load, a reload, or the tab
+// regaining focus after being backgrounded/suspended - always checks,
+// bypassing the throttle above: that's exactly when stale data is most
+// likely and least forgivable, not something to suppress just because some
+// unrelated click happened a couple of seconds earlier. Also resets the
+// throttle window so a click immediately afterward doesn't fire a second,
+// redundant check.
+function syncOnAppActive() {
+  lastActivitySyncAt = Date.now();
+  syncTick();
 }
+let syncLoopStarted = false;
 function startSyncLoop() {
-  if (syncTimer) return;
+  if (syncLoopStarted) return;
+  syncLoopStarted = true;
   lastPushedSnapshot = JSON.stringify(state.applicationData);
-  currentPollIntervalMs = MIN_POLL_INTERVAL_MS;
-  runScheduledSyncTick();
-}
-// Jumps the next tick to "now" and resets the backoff, instead of leaving
-// the app waiting out however long is left on a backed-off interval. Used
-// for exactly the moments a poll-interval approach otherwise handles
-// poorly: the tab was just backgrounded/suspended and is now active again,
-// so whatever's been missed should show up immediately, not up to a minute
-// later. A no-op before startSyncLoop has ever run (nothing to reschedule
-// yet - its own first tick already covers that case).
-function triggerImmediateSync() {
-  if (!syncTimer) return;
-  currentPollIntervalMs = MIN_POLL_INTERVAL_MS;
-  scheduleSyncTick(0);
+  syncOnAppActive();
+  ACTIVITY_EVENT_TYPES.forEach(type =>
+    document.addEventListener(type, onUserActivity, { passive: true })
+  );
 }
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') triggerImmediateSync();
+  if (document.visibilityState === 'visible') syncOnAppActive();
 });
-window.addEventListener('pageshow', triggerImmediateSync);
+window.addEventListener('pageshow', syncOnAppActive);
 
 function renderSyncPanel() {
   const setupBox = document.getElementById('sync-setup-box');
@@ -573,6 +566,5 @@ export {
   setSyncPairing,
   setSyncStatusUi,
   startSyncLoop,
-  syncTick,
-  triggerImmediateSync
+  syncTick
 };
