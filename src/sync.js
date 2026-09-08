@@ -575,6 +575,19 @@ function acknowledgeSyncCreatedCodes() {
   pendingCreatedCodes = null;
   renderSyncPanel();
 }
+// Copies text to the clipboard and reflects the outcome the same way
+// everywhere: the triggering button's label flips to "已複製！" on success,
+// or the shared sync-status line reports the failure. Every copy-to-
+// clipboard affordance in the sync UI - the two just-created codes, the
+// manager passcode reveal, the pre-unlink code copy - shares this shape.
+async function copyWithButtonFeedback(text, button) {
+  try {
+    await copyTransferText(text);
+    if (button) button.textContent = '已複製！';
+  } catch (error) {
+    setSyncStatusUi(`複製失敗：${error.message || error}`, true);
+  }
+}
 async function copySyncCreatedCode(which) {
   if (!pendingCreatedCodes) return;
   const text =
@@ -582,12 +595,7 @@ async function copySyncCreatedCode(which) {
   const button = document.getElementById(
     which === 'passcode' ? 'sync-created-passcode-copy' : 'sync-created-code-copy'
   );
-  try {
-    await copyTransferText(text);
-    if (button) button.textContent = '已複製！';
-  } catch (error) {
-    setSyncStatusUi(`複製失敗：${error.message || error}`, true);
-  }
+  await copyWithButtonFeedback(text, button);
 }
 // The manager-passcode-reveal fold in the active-sync box (for a device
 // that already has one) - unlike the viewer code in the old two-code
@@ -599,12 +607,7 @@ async function copySyncManagerPasscode() {
   const passcode = getSyncManagerPasscode();
   if (!passcode) return;
   const button = document.getElementById('sync-manager-passcode-copy');
-  try {
-    await copyTransferText(passcode);
-    if (button) button.textContent = '已複製！';
-  } catch (error) {
-    setSyncStatusUi(`複製失敗：${error.message || error}`, true);
-  }
+  await copyWithButtonFeedback(passcode, button);
 }
 function toggleSyncManagerPasscodeReveal() {
   const valueEl = document.getElementById('sync-manager-passcode-value');
@@ -1231,15 +1234,8 @@ function orbitSyncUnlink() {
           // Deliberately doesn't close the sheet (unlike the default
           // extraHandler) - copying is meant to happen *before* deciding
           // whether to actually confirm the unlink, not instead of it.
-          extraHandler: async () => {
-            const extraBtn = document.getElementById('editor-confirm-extra-btn');
-            try {
-              await copyTransferText(copyText);
-              if (extraBtn) extraBtn.textContent = '已複製！';
-            } catch (error) {
-              setSyncStatusUi(`複製失敗：${error.message || error}`, true);
-            }
-          }
+          extraHandler: () =>
+            copyWithButtonFeedback(copyText, document.getElementById('editor-confirm-extra-btn'))
         }
   );
   showEditorConfirmSheet();

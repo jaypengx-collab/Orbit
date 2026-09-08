@@ -18,7 +18,6 @@ import {
 } from './editor-core.js';
 import { getSyncKeepLocalStyle, isSyncViewer } from './sync.js';
 
-// ---- js/appearance.js ----
 function normalizeProAccent(value) {
   const color = String(value || '')
     .trim()

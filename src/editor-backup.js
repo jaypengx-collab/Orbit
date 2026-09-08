@@ -1,6 +1,7 @@
 // ---- src/editor-backup.js ----
 // Backup export/import: the v2 transfer format's encode/decode, settings
 // validation for imported data, and the editor's dirty-state tracking.
+import { WEEKDAYS_DISPLAY_ORDER, WEEKDAYS_INDEX_ORDER, WEEKDAY_LABELS } from './constants.js';
 import { state } from './state.js';
 import {
   applyProAccent,
@@ -42,7 +43,6 @@ import { renderEditorTeachers } from './editor-teachers.js';
 import { buildSchedule } from './schedule.js';
 import { isSyncConfigured, isSyncViewer, pushSyncSnapshot, setSyncStatusUi } from './sync.js';
 
-// ---- js/editor-backup.js ----
 // Reads the editor form and converts it into the app data shape.
 function collectEditorFormState() {
   const newDB = {},
@@ -308,7 +308,7 @@ function encodeTransferPayloadV2(data) {
     value[1] || '',
     value[2] || ''
   ]);
-  const weeklyDays = [0, 1, 2, 3, 4, 5, 6].map(day => (data.weeklySchedule || {})[day] || []);
+  const weeklyDays = WEEKDAYS_INDEX_ORDER.map(day => (data.weeklySchedule || {})[day] || []);
   const breakEntries = (data.breakTimes || []).map(item => [
     item.name || '',
     item.start || '',
@@ -359,7 +359,7 @@ function decodeTransferPayloadV2(array) {
     locationDB[key] = location;
   });
   const weeklySchedule = {};
-  [0, 1, 2, 3, 4, 5, 6].forEach(day => {
+  WEEKDAYS_INDEX_ORDER.forEach(day => {
     weeklySchedule[day] = (weeklyDays || [])[day] || [];
   });
   const breakTimes = (breakEntries || []).map(([name, start, end]) => ({ name, start, end }));
@@ -472,7 +472,7 @@ function normalizeSettingsData(raw, { requireMarker = false } = {}) {
   });
 
   const weeklySchedule = {};
-  [0, 1, 2, 3, 4, 5, 6].forEach(day => {
+  WEEKDAYS_INDEX_ORDER.forEach(day => {
     const row = source.weeklySchedule[day] || source.weeklySchedule[String(day)] || [];
     if (!Array.isArray(row)) {
       weeklySchedule[day] = [];
@@ -590,8 +590,7 @@ function pushDiff(lines, title, items) {
   items.forEach(item => lines.push(`- ${item}`));
 }
 function dayDiffLabel(day) {
-  const labels = { 0: '週日', 1: '週一', 2: '週二', 3: '週三', 4: '週四', 5: '週五', 6: '週六' };
-  return labels[day] || `第 ${day} 天`;
+  return WEEKDAY_LABELS[day] || `第 ${day} 天`;
 }
 // True when two identity-key arrays hold exactly the same multiset but in a
 // different sequence - a pure drag-reorder with no addition or removal.
@@ -678,7 +677,7 @@ function describeSettingsDiff(current, next, { isImport = false } = {}) {
   pushDiff(lines, '休息時段', breakItems);
 
   const scheduleItems = [];
-  [1, 2, 3, 4, 5, 6, 0].forEach(day => {
+  WEEKDAYS_DISPLAY_ORDER.forEach(day => {
     const beforeRow = (current.weeklySchedule || {})[day] || [];
     const afterRow = (next.weeklySchedule || {})[day] || [];
     const total = Math.max(beforeRow.length, afterRow.length);
@@ -856,7 +855,7 @@ function mergeImportedSettings(current, imported, preserveStyle = false) {
     merged.locationDB[targetKey] = value;
   });
   merged.weeklySchedule = {};
-  [0, 1, 2, 3, 4, 5, 6].forEach(day => {
+  WEEKDAYS_INDEX_ORDER.forEach(day => {
     const currentRow = current.weeklySchedule?.[day] || [],
       importedRow = imported.weeklySchedule?.[day] || [];
     const total = Math.max(currentRow.length, importedRow.length);

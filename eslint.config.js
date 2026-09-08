@@ -21,7 +21,12 @@ export default [
       }
     },
     rules: {
-      'no-unused-vars': 'warn'
+      'no-unused-vars': 'warn',
+      // src/ is all const/let ES modules now (testsim-runtime.js was the last
+      // `var` holdout). These two keep it that way rather than leaving it to
+      // whoever reviews the next patch.
+      'no-var': 'error',
+      'prefer-const': 'error'
     }
   },
   {

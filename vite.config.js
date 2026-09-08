@@ -85,9 +85,32 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
-    // Each test file gets its own jsdom global environment - required by
+    // Each test file gets its own module registry and document - required by
     // test/helpers/loadApp.js, which imports the real src/main.js module
     // graph once per file.
-    isolate: true
+    isolate: true,
+    setupFiles: ['./test/helpers/setupEnv.js'],
+    // Nearly every file boots the whole app through loadApp(), so building
+    // jsdom - not running assertions - dominated the suite. vmThreads builds
+    // it once per worker instead of once per file and keeps the per-file
+    // isolation above, taking the run from ~11.5s to ~5.5s.
+    //
+    // reset-app-data.test.js is the one file that can't use it: inside a VM
+    // realm jsdom's `location` is a non-configurable accessor, so the test
+    // can't stand in for the location.reload() that a factory reset ends on.
+    // It runs on the default pool, where that property is still replaceable.
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'app',
+          pool: 'vmThreads',
+          // Vitest's default excludes are replaced, not merged, so
+          // node_modules has to be restated alongside the one opt-out.
+          exclude: ['**/node_modules/**', '**/dist/**', 'test/reset-app-data.test.js']
+        }
+      },
+      { extends: true, test: { name: 'location', include: ['test/reset-app-data.test.js'] } }
+    ]
   }
 });

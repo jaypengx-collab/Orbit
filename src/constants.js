@@ -1,5 +1,5 @@
 // ---- src/constants.js ----
-// A handful of plain constants shared by data.js and appearance.js. Kept in
+// Plain constants shared across modules. Kept in
 // their own leaf module (imports nothing) rather than declared in either
 // one, because data.js and appearance.js import *from each other*
 // (data.js needs appearance.js's normalize* functions, appearance.js used
@@ -20,4 +20,39 @@
 const DEFAULT_STYLE_PRIMARY = '#6C5DD3';
 const DEFAULT_STYLE_SECONDARY = '#E8497B';
 
-export { DEFAULT_STYLE_PRIMARY, DEFAULT_STYLE_SECONDARY };
+// The zh-TW weekday names, and the two day orders the app walks days in.
+// Both used to be re-declared inline in every module that needed them (six
+// copies of the label table, thirteen of the arrays), which is exactly the
+// kind of thing that drifts one copy at a time. Keyed 0-6 to match
+// Date.getDay(), so a lookup is `WEEKDAY_LABELS[day]` wherever a day number
+// is already in hand.
+const WEEKDAY_LABELS = Object.freeze({
+  0: '週日',
+  1: '週一',
+  2: '週二',
+  3: '週三',
+  4: '週四',
+  5: '週五',
+  6: '週六'
+});
+
+// Mon-first: the order days are *presented* in (nav bar, editor rows, day
+// tabs) - Sunday reads as the end of the week here, not the start.
+const WEEKDAYS_DISPLAY_ORDER = Object.freeze([1, 2, 3, 4, 5, 6, 0]);
+
+// Sun-first: Date.getDay()'s own numbering, for storage and iteration where
+// order is irrelevant but matching the stored key layout is not.
+const WEEKDAYS_INDEX_ORDER = Object.freeze([0, 1, 2, 3, 4, 5, 6]);
+
+// Milliseconds in a day, for the date-difference arithmetic in dashboard.js
+// and schedule.js that would otherwise spell 86400000 out by hand.
+const MS_PER_DAY = 86400000;
+
+export {
+  DEFAULT_STYLE_PRIMARY,
+  DEFAULT_STYLE_SECONDARY,
+  WEEKDAY_LABELS,
+  WEEKDAYS_DISPLAY_ORDER,
+  WEEKDAYS_INDEX_ORDER,
+  MS_PER_DAY
+};

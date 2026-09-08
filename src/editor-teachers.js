@@ -1,5 +1,6 @@
 // ---- src/editor-teachers.js ----
 // The teacher/subject list editor and the day-by-day period assignment UI.
+import { WEEKDAYS_DISPLAY_ORDER, WEEKDAY_LABELS } from './constants.js';
 import { state } from './state.js';
 import { collectEditorFormState, dayDiffLabel, formatClassRef } from './editor-backup.js';
 import {
@@ -15,7 +16,6 @@ import {
 } from './editor-core.js';
 import { subjectHue } from './schedule.js';
 
-// ---- js/editor-teachers.js ----
 // Renders the editable teacher list.
 function renderEditorTeachers() {
   const container = document.getElementById('teacher-list');
@@ -103,9 +103,8 @@ function openAssignSheet(key) {
   subtitle.textContent = `選擇「${getEditorClassLabelFromDom(key) || key}」要放置的星期與節次`;
   grid.replaceChildren();
   assignmentDraft = { key, original: new Map(), draft: new Map() };
-  const labels = { 1: '週一', 2: '週二', 3: '週三', 4: '週四', 5: '週五', 6: '週六', 0: '週日' };
   const count = getEditorBellPeriodCount();
-  [1, 2, 3, 4, 5, 6, 0].forEach(day => {
+  WEEKDAYS_DISPLAY_ORDER.forEach(day => {
     for (let period = 0; period < count; period++) {
       const select = document
         .querySelector(`#schedule-grid .schedule-day-row[data-day="${day}"]`)
@@ -117,13 +116,13 @@ function openAssignSheet(key) {
     }
   });
   tabs.replaceChildren();
-  [1, 2, 3, 4, 5, 6, 0].forEach(day => {
+  WEEKDAYS_DISPLAY_ORDER.forEach(day => {
     const tab = document.createElement('button');
     tab.type = 'button';
     tab.className = 'assign-day-tab';
     tab.dataset.day = day;
     tab.setAttribute('role', 'tab');
-    tab.textContent = labels[day];
+    tab.textContent = WEEKDAY_LABELS[day];
     tab.onclick = () => renderAssignmentDay(day);
     tabs.appendChild(tab);
   });
@@ -148,15 +147,7 @@ function renderAssignmentDay(day) {
   row.className = 'assign-day-row';
   const label = document.createElement('div');
   label.className = 'assign-day-label';
-  label.textContent = {
-    1: '週一',
-    2: '週二',
-    3: '週三',
-    4: '週四',
-    5: '週五',
-    6: '週六',
-    0: '週日'
-  }[day];
+  label.textContent = WEEKDAY_LABELS[day];
   row.appendChild(label);
   const periods = document.createElement('div');
   periods.className = 'assign-periods';

@@ -2,6 +2,7 @@
 // The live "what's happening right now" dashboard: update()'s per-second
 // orchestration (calls schedule-calc.js for the math, then renders), plus
 // the toolbar/modal/countdown-card UI around it.
+import { MS_PER_DAY } from './constants.js';
 import { state } from './state.js';
 import { closeStylePanel } from './appearance.js';
 import {
@@ -32,7 +33,6 @@ import {
 } from './schedule.js';
 import { computeDashboardViewModel } from './schedule-calc.js';
 
-// ---- js/dashboard.js ----
 // Opens or closes the manual time simulation panel.
 // Modal and toolbar state is separate from saved schedule settings.
 async function toggleTestPanel() {
@@ -304,8 +304,8 @@ function updateExamCountdown() {
   const examEnd = toDate(event.endDate);
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const diffStart = Math.round((examStart - today) / 86400000);
-  const diffEnd = Math.round((examEnd - today) / 86400000);
+  const diffStart = Math.round((examStart - today) / MS_PER_DAY);
+  const diffEnd = Math.round((examEnd - today) / MS_PER_DAY);
   const isSingleDay = event.startDate === event.endDate;
 
   if (diffStart > 0) {
@@ -476,7 +476,7 @@ function updateExamCountdownIfDayChanged() {
 function update() {
   updateExamCountdownIfDayChanged();
   const dom = getDashboardDom();
-  let now = new Date();
+  const now = new Date();
   if (window.MANUALLY_TEST) {
     const h = Math.floor((window.TEST_TIME_SEC || 0) / 3600),
       m = Math.floor(((window.TEST_TIME_SEC || 0) % 3600) / 60),

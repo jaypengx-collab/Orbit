@@ -1,5 +1,6 @@
 // ---- src/editor-schedule.js ----
 // The weekly schedule grid and bell-time editor forms.
+import { WEEKDAYS_DISPLAY_ORDER, WEEKDAY_LABELS } from './constants.js';
 import { state } from './state.js';
 import { validateTimeIntervals } from './data.js';
 import {
@@ -24,19 +25,17 @@ import {
 import { pad2 } from './schedule.js';
 import { isSyncViewer, setSyncStatusUi } from './sync.js';
 
-// ---- js/editor-schedule.js ----
-// Renders the day-by-day period dropdowns in the editor.
-// Renders day-by-day period selectors from the saved or currently edited schedule.
+// Renders the day-by-day period selectors from the saved or currently edited
+// schedule.
 function renderEditorSchedule(weeklyScheduleOverride) {
   const container = document.getElementById('schedule-grid');
-  const dayLabels = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
   const entries = getEditorTeacherEntriesFromDom();
   const periodCount = getEditorBellPeriodCount();
   const weeklySchedule = weeklyScheduleOverride || state.applicationData.weeklySchedule;
 
   container.innerHTML = '';
 
-  [1, 2, 3, 4, 5, 6, 0].forEach(day => {
+  WEEKDAYS_DISPLAY_ORDER.forEach(day => {
     const row = document.createElement('div');
     const daySchedule = weeklySchedule[day] || [];
     let periodHtml = '';
@@ -56,7 +55,7 @@ function renderEditorSchedule(weeklyScheduleOverride) {
       periodHtml += `<select class="period-select" data-period="${i}"><option value="">-</option>${options}</select>`;
     }
 
-    row.innerHTML = `<div class="schedule-day-label">${dayLabels[day]}</div><div class="schedule-periods">${periodHtml}</div>`;
+    row.innerHTML = `<div class="schedule-day-label">${WEEKDAY_LABELS[day]}</div><div class="schedule-periods">${periodHtml}</div>`;
     container.appendChild(row);
   });
 }
