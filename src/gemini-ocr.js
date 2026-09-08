@@ -13,12 +13,58 @@ import { updateTeacherCardAvatar } from './editor-teachers.js';
 import { isSyncViewer } from './sync.js';
 
 // ---- js/gemini-ocr.js ----
+// What one submitted file may be. The three "decodable" image types are the
+// ones every browser can draw into a canvas, which is what lets them be
+// downscaled and re-encoded before upload (see encodeCanvasAsJpeg) - by far
+// the biggest lever on how long the request takes, since the upload is
+// often the slowest single leg of it on a phone.
+//
+// HEIC/HEIF and PDF are accepted too but deliberately never decoded here:
+// only Safari can put a HEIC in a canvas at all, and rasterizing a PDF would
+// mean shipping a PDF renderer to every user for a feature most of them use
+// once. Gemini reads both formats natively, so those are forwarded as-is,
+// size-capped instead of downscaled.
+const DECODABLE_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const PASSTHROUGH_TYPES = ['image/heic', 'image/heif', 'application/pdf'];
+// Mirrors the Worker's own MAX_FILE_BASE64_LENGTH, checked here first so an
+// over-large file is refused before it is uploaded rather than after.
+// base64 is 4 bytes per 3, hence the ratio.
+const MAX_PASSTHROUGH_BYTES = Math.floor((10_000_000 * 3) / 4);
+const MAX_FILES = 6;
+
+function fileKind(file) {
+  const type = (file?.type || '').toLowerCase();
+  if (DECODABLE_IMAGE_TYPES.includes(type)) return 'decodable';
+  if (PASSTHROUGH_TYPES.includes(type)) return 'passthrough';
+  // An iPhone share sheet and a few Android file pickers hand over a HEIC
+  // with an empty or generic MIME type, so fall back to the extension
+  // before rejecting something Gemini would have read perfectly well.
+  if (/\.(heic|heif)$/i.test(file?.name || '')) return 'passthrough';
+  if (/\.pdf$/i.test(file?.name || '')) return 'passthrough';
+  return '';
+}
+function passthroughMimeType(file) {
+  const type = (file?.type || '').toLowerCase();
+  if (PASSTHROUGH_TYPES.includes(type)) return type;
+  if (/\.pdf$/i.test(file?.name || '')) return 'application/pdf';
+  return 'image/heic';
+}
+
 // Loads a chosen photo into a plain canvas at its native colour (no destructive filtering),
-// capped to a sane max dimension so later steps stay fast.
-class ImagePreprocessor {
+// then hands back the source itself for anything the browser can't decode.
+class FilePreprocessor {
   async process(file) {
-    if (!(file instanceof Blob)) throw new Error('請選擇一張圖片。');
-    if (!file.type.startsWith('image/')) throw new Error('請選擇支援的圖片格式。');
+    if (!(file instanceof Blob)) throw new Error('請選擇一個檔案。');
+    const kind = fileKind(file);
+    if (!kind)
+      throw new Error(
+        `不支援的檔案格式：${file.name || '未命名檔案'}（可用 JPG／PNG／HEIC／PDF）。`
+      );
+    if (kind === 'passthrough') {
+      if (file.size > MAX_PASSTHROUGH_BYTES)
+        throw new Error(`檔案太大：${file.name || '未命名檔案'}，請改用較小的檔案。`);
+      return { kind, file, name: file.name || '', mimeType: passthroughMimeType(file) };
+    }
     const url = URL.createObjectURL(file);
     try {
       const image = await new Promise((resolve, reject) => {
@@ -33,7 +79,7 @@ class ImagePreprocessor {
       canvas.width = image.naturalWidth;
       canvas.height = image.naturalHeight;
       canvas.getContext('2d').drawImage(image, 0, 0);
-      return { canvas, width: canvas.width, height: canvas.height };
+      return { kind, file, name: file.name || '', canvas, mimeType: 'image/jpeg' };
     } finally {
       URL.revokeObjectURL(url);
     }
@@ -42,7 +88,7 @@ class ImagePreprocessor {
 
 // Downscales a canvas in place so the JPEG payload sent to the AI stays small; a no-op if
 // the canvas is already within bounds.
-function capCanvasDimension(canvas, maxDimension = 1600) {
+function capCanvasDimension(canvas, maxDimension = UPLOAD_MAX_DIMENSION) {
   const scale = Math.min(1, maxDimension / Math.max(canvas.width, canvas.height));
   if (scale >= 1) return canvas;
   const scaled = document.createElement('canvas');
@@ -50,6 +96,62 @@ function capCanvasDimension(canvas, maxDimension = 1600) {
   scaled.height = Math.max(1, Math.round(canvas.height * scale));
   scaled.getContext('2d').drawImage(canvas, 0, 0, scaled.width, scaled.height);
   return scaled;
+}
+
+// 1280px at quality 0.72, down from 1600px at 0.9. A timetable's text is
+// still comfortably legible at this size (it is a grid of large-ish
+// characters, not fine print), and the file it produces is roughly a third
+// of the size - which comes straight off the upload, the leg of this
+// request that most often dominates on a phone. Sending several files at
+// once makes that saving matter several times over.
+const UPLOAD_MAX_DIMENSION = 1280;
+const UPLOAD_JPEG_QUALITY = 0.72;
+
+// canvas.toBlob + FileReader rather than canvas.toDataURL. toDataURL runs
+// the JPEG encoder synchronously on the main thread and hands back a string
+// the whole document has to hold at once; on a large photo that is a
+// visible freeze right at the moment the user pressed the button, which
+// reads as the app having hung rather than as work in progress. Both steps
+// here are asynchronous, so the UI keeps painting its status line
+// throughout.
+function encodeCanvasAsJpeg(canvas) {
+  return new Promise((resolve, reject) => {
+    if (typeof canvas.toBlob !== 'function') {
+      // jsdom and very old browsers - fall back to the synchronous path
+      // rather than failing outright.
+      resolve(canvas.toDataURL('image/jpeg', UPLOAD_JPEG_QUALITY).replace(/^data:[^,]*,/, ''));
+      return;
+    }
+    canvas.toBlob(
+      blob => {
+        if (!blob) {
+          reject(new Error('圖片編碼失敗，請換一張再試。'));
+          return;
+        }
+        resolve(blobToBase64(blob));
+      },
+      'image/jpeg',
+      UPLOAD_JPEG_QUALITY
+    );
+  });
+}
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || '').replace(/^data:[^,]*,/, ''));
+    reader.onerror = () => reject(new Error('檔案讀取失敗，請再試一次。'));
+    reader.readAsDataURL(blob);
+  });
+}
+// One submitted file -> one Gemini inline_data part.
+async function encodeSourceForUpload(source) {
+  if (source.kind === 'passthrough') {
+    return { mime_type: source.mimeType, data: await blobToBase64(source.file) };
+  }
+  return {
+    mime_type: 'image/jpeg',
+    data: await encodeCanvasAsJpeg(capCanvasDimension(source.canvas))
+  };
 }
 
 // True while a Gemini OCR request is in flight; the editor sheet checks this to block
@@ -70,21 +172,61 @@ function isGeminiProxyConfigured() {
   return !!GEMINI_PROXY_URL;
 }
 
+// Fired the moment the user reaches for the file picker, long before there
+// is anything to send: it pays the DNS lookup, TLS handshake and the
+// Worker's own first-request initialization while the user is still
+// choosing a file, instead of on the critical path afterwards. The Worker
+// answers a GET here with a bare {ok:true} and charges nothing against the
+// rate limit (see handleGeminiRequest).
+//
+// Best-effort in every direction - a failure means the real request simply
+// pays those costs itself, which is exactly what used to happen every time,
+// so there is nothing to report and nothing to retry. Rate-limited to one
+// per minute so repeatedly opening and cancelling the picker can't turn
+// into a stream of pings.
+const WARM_UP_INTERVAL_MS = 60_000;
+let lastWarmUpAt = 0;
+function warmUpGeminiProxy() {
+  if (!GEMINI_PROXY_URL || !navigator.onLine) return;
+  const now = Date.now();
+  if (now - lastWarmUpAt < WARM_UP_INTERVAL_MS) return;
+  lastWarmUpAt = now;
+  fetch(GEMINI_PROXY_URL, { method: 'GET', cache: 'no-store', keepalive: true }).catch(() => {
+    // Never surfaced: this is an optimization, not a precondition.
+  });
+}
+
 class AIVisionProcessor {
   constructor() {
-    // Ordered for the best balance of accuracy and speed on this structured-extraction task:
-    // gemini-3.6-flash (newest GA, strong accuracy + token efficiency) is tried first, then
-    // gemini-3.7-flash (strong general reasoning) and gemini-2.5-flash (proven, stable) as
-    // capable fallbacks, with the flash-lite variant last since it favors speed over accuracy.
+    // Fastest first, most capable last - the reverse of how this list used
+    // to be ordered. The old order optimized purely for accuracy on the
+    // first attempt, and the flash-lite model at the end was only ever
+    // reached if every model above it was returning HTTP errors, which
+    // essentially never happens; in practice every user paid the largest
+    // model's latency on every import.
+    //
+    // The order is safe to flip because the fallback below is no longer
+    // driven by transport errors alone: a response that comes back
+    // structurally unusable (see the `validate` option) also escalates to
+    // the next model. So the common case - a clear, ordinary timetable - is
+    // answered by the quickest model, and a photo the quick model can't
+    // make sense of still ends up in front of the strongest one, at the
+    // cost of one extra round trip in exactly the cases that need it.
     this.geminiModels = [
+      'gemini-3.5-flash-lite',
       'gemini-3.6-flash',
       'gemini-3.7-flash',
-      'gemini-2.5-flash',
-      'gemini-3.5-flash-lite'
+      'gemini-2.5-flash'
     ];
   }
 
-  async recognizeSchedule(canvas, onProgress) {
+  // `files` is the encoded {mime_type, data} part list (see
+  // encodeSourceForUpload) - all of them go up in one request so the model
+  // reads them as one timetable, which is the entire point of accepting
+  // more than one. `validate` is optional and, when given, decides whether
+  // a parsed response is good enough to stop at or worth escalating to the
+  // next model for.
+  async recognizeSchedule(files, onProgress, { validate } = {}) {
     const report = message => {
       try {
         onProgress?.(message);
@@ -94,25 +236,28 @@ class AIVisionProcessor {
     };
     if (!GEMINI_PROXY_URL) throw new Error('AI 匯入功能尚未設定，請聯絡課表管理者。');
     if (!navigator.onLine) throw new Error('目前沒有網路連線，AI 匯入暫時無法使用。');
-
-    report('正在壓縮並編碼圖片…');
-    const base64Data = canvas.toDataURL('image/jpeg', 0.9).replace(/^data:image\/jpeg;base64,/, '');
+    const parts = Array.isArray(files) ? files : [files];
+    if (!parts.length) throw new Error('請先選擇檔案。');
 
     // The prompt text and generation config are NOT sent from here - the
     // proxy (cloudflare-worker/orbit-worker.js's /gemini path) owns both and builds
-    // the full Gemini request itself from just {model, image}. That's
+    // the full Gemini request itself from just {model, files}. That's
     // deliberate: it means the proxy can only ever be used to run this
-    // app's own fixed timetable-extraction prompt against a submitted
-    // image, never as a generic pass-through for arbitrary prompts - see
+    // app's own fixed timetable-extraction prompt against submitted
+    // files, never as a generic pass-through for arbitrary prompts - see
     // README's security notes on the AI proxy.
     let lastError = null;
+    let lastRejected = null;
     for (const model of this.geminiModels) {
       report(`正在請求 AI 模型（${model}）分析課表…`);
-      const requestBody = JSON.stringify({
-        model,
-        image: { mime_type: 'image/jpeg', data: base64Data }
-      });
+      const requestBody = JSON.stringify({ model, files: parts });
       let response;
+      // Split into three marks rather than one so a slow import can be
+      // attributed instead of guessed at: if GeminiCall is quick and
+      // GeminiParse is slow, the page is stalling on this file's own
+      // parsing, not on the network.
+      const callLabel = `GeminiCall:${model}`;
+      console.time(callLabel);
       try {
         response = await fetch(GEMINI_PROXY_URL, {
           method: 'POST',
@@ -123,10 +268,28 @@ class AIVisionProcessor {
         lastError = new Error(`無法連線至 AI 服務：${networkError.message}`);
         report(`連線失敗，準備改用下一個模型…`);
         continue;
+      } finally {
+        console.timeEnd(callLabel);
       }
       if (response.ok) {
         report(`AI 已回應（使用模型：${model}），正在解析辨識結果…`);
-        return { candidate: this.parseResponse(await response.json()), modelUsed: model };
+        const parseLabel = `GeminiParse:${model}`;
+        console.time(parseLabel);
+        let candidate;
+        try {
+          candidate = this.parseResponse(await response.json());
+        } finally {
+          console.timeEnd(parseLabel);
+        }
+        const verdict = validate ? validate(candidate) : { valid: true };
+        if (verdict.valid) return { candidate, modelUsed: model };
+        // Structurally unusable rather than merely imperfect - worth one
+        // more round trip against a stronger model, but the result is kept
+        // so the last model's attempt is still what the user sees (with its
+        // own validation errors) if every model comes back the same way.
+        lastRejected = { candidate, modelUsed: model };
+        report(`模型（${model}）的結果不完整，改用更強的模型再試一次…`);
+        continue;
       }
 
       const errorJson = await response.json().catch(() => ({}));
@@ -148,6 +311,7 @@ class AIVisionProcessor {
       report(`模型（${model}）暫時無法使用（${response.status}：${message}），準備改用下一個模型…`);
     }
 
+    if (lastRejected) return lastRejected;
     throw lastError || new Error('AI 辨識請求失敗：沒有可用的模型。');
   }
 
@@ -561,31 +725,52 @@ class ImportPreview {
   }
 }
 
-// A rough, hand-picked estimate (typical case: the first model in the
-// fallback list succeeds on the first try) - not measured from real usage
-// data, since this app has no telemetry. Purely cosmetic: it's there so the
-// wait has a visible countdown instead of a static spinner, which makes an
-// unavoidable several-second wait feel shorter. Running noticeably over
-// this estimate (a retried model, a slow connection) just degrades to an
-// honest "taking longer than usual" message rather than a wrong countdown.
-const ESTIMATED_RECOGNITION_SECONDS = 15;
-function startEtaTimer(etaElement) {
+// A static estimate, shown once and left alone - the matchmaking-queue
+// pattern, not a countdown. The countdown this replaces re-rendered a
+// shrinking number every second, which turned an unavoidable few-second wait
+// into something to watch, drew the eye to precisely the moment the estimate
+// was most likely to be wrong, and (when it hit zero and the request had not
+// finished) made the app look broken rather than busy. One unchanging
+// sentence sets the expectation and then stops competing for attention.
+//
+// The estimate itself is derived rather than fixed: the number of files
+// genuinely changes how long this takes - each one is separately uploaded
+// and separately read - so quoting the same figure for a single screenshot
+// and for four is just being wrong on purpose. Still hand-picked rather
+// than measured, since this app has no telemetry; it is deliberately a
+// little pessimistic, because an import that beats its estimate costs
+// nothing and one that overruns it is the case this whole element exists to
+// avoid.
+const ETA_BASE_SECONDS = 5;
+const ETA_PER_EXTRA_FILE_SECONDS = 3;
+// How far past the estimate to run before admitting it - generous enough
+// that an ordinary bit of variance never trips it, tight enough that a
+// genuinely stuck request doesn't sit under a confident-looking estimate
+// forever. A model fallback (see recognizeSchedule) is the usual reason.
+const ETA_OVERRUN_FACTOR = 1.8;
+function estimateRecognitionSeconds(fileCount) {
+  return ETA_BASE_SECONDS + Math.max(0, fileCount - 1) * ETA_PER_EXTRA_FILE_SECONDS;
+}
+function startEtaTimer(etaElement, fileCount = 1) {
   if (!etaElement) return () => {};
-  const startedAt = Date.now();
-  const tick = () => {
-    const elapsedSeconds = Math.round((Date.now() - startedAt) / 1000);
-    const remaining = ESTIMATED_RECOGNITION_SECONDS - elapsedSeconds;
-    etaElement.textContent =
-      remaining > 0
-        ? `已等待 ${elapsedSeconds} 秒，預估還需約 ${remaining} 秒…`
-        : `已等待 ${elapsedSeconds} 秒，比預期久一點，請再稍候…`;
-  };
-  tick();
-  const timer = setInterval(tick, 1000);
+  const estimate = estimateRecognitionSeconds(fileCount);
+  etaElement.textContent = `預估等待時間 約 ${estimate} 秒`;
+  const timer = setTimeout(
+    () => {
+      etaElement.textContent = '比預估久一點，仍在辨識中…';
+    },
+    Math.round(estimate * ETA_OVERRUN_FACTOR * 1000)
+  );
   return () => {
-    clearInterval(timer);
+    clearTimeout(timer);
     etaElement.textContent = '';
   };
+}
+
+function describeSelection(sources) {
+  if (!sources.length) return '尚未選擇檔案';
+  if (sources.length === 1) return sources[0].name || '已選擇 1 個檔案';
+  return `已選擇 ${sources.length} 個檔案：${sources.map(source => source.name || '未命名').join('、')}`;
 }
 
 function mountOCRImporter({
@@ -594,31 +779,82 @@ function mountOCRImporter({
   imageLabel,
   etaElement,
   imagePreview,
+  filenameElement,
   status,
   result,
   onImport
 }) {
-  const preprocessor = new ImagePreprocessor();
+  const preprocessor = new FilePreprocessor();
   const validator = new DataValidator();
   const aiProcessor = new AIVisionProcessor();
   const preview = new ImportPreview(result, onImport);
-  let source = null;
+  let sources = [];
+  // Object URLs for the thumbnails - revoked on the next selection rather
+  // than on the same tick, since the <img> elements are still using them.
+  let previewUrls = [];
 
-  async function loadFile(file) {
+  function renderPreviews() {
+    const wrap = imagePreview?.parentElement;
+    previewUrls.forEach(url => URL.revokeObjectURL(url));
+    previewUrls = [];
+    if (!wrap) return;
+    // The single <img> from the markup is the template for the first
+    // thumbnail; any extras are cloned from it so they inherit its styling.
+    wrap.querySelectorAll('.ocr-import-image-preview').forEach((node, index) => {
+      if (index > 0) node.remove();
+    });
+    const thumbnails = sources.filter(source => source.kind === 'decodable');
+    wrap.classList.toggle('has-image', thumbnails.length > 0);
+    imagePreview.hidden = thumbnails.length === 0;
+    thumbnails.forEach((source, index) => {
+      const url = URL.createObjectURL(source.file);
+      previewUrls.push(url);
+      const node = index === 0 ? imagePreview : imagePreview.cloneNode(false);
+      node.hidden = false;
+      node.src = url;
+      if (index > 0) wrap.appendChild(node);
+    });
+  }
+
+  async function loadFiles(fileList) {
+    const chosen = Array.from(fileList || []);
+    sources = [];
+    if (!chosen.length) {
+      renderPreviews();
+      if (filenameElement) filenameElement.textContent = describeSelection(sources);
+      runButton.disabled = true;
+      return;
+    }
+    if (chosen.length > MAX_FILES) {
+      status(`一次最多 ${MAX_FILES} 個檔案，請減少後再試。`, true);
+      runButton.disabled = true;
+      return;
+    }
     try {
-      source = await preprocessor.process(file);
-      imagePreview.src = URL.createObjectURL(file);
-      imagePreview.hidden = false;
-      imagePreview.parentElement?.classList.add('has-image');
+      // Sequential, not Promise.all: decoding several full-resolution
+      // photos at once is the one thing here that can genuinely exhaust
+      // memory on an older phone, and the files are small enough
+      // individually that there is nothing to win by overlapping them.
+      for (const file of chosen) sources.push(await preprocessor.process(file));
+      renderPreviews();
+      if (filenameElement) filenameElement.textContent = describeSelection(sources);
       runButton.disabled = false;
-      status('已載入圖片，點擊匯入讓 AI 自動判讀課表。');
+      status(
+        sources.length > 1
+          ? `已載入 ${sources.length} 個檔案，AI 會一起判讀它們（後面的檔案可以補充或修正前面的）。`
+          : '已載入檔案，點擊匯入讓 AI 自動判讀課表。'
+      );
     } catch (error) {
+      sources = [];
+      renderPreviews();
+      if (filenameElement) filenameElement.textContent = describeSelection(sources);
+      runButton.disabled = true;
       status(error.message, true);
     }
   }
 
   runButton.addEventListener('click', async () => {
-    if (!source) return;
+    if (!sources.length) return;
     // Belt-and-suspenders, same as saveEditor()/requestTransferAction(): the
     // editor UI already disables this button for a viewer device (see
     // styles.css's .sync-viewer-locked), but that's a CSS/pointer-events
@@ -636,7 +872,7 @@ function mountOCRImporter({
       return;
     }
     runButton.disabled = true;
-    // Also locks the "選擇圖片" control itself - picking a different photo
+    // Also locks the "選擇檔案" control itself - picking different files
     // mid-recognition would abandon the in-flight request with no way to
     // cancel it, and the file input's disabled state is what actually stops
     // its <label> from opening the file picker (a disabled control's label
@@ -644,13 +880,24 @@ function mountOCRImporter({
     if (imageInput) imageInput.disabled = true;
     imageLabel?.classList.add('is-disabled');
     state.isOcrProcessing = true;
-    const stopEta = startEtaTimer(etaElement);
+    const stopEta = startEtaTimer(etaElement, sources.length);
     try {
-      const workingCanvas = capCanvasDimension(source.canvas, 1600);
+      status(sources.length > 1 ? `準備 ${sources.length} 個檔案中…` : '準備檔案中…');
+      console.time('GeminiEncode');
+      let files;
+      try {
+        files = await Promise.all(sources.map(encodeSourceForUpload));
+      } finally {
+        console.timeEnd('GeminiEncode');
+      }
 
-      status('準備圖片中…');
-      const { candidate, modelUsed } = await aiProcessor.recognizeSchedule(workingCanvas, message =>
-        status(message)
+      const { candidate, modelUsed } = await aiProcessor.recognizeSchedule(
+        files,
+        message => status(message),
+        // Lets a structurally unusable answer escalate to a stronger model
+        // instead of being shown to the user as a broken preview - the same
+        // check the preview itself is about to run.
+        { validate: input => validator.validate(input) }
       );
       status('正在驗證課表資料…');
       const validation = validator.validate(candidate);
@@ -672,10 +919,10 @@ function mountOCRImporter({
     }
   });
 
-  return { loadFile };
+  return { loadFiles };
 }
 
-// Load the importer only when the image-import control is first used.
+// Load the importer only when the file-import control is first used.
 let ocrImporterPromise;
 let ocrImporterController;
 function activateOCRImporter() {
@@ -695,6 +942,7 @@ function activateOCRImporter() {
       imageLabel,
       etaElement,
       imagePreview,
+      filenameElement: document.getElementById('ocr-import-filename'),
       result,
       onImport: data => {
         try {
@@ -739,13 +987,24 @@ function activateOCRImporter() {
   return ocrImporterPromise;
 }
 const ocrImageInput = document.getElementById('ocr-import-image');
-const ocrImageFilename = document.getElementById('ocr-import-filename');
-ocrImageInput?.addEventListener('pointerdown', activateOCRImporter, { once: true });
+// Reaching for the picker is the earliest honest signal that a request is
+// coming, and the gap between it and the request is exactly the free time a
+// connection warm-up needs (see warmUpGeminiProxy). Not `once`, unlike the
+// importer's own lazy load: a user who opens the picker, cancels, and comes
+// back a few minutes later needs the connection warmed again, and the
+// function rate-limits itself.
+ocrImageInput?.addEventListener('pointerdown', () => {
+  activateOCRImporter();
+  warmUpGeminiProxy();
+});
 ocrImageInput?.addEventListener('change', async event => {
-  const file = event.target.files?.[0];
-  if (ocrImageFilename) ocrImageFilename.textContent = file?.name || '尚未選擇檔案';
   const controller = ocrImporterController || (await activateOCRImporter());
-  await controller?.loadFile(file);
+  await controller?.loadFiles(event.target.files);
 });
 
-export { AIVisionProcessor, isGeminiProxyConfigured };
+export {
+  AIVisionProcessor,
+  estimateRecognitionSeconds,
+  isGeminiProxyConfigured,
+  warmUpGeminiProxy
+};

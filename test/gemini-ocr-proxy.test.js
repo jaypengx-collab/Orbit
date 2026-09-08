@@ -10,20 +10,25 @@ const PROXY_URL = 'https://example-region-demo-project.cloudfunctions.net/gemini
 
 let AIVisionProcessor;
 let isGeminiProxyConfigured;
+let warmUpGeminiProxy;
 
 beforeAll(async () => {
   vi.stubEnv('VITE_ORBIT_GEMINI_PROXY_URL', PROXY_URL);
   seedLocalStorage();
   await loadApp();
-  ({ AIVisionProcessor, isGeminiProxyConfigured } = await import('../src/gemini-ocr.js'));
+  ({ AIVisionProcessor, isGeminiProxyConfigured, warmUpGeminiProxy } =
+    await import('../src/gemini-ocr.js'));
 });
 
 afterAll(() => {
   vi.unstubAllEnvs();
 });
 
-function fakeCanvas() {
-  return { toDataURL: () => 'data:image/jpeg;base64,AAAA' };
+// The encoded inline_data parts recognizeSchedule() takes now - the
+// canvas/file preprocessing that produces them happens before this call and
+// is the importer's job, not the processor's.
+function fakeFiles(count = 1) {
+  return Array.from({ length: count }, () => ({ mime_type: 'image/jpeg', data: 'AAAA' }));
 }
 
 function fakeGeminiResponse(json) {
@@ -40,33 +45,96 @@ describe('AIVisionProcessor.recognizeSchedule with a configured proxy', () => {
     expect(isGeminiProxyConfigured()).toBe(true);
   });
 
-  it('does not require an API key', async () => {
+  // Fastest model first, most capable last - see the comment on
+  // AIVisionProcessor's own model list for why that order is safe now.
+  it('does not require an API key, and reaches for the quickest model first', async () => {
     const processor = new AIVisionProcessor();
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => fakeGeminiResponse({ teacherDB: {}, weeklySchedule: {} }))
     );
-    await expect(processor.recognizeSchedule(fakeCanvas(), () => {})).resolves.toMatchObject({
-      modelUsed: 'gemini-3.6-flash'
+    await expect(processor.recognizeSchedule(fakeFiles(), () => {})).resolves.toMatchObject({
+      modelUsed: 'gemini-3.5-flash-lite'
     });
     vi.unstubAllGlobals();
   });
 
-  it("sends only {model, image} - the prompt and generation config are the proxy's job, not the client's", async () => {
+  it("sends only {model, files} - the prompt and generation config are the proxy's job, not the client's", async () => {
     const processor = new AIVisionProcessor();
     const fetchMock = vi.fn(async (url, options) => {
       expect(url).toBe(PROXY_URL);
       const body = JSON.parse(options.body);
-      expect(body.model).toBe('gemini-3.6-flash');
-      expect(body.image).toMatchObject({ mime_type: 'image/jpeg' });
-      expect(typeof body.image.data).toBe('string');
+      expect(body.model).toBe('gemini-3.5-flash-lite');
+      expect(body.files).toHaveLength(1);
+      expect(body.files[0]).toMatchObject({ mime_type: 'image/jpeg' });
+      expect(typeof body.files[0].data).toBe('string');
       expect(body.contents).toBeUndefined();
       expect(body.generationConfig).toBeUndefined();
       return fakeGeminiResponse({ teacherDB: {}, weeklySchedule: {} });
     });
     vi.stubGlobal('fetch', fetchMock);
-    await processor.recognizeSchedule(fakeCanvas(), () => {});
+    await processor.recognizeSchedule(fakeFiles(), () => {});
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
+  // The whole point of accepting more than one file: they have to reach the
+  // model as one request, or a screenshot cannot fill in the names a
+  // timetable photo left as placeholders.
+  it('sends every chosen file in a single request, in the order they were picked', async () => {
+    const processor = new AIVisionProcessor();
+    const fetchMock = vi.fn(async (url, options) => {
+      const body = JSON.parse(options.body);
+      expect(body.files.map(file => file.data)).toEqual(['one', 'two', 'three']);
+      return fakeGeminiResponse({ teacherDB: {}, weeklySchedule: {} });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    await processor.recognizeSchedule(
+      ['one', 'two', 'three'].map(data => ({ mime_type: 'image/jpeg', data })),
+      () => {}
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
+  // A structurally unusable answer is no longer the end of the road: it
+  // escalates to the next, stronger model instead of being shown to the
+  // user as a broken preview.
+  it('escalates to the next model when the quick one returns something unusable', async () => {
+    const processor = new AIVisionProcessor();
+    const fetchMock = vi.fn(async (url, options) =>
+      JSON.parse(options.body).model === 'gemini-3.5-flash-lite'
+        ? fakeGeminiResponse({ teacherDB: {}, weeklySchedule: {} })
+        : fakeGeminiResponse({
+            teacherDB: { 國文: ['國文', '陳老師', 'A101'] },
+            weeklySchedule: { 1: ['國文'] },
+            bellTimes: [{ start: '08:10', end: '09:00' }]
+          })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const result = await processor.recognizeSchedule(fakeFiles(), () => {}, {
+      validate: candidate =>
+        Object.keys(candidate.teacherDB || {}).length
+          ? { valid: true }
+          : { valid: false, errors: ['沒有辨識到課程或倒數日期。'] }
+    });
+    expect(result.modelUsed).toBe('gemini-3.6-flash');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    vi.unstubAllGlobals();
+  });
+
+  // ...but only so far. When no model can make sense of it, the user still
+  // gets the last attempt (and its validation errors) to correct by hand,
+  // rather than a bare failure.
+  it('falls back to the last attempt when no model produces a usable result', async () => {
+    const processor = new AIVisionProcessor();
+    const fetchMock = vi.fn(async () => fakeGeminiResponse({ teacherDB: {}, weeklySchedule: {} }));
+    vi.stubGlobal('fetch', fetchMock);
+    const result = await processor.recognizeSchedule(fakeFiles(), () => {}, {
+      validate: () => ({ valid: false, errors: ['沒有辨識到課程或倒數日期。'] })
+    });
+    expect(result.modelUsed).toBe('gemini-2.5-flash'); // the last one tried
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     vi.unstubAllGlobals();
   });
 
@@ -79,7 +147,7 @@ describe('AIVisionProcessor.recognizeSchedule with a configured proxy', () => {
       json: async () => ({ error: { message: '請求過於頻繁，請稍後再試。' } })
     }));
     vi.stubGlobal('fetch', fetchMock);
-    await expect(processor.recognizeSchedule(fakeCanvas(), () => {})).rejects.toThrow(
+    await expect(processor.recognizeSchedule(fakeFiles(), () => {})).rejects.toThrow(
       '請求過於頻繁，請稍後再試。'
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -91,9 +159,47 @@ describe('AIVisionProcessor.recognizeSchedule with a configured proxy', () => {
     const processor = new AIVisionProcessor();
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    await expect(processor.recognizeSchedule(fakeCanvas(), () => {})).rejects.toThrow(
+    await expect(processor.recognizeSchedule(fakeFiles(), () => {})).rejects.toThrow(
       /沒有網路連線/
     );
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+  });
+});
+
+// Sent while the user is still choosing a file, so DNS/TLS/Worker startup
+// are paid for out of time they were going to spend anyway rather than out
+// of the wait after they press import.
+describe('the proxy connection is warmed up before there is anything to send', () => {
+  it('pings the proxy with a GET carrying no file content', () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true }) }));
+    vi.stubGlobal('fetch', fetchMock);
+    warmUpGeminiProxy();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, options] = fetchMock.mock.calls[0];
+    expect(url).toBe(PROXY_URL);
+    expect(options.method).toBe('GET');
+    expect(options.body).toBeUndefined();
+    vi.unstubAllGlobals();
+  });
+
+  it('does not ping again straight away, so reopening the picker is not a stream of pings', () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true }) }));
+    vi.stubGlobal('fetch', fetchMock);
+    warmUpGeminiProxy(); // may or may not fire, depending on what ran before
+    fetchMock.mockClear();
+    warmUpGeminiProxy();
+    warmUpGeminiProxy();
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it('stays silent while offline, rather than failing in the background', () => {
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    warmUpGeminiProxy();
     expect(fetchMock).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
     Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });

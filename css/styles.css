@@ -1017,13 +1017,22 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .ocr-import-file-input{display:none}
 .ocr-import-file-row{display:flex;align-items:center;gap:10px}
 .ocr-import-file-row .settings-transfer-btn{width:auto;flex:0 0 auto;min-height:38px;display:inline-flex;align-items:center;justify-content:center;text-align:center;font-size:12.5px;padding:0 18px}
-.ocr-import-filename{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+.ocr-import-filename{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;font-size:11.5px;color:var(--sub)}
 #ocr-import-detect{width:100%}
 #ocr-import-detect:disabled{opacity:.45;filter:grayscale(.4);cursor:not-allowed}
 #ocr-import-image-label.is-disabled{opacity:.45;filter:grayscale(.4);cursor:not-allowed;pointer-events:none}
-.ocr-import-eta{min-height:16px;font-size:10.5px;line-height:1.3;color:var(--sub)}
-.ocr-import-image-wrap{position:relative;flex:0 0 auto;display:none;align-items:center;justify-content:center;width:36px;height:36px;border:1px solid var(--bd);border-radius:9px;background:rgba(0,0,0,.18);overflow:hidden}
+/* A single static line (see startEtaTimer) rather than a per-second
+   countdown, so it takes no reserved height while there is nothing to
+   estimate. */
+.ocr-import-eta{font-size:10.5px;line-height:1.3;color:var(--sub)}
+.ocr-import-eta:empty{display:none}
+/* One thumbnail per decodable file picked, side by side - the box grows
+   with the selection rather than only ever showing the first, so "I meant
+   to send two of these" is visible before the request goes out. Not a
+   fixed-width box any more for the same reason. */
+.ocr-import-image-wrap{position:relative;flex:0 0 auto;display:none;align-items:center;justify-content:center;gap:4px;height:36px;border:1px solid var(--bd);border-radius:9px;background:rgba(0,0,0,.18);overflow:hidden;padding:2px}
 .ocr-import-image-wrap.has-image{display:flex}
+.ocr-import-image-wrap .ocr-import-image-preview{width:30px;height:30px;border-radius:7px;flex:0 0 auto}
 .ocr-import-image-preview{display:block;width:100%;height:100%;object-fit:cover;background:transparent;-webkit-user-select:none;user-select:none}
 .ocr-import-image-preview[hidden]{display:none}
 .ocr-import-result{display:flex;flex-direction:column;gap:12px;max-height:none;overflow:visible;margin-top:6px}

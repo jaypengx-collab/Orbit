@@ -385,18 +385,18 @@
     </div>
   </details>
   <div class="ocr-import-box" id="ocr-import-box">
-    <div class="ocr-import-heading">圖片匯入</div>
-    <div class="editor-hint-body">選擇課表照片後，AI 會自動判讀整張照片中的課表內容，直接產出課程、教師與節次資料。</div>
+    <div class="ocr-import-heading">AI 匯入</div>
+    <div class="editor-hint-body">選擇課表照片、螢幕截圖或 PDF 後，AI 會自動判讀其中的課表內容，直接產出課程、教師與節次資料。可以一次選多個檔案，AI 會把它們當成同一份課表一起讀 —— 例如先給課表照片，再給選課系統的截圖來補上正確的科目與老師名稱。</div>
     <div class="ocr-import-file-row">
       <label id="ocr-import-image-label" class="settings-transfer-btn" for="ocr-import-image">
-        選擇圖片
+        選擇檔案
       </label>
       <div class="ocr-import-image-wrap" id="ocr-import-image-wrap">
-        <img id="ocr-import-image-preview" class="ocr-import-image-preview" alt="圖片預覽" hidden>
+        <img id="ocr-import-image-preview" class="ocr-import-image-preview" alt="檔案預覽" hidden>
       </div>
       <div id="ocr-import-filename" class="ocr-import-filename">尚未選擇檔案</div>
     </div>
-    <input id="ocr-import-image" class="ocr-import-file-input" type="file" accept="image/*">
+    <input id="ocr-import-image" class="ocr-import-file-input" type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf,.heic,.heif,.pdf">
     <button type="button" id="ocr-import-detect" class="settings-transfer-btn primary" disabled>匯入</button>
     <div id="ocr-import-status" class="settings-transfer-status" role="status"></div>
     <div id="ocr-import-eta" class="ocr-import-eta" role="status"></div>

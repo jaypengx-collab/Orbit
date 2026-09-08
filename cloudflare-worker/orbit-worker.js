@@ -122,7 +122,9 @@ async function isRateLimited(env, ip, feature, limit) {
 // Exact copy of the prompt that used to live in src/gemini-ocr.js's
 // AIVisionProcessor.buildPrompt() - kept here now instead, since the whole
 // point of moving it server-side is that the client no longer sends it.
-const GEMINI_PROMPT = `Extract the class timetable from this photo and return it as a single JSON object. Focus on the timetable only — ignore background, margins, decorations, and unrelated content; it may only occupy part of the frame.
+const GEMINI_PROMPT = `Extract the class timetable from the attached file(s) and return it as a single JSON object. Focus on the timetable only — ignore background, margins, decorations, and unrelated content; it may only occupy part of the frame.
+
+When more than one file is attached, they describe ONE timetable together, not several: read all of them first, then answer once. They are given in the order the user chose them, and a later file is normally there to fill in or correct what an earlier one left vague — for example a timetable photo with placeholder or generic slot names followed by a screenshot of the student's own enrolled classes, where the second file supplies the real subject and teacher names for the first file's slots. Prefer the more specific, more legible source for any given detail, and prefer a later file when two disagree about the same slot. Never emit a slot twice because two files showed it.
 
 Return valid JSON only, matching this exact schema:
 {
@@ -145,19 +147,97 @@ Interpret the timetable visually and use your best judgment to reconstruct its s
 - Set reverseWeek to true only when the photo clearly indicates a reversed odd/even week orientation; otherwise false.
 - Add breakTimes only for explicitly shown non-class periods such as lunch or cleaning — not empty/free periods.
 - Add countdownEvents only for clearly visible events/exams with a readable calendar date, formatted as "YYYY-MM-DD". Set startDate and endDate to the same date for a single-day event; use the visible first and last dates for a multi-day event/exam period. Only include dates you can actually read; otherwise return an empty array.
-- Do not invent information. When uncertain, prefer an empty value or null.
+- Do not invent information. When uncertain, prefer an empty value or null. Combining two files is not inventing; guessing at something neither of them shows is.
+- Every field in the response schema you are given must be present, even when empty.
 - Keep all fields internally consistent.
 - Return ONLY the raw JSON object — no markdown fences, no comments, no extra text.`;
 
 // Must match src/gemini-ocr.js's AIVisionProcessor.geminiModels exactly -
 // this is the actual enforcement point that stops the model name from being
-// an arbitrary passthrough to Gemini's API.
+// an arbitrary passthrough to Gemini's API. Ordered fastest-first there and
+// mirrored here; see that file for why the order flipped.
 const GEMINI_ALLOWED_MODELS = [
+  'gemini-3.5-flash-lite',
   'gemini-3.6-flash',
   'gemini-3.7-flash',
-  'gemini-2.5-flash',
-  'gemini-3.5-flash-lite'
+  'gemini-2.5-flash'
 ];
+
+// The exact shape src/gemini-ocr.js's normalizeAIOutput() reads back,
+// handed to the model as a response schema rather than only described in
+// prompt prose. Constrained decoding is the single biggest lever this proxy
+// has on how long a request takes: the model can no longer spend output
+// tokens on a markdown fence, a preamble, a trailing explanation or a
+// differently-shaped object, so there are simply fewer tokens to generate,
+// and the client's own fence-stripping/brace-hunting salvage path in
+// parseResponse() stops being the normal case. It is not a substitute for
+// the prompt - the prompt still says what to extract and what not to invent
+// - only for the half of it that describes JSON punctuation.
+//
+// Deliberately loose in two places: bellTimes/breakTimes times stay plain
+// strings (normalizeTime() already accepts and repairs several forms, and a
+// stricter pattern would make the model drop a period it could otherwise
+// half-read), and weeklySchedule is a fixed set of seven arrays because a
+// schema cannot express "these keys are required, the others optional".
+const GEMINI_TIME_RANGE_SCHEMA = {
+  type: 'object',
+  properties: { start: { type: 'string' }, end: { type: 'string' } },
+  required: ['start', 'end']
+};
+const GEMINI_DAY_SCHEMA = { type: 'array', items: { type: 'string', nullable: true } };
+const GEMINI_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    bellTimes: { type: 'array', items: GEMINI_TIME_RANGE_SCHEMA },
+    breakTimes: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          start: { type: 'string' },
+          end: { type: 'string' }
+        },
+        required: ['name', 'start', 'end']
+      }
+    },
+    // The subject keys are the model's own choice (the prompt asks for the
+    // Chinese subject name), so this is a free-form map of key -> [subject,
+    // teacher, location] rather than a fixed property list.
+    teacherDB: {
+      type: 'object',
+      additionalProperties: { type: 'array', items: { type: 'string' } }
+    },
+    locationDB: { type: 'object', additionalProperties: { type: 'string' } },
+    weeklySchedule: {
+      type: 'object',
+      properties: {
+        0: GEMINI_DAY_SCHEMA,
+        1: GEMINI_DAY_SCHEMA,
+        2: GEMINI_DAY_SCHEMA,
+        3: GEMINI_DAY_SCHEMA,
+        4: GEMINI_DAY_SCHEMA,
+        5: GEMINI_DAY_SCHEMA,
+        6: GEMINI_DAY_SCHEMA
+      },
+      required: ['1', '2', '3', '4', '5']
+    },
+    reverseWeek: { type: 'boolean' },
+    countdownEvents: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          startDate: { type: 'string' },
+          endDate: { type: 'string' }
+        },
+        required: ['name', 'startDate', 'endDate']
+      }
+    }
+  },
+  required: ['bellTimes', 'teacherDB', 'weeklySchedule']
+};
 
 // Same reasoning as AIVisionProcessor.buildGenerationConfig() (which this
 // replaces client-side) - plain structured extraction gets no benefit from
@@ -166,21 +246,82 @@ const GEMINI_ALLOWED_MODELS = [
 function buildGenerationConfig(model) {
   return {
     response_mime_type: 'application/json',
+    response_schema: GEMINI_RESPONSE_SCHEMA,
     temperature: 0.1,
     maxOutputTokens: 8192,
     thinkingConfig: /^gemini-2\./.test(model) ? { thinkingBudget: 0 } : { thinkingLevel: 'low' }
   };
 }
 
-// A downscaled 1600px-max JPEG at quality 0.9 (see src/gemini-ocr.js's
-// capCanvasDimension) is realistically well under 1MB base64-encoded; this
-// caps well above that so a legitimate photo is never rejected, while still
-// bounding how much upstream bandwidth/tokens a single request can burn.
-const MAX_IMAGE_BASE64_LENGTH = 10_000_000;
+// What a single submitted file may be. Images and PDFs are the two things
+// Gemini actually *looks at* rather than flattening to text (see its
+// document-understanding docs), and between them they cover every way a
+// student realistically has a timetable on their phone: a photo, a
+// screenshot, an iPhone HEIC straight out of the camera roll, or the PDF
+// the school published. Anything else is refused here rather than being
+// forwarded and billed for.
+const GEMINI_ALLOWED_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+  'application/pdf'
+];
+// A downscaled JPEG (see src/gemini-ocr.js's encodeCanvasAsJpeg) is
+// realistically a few hundred KB base64-encoded; this caps well above that
+// so a legitimate photo - or a pass-through PDF the browser could not
+// re-encode - is never rejected, while still bounding how much upstream
+// bandwidth/tokens one request can burn.
+const MAX_FILE_BASE64_LENGTH = 10_000_000;
+// Gemini's own inline-data ceiling for a whole request is 20MB; this stays
+// under it with room for the prompt, and is what stops "send several files
+// at once" from turning into an unbounded upload.
+const MAX_TOTAL_BASE64_LENGTH = 18_000_000;
+const MAX_FILES_PER_REQUEST = 6;
 
 const GEMINI_RATE_LIMIT = 20;
 
+// Reads either the current `files: [{mime_type, data}, ...]` body or the
+// older single-`image` one, so a client still running from a stale service
+// worker cache keeps working after this Worker is redeployed. Returns a
+// plain error string rather than throwing - every failure here is a 400
+// with that message.
+function readGeminiFiles(body) {
+  const files = Array.isArray(body?.files) ? body.files : body?.image ? [body.image] : null;
+  if (!files || !files.length) return { error: 'Missing or invalid files' };
+  if (files.length > MAX_FILES_PER_REQUEST) {
+    return { error: `At most ${MAX_FILES_PER_REQUEST} files per request` };
+  }
+  let total = 0;
+  for (const file of files) {
+    if (
+      !file ||
+      typeof file.mime_type !== 'string' ||
+      !GEMINI_ALLOWED_MIME_TYPES.includes(file.mime_type) ||
+      typeof file.data !== 'string' ||
+      !file.data ||
+      file.data.length > MAX_FILE_BASE64_LENGTH
+    ) {
+      return { error: 'Missing or invalid files' };
+    }
+    total += file.data.length;
+  }
+  if (total > MAX_TOTAL_BASE64_LENGTH) return { error: 'Submitted files are too large' };
+  return { files };
+}
+
 async function handleGeminiRequest(request, env, headers, ip) {
+  // A warm-up ping, sent the moment the user opens the file picker (see
+  // src/gemini-ocr.js's warmUpGeminiProxy) - long before there's anything
+  // to actually send. It exists purely to pay the connection's setup cost
+  // (DNS, TLS, and this Worker's own first-request initialization) while
+  // the user is still choosing a file, instead of on the critical path
+  // afterwards. Deliberately does no work, calls nothing upstream, and is
+  // not rate-limited: it must stay far cheaper than the request it is
+  // warming the path for, or it would be a worse denial-of-service target
+  // than the real endpoint.
+  if (request.method === 'GET') return json({ ok: true }, 200, headers);
   if (request.method !== 'POST') return json({ error: { message: 'POST only' } }, 405, headers);
 
   const rateLimit = await isRateLimited(env, ip, 'gemini', GEMINI_RATE_LIMIT);
@@ -198,30 +339,31 @@ async function handleGeminiRequest(request, env, headers, ip) {
   } catch {
     return json({ error: { message: 'Invalid JSON body' } }, 400, headers);
   }
-  const { model, image } = body || {};
+  const { model } = body || {};
   if (!GEMINI_ALLOWED_MODELS.includes(model)) {
     return json({ error: { message: 'Unsupported model' } }, 400, headers);
   }
-  if (
-    !image ||
-    typeof image.mime_type !== 'string' ||
-    !image.mime_type.startsWith('image/') ||
-    typeof image.data !== 'string' ||
-    !image.data ||
-    image.data.length > MAX_IMAGE_BASE64_LENGTH
-  ) {
-    return json({ error: { message: 'Missing or invalid image' } }, 400, headers);
-  }
+  const parsedFiles = readGeminiFiles(body);
+  if (parsedFiles.error) return json({ error: { message: parsedFiles.error } }, 400, headers);
   if (!env.GEMINI_API_KEY) {
     return json({ error: { message: 'Worker 尚未設定 GEMINI_API_KEY。' } }, 500, headers);
   }
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${env.GEMINI_API_KEY}`;
+  // Every submitted file goes into one part list, in the order the user
+  // picked them, so the model reads them as one document rather than as
+  // separate jobs - that is the whole point of allowing several: a
+  // timetable photo whose subjects are placeholders plus a screenshot of
+  // the class list that names them only works if one request sees both.
+  // The prompt leads, so the instructions are in context before the first
+  // file rather than after the last.
   const contents = [
     {
       parts: [
         { text: GEMINI_PROMPT },
-        { inline_data: { mime_type: image.mime_type, data: image.data } }
+        ...parsedFiles.files.map(file => ({
+          inline_data: { mime_type: file.mime_type, data: file.data }
+        }))
       ]
     }
   ];
@@ -231,8 +373,15 @@ async function handleGeminiRequest(request, env, headers, ip) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contents, generationConfig: buildGenerationConfig(model) })
     });
-    const data = await upstream.json();
-    return json(data, upstream.status, headers);
+    // Piped straight through rather than parsed and re-serialized here: the
+    // body is JSON the client parses itself either way, and buffering the
+    // whole thing in the Worker first only adds the upstream's full
+    // download time to every request before a single byte reaches the
+    // browser.
+    return new Response(upstream.body, {
+      status: upstream.status,
+      headers: { ...headers, 'Content-Type': 'application/json' }
+    });
   } catch (error) {
     return json({ error: { message: error.message || 'Upstream request failed' } }, 502, headers);
   }
