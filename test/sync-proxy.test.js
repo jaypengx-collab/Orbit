@@ -147,6 +147,53 @@ describe('a receiving device can opt out of syncing style/color', () => {
     expect(state.applicationData.proAccent).toBe('#123456');
   });
 
+  // The bug this covers: clearing the opt-out used to only flip the flag and
+  // leave it to the next poll, which never applied anything - pullSyncSnapshot
+  // skips a document whose updateTime this device already recorded, so the
+  // shared colors and saved presets sat there unapplied until some *other*
+  // device happened to publish an unrelated change.
+  it('un-checking the opt-out adopts the shared colors and presets immediately', async () => {
+    sync.setSyncPairing('CODE1234');
+    const { encodeTransferData, normalizeSettingsData } = await import('../src/editor-backup.js');
+    const sharedData = normalizeSettingsData({
+      ...state.applicationData,
+      proAccent: '#ABCDEF',
+      proSecondary: '#FEDCBA',
+      styleSlots: [{ name: '共用', primary: '#ABCDEF', secondary: '#FEDCBA' }]
+    });
+    const payload = await encodeTransferData(sharedData);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ exists: true, updateTime: 'now', payload })
+      }))
+    );
+    // One normal pull caches the shared style, exactly as everyday polling does.
+    await sync.pullSyncSnapshot();
+    expect(state.applicationData.proAccent).toBe('#ABCDEF');
+
+    // Opt out and drift this device's own colors away from the shared ones.
+    sync.setSyncKeepLocalStyle(true);
+    state.applicationData.proAccent = '#111111';
+    state.applicationData.proSecondary = '#222222';
+    state.applicationData.styleSlots = [{ name: '自訂', primary: '#111111', secondary: '#222222' }];
+
+    document.getElementById('sync-keep-local-style').checked = false;
+    sync.orbitSyncSetKeepLocalStyle(false);
+    document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[1].onclick();
+
+    // Synchronously, on confirming - not "after the next tick eventually
+    // notices something changed".
+    expect(sync.getSyncKeepLocalStyle()).toBe(false);
+    expect(state.applicationData.proAccent).toBe('#ABCDEF');
+    expect(state.applicationData.proSecondary).toBe('#FEDCBA');
+    expect(state.applicationData.styleSlots[0].name).toBe('共用');
+    // The style this device gave up is kept for the restore offer that
+    // re-checking the box makes.
+    expect(sync.getStyleBackup().proAccent).toBe('#111111');
+  });
+
   // Not a viewer-only feature: a manager who checks the opt-out also has
   // their own device's color kept out of the shared document entirely, in
   // both directions. The push side is the tricky half - without this, a

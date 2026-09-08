@@ -359,17 +359,6 @@
       <input type="checkbox" id="sync-keep-local-style" onchange="orbitSyncSetKeepLocalStyle(this.checked)">
       不同步樣式顏色（保留這台裝置目前的配色）
     </label>
-    <div id="sync-style-backup-notice" class="sync-style-backup-notice" hidden>
-      <div class="editor-hint-body">先前保留的配色已備份，還沒套用回來。</div>
-      <div class="settings-transfer-actions">
-        <button type="button" class="settings-transfer-btn" onclick="orbitSyncDismissStyleBackup()">
-          不用了，捨棄備份
-        </button>
-        <button type="button" class="settings-transfer-btn primary" onclick="orbitSyncRestoreStyleBackup()">
-          還原保留的樣式
-        </button>
-      </div>
-    </div>
     <div class="settings-transfer-actions">
       <button type="button" id="sync-unlink-btn" class="settings-transfer-btn" onclick="orbitSyncUnlink()">
         解除同步

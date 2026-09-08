@@ -359,19 +359,23 @@ describe('orbitSyncSetKeepLocalStyle warns before either direction takes effect'
 });
 
 describe('the destructive "resume shared style" direction backs up the local style first', () => {
+  const confirmSheetButton = index =>
+    document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[index];
+  const confirmToggle = () => confirmSheetButton(1).onclick();
+
   beforeEach(() => {
     sync.setSyncPairing('CODE1234');
     document.getElementById('sync-keep-local-style').checked = false;
     sync.orbitSyncDismissStyleBackup(); // clear any backup left over from another test
+    sync.setSyncKeepLocalStyle(false);
   });
 
   it('turning keep-local-style ON does not create a backup', () => {
     const checkbox = document.getElementById('sync-keep-local-style');
     checkbox.checked = true;
     sync.orbitSyncSetKeepLocalStyle(true);
-    document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[1].onclick();
+    confirmToggle();
     expect(sync.getStyleBackup()).toBeNull();
-    expect(document.getElementById('sync-style-backup-notice').hidden).toBe(true);
   });
 
   it('turning keep-local-style OFF backs up the current style, and it can be restored later', () => {
@@ -384,7 +388,7 @@ describe('the destructive "resume shared style" direction backs up the local sty
     const checkbox = document.getElementById('sync-keep-local-style');
     checkbox.checked = false;
     sync.orbitSyncSetKeepLocalStyle(false);
-    document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[1].onclick(); // 恢復同步
+    confirmToggle(); // 恢復同步
 
     expect(sync.getSyncKeepLocalStyle()).toBe(false);
     const backup = sync.getStyleBackup();
@@ -396,10 +400,9 @@ describe('the destructive "resume shared style" direction backs up the local sty
       primary: '#111111',
       secondary: '#222222'
     });
-    expect(document.getElementById('sync-style-backup-notice').hidden).toBe(false);
 
     // Simulate what turning the checkbox off actually does in practice: the
-    // very next sync pulls in the shared style and overwrites it.
+    // shared style comes in and overwrites it.
     state.applicationData.proAccent = '#999999';
     state.applicationData.styleSlots = [
       { name: 'Shared', primary: '#999999', secondary: '#888888' }
@@ -416,7 +419,6 @@ describe('the destructive "resume shared style" direction backs up the local sty
     });
     expect(sync.getSyncKeepLocalStyle()).toBe(true); // re-enabled, so it isn't overwritten right away again
     expect(sync.getStyleBackup()).toBeNull();
-    expect(document.getElementById('sync-style-backup-notice').hidden).toBe(true);
     expect(document.getElementById('sync-status').textContent).toMatch(/已還原/);
   });
 
@@ -425,13 +427,87 @@ describe('the destructive "resume shared style" direction backs up the local sty
     state.applicationData.proAccent = '#111111';
     document.getElementById('sync-keep-local-style').checked = false;
     sync.orbitSyncSetKeepLocalStyle(false);
-    document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[1].onclick();
+    confirmToggle();
     expect(sync.getStyleBackup()).not.toBeNull();
 
     state.applicationData.proAccent = '#999999';
     sync.orbitSyncDismissStyleBackup();
     expect(sync.getStyleBackup()).toBeNull();
     expect(state.applicationData.proAccent).toBe('#999999'); // untouched
-    expect(document.getElementById('sync-style-backup-notice').hidden).toBe(true);
+  });
+});
+
+// The restore offer is no longer a standing notice in the sync panel: it is
+// chained onto re-checking "不同步樣式顏色", the one moment a previously
+// kept-local style is wanted again - the same shape as the schedule
+// backup's post-unlink prompt.
+describe('re-checking the opt-out offers the last kept-local style back', () => {
+  const confirmSheetButton = index =>
+    document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[index];
+
+  beforeEach(() => {
+    sync.setSyncPairing('CODE1234');
+    sync.orbitSyncDismissStyleBackup();
+    sync.setSyncKeepLocalStyle(false);
+    document.getElementById('sync-keep-local-style').checked = false;
+  });
+
+  // Uncheck: backs the current local style up, then (with a proxy
+  // configured, which this file deliberately has none of) adopts the shared
+  // one in its place.
+  const resumeSharedStyle = () => {
+    sync.setSyncKeepLocalStyle(true);
+    document.getElementById('sync-keep-local-style').checked = false;
+    sync.orbitSyncSetKeepLocalStyle(false);
+    confirmSheetButton(1).onclick(); // 恢復同步
+  };
+  // Re-check: this is what chains into the restore offer.
+  const keepLocalStyleAgain = () => {
+    document.getElementById('sync-keep-local-style').checked = true;
+    sync.orbitSyncSetKeepLocalStyle(true);
+    confirmSheetButton(1).onclick(); // 不再同步樣式
+  };
+
+  it('prompts, and restoring reapplies the kept colors and saved presets', () => {
+    state.applicationData.proAccent = '#111111';
+    state.applicationData.styleSlots = [{ name: 'Kept', primary: '#111111', secondary: '#222222' }];
+    resumeSharedStyle();
+    // Stand in for the shared style having replaced the local one meanwhile.
+    state.applicationData.proAccent = '#999999';
+    state.applicationData.styleSlots = [
+      { name: 'Shared', primary: '#999999', secondary: '#888888' }
+    ];
+    keepLocalStyleAgain();
+
+    expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(true);
+    expect(document.getElementById('editor-confirm-title').textContent).toMatch(
+      /找回先前保留的配色/
+    );
+
+    confirmSheetButton(1).onclick(); // 換回保留的配色
+    expect(state.applicationData.proAccent).toBe('#111111');
+    expect(state.applicationData.styleSlots[0].name).toBe('Kept');
+    expect(sync.getStyleBackup()).toBeNull();
+  });
+
+  it('keeping the current colors discards the backup instead', () => {
+    state.applicationData.proAccent = '#111111';
+    resumeSharedStyle();
+    state.applicationData.proAccent = '#999999';
+    keepLocalStyleAgain();
+    confirmSheetButton(0).onclick(); // 繼續使用目前配色
+    expect(state.applicationData.proAccent).toBe('#999999');
+    expect(sync.getStyleBackup()).toBeNull();
+  });
+
+  it('never asks when the backed-up style is identical to what is already applied', () => {
+    state.applicationData.proAccent = '#111111';
+    state.applicationData.styleSlots = [{ name: 'Kept', primary: '#111111', secondary: '#222222' }];
+    resumeSharedStyle();
+    keepLocalStyleAgain();
+    // applicationData was never actually replaced here, so the backup and
+    // the live style match - there is nothing worth asking about.
+    expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(false);
+    expect(sync.getStyleBackup()).toBeNull();
   });
 });

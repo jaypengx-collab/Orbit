@@ -268,23 +268,56 @@ function renderStyleSlots() {
     )
     .join('');
 }
+// True when `style` is one of the built-in palette presets - i.e. a color
+// pair the user picked off the shelf rather than one they mixed themselves.
+// Losing one of these costs a single tap to get back, which is what lets
+// loadStyleSlot below skip its "目前的樣式將被替換" warning: a warning about
+// discarding something nobody authored is a popup with nothing behind it.
+function isBuiltInPresetStyle(style) {
+  const primary = normalizeProAccent(style?.proAccent);
+  const secondary = normalizeProSecondary(style?.proSecondary);
+  return Object.values(PRO_PALETTE_PRESETS).some(
+    preset =>
+      normalizeProAccent(preset.primary) === primary &&
+      normalizeProSecondary(preset.secondary) === secondary
+  );
+}
+function sameSlotColors(slot, style) {
+  return (
+    normalizeProAccent(slot?.primary) === normalizeProAccent(style?.proAccent) &&
+    normalizeProSecondary(slot?.secondary) === normalizeProSecondary(style?.proSecondary)
+  );
+}
+// Both directions of "am I about to lose a color I mixed myself" get a
+// confirmation, and neither asks when the answer is obviously no:
+//   - an occupied slot warns that its saved pair is being replaced;
+//   - an empty slot still confirms, but only to name which of the five
+//     positions the new preset is going into - the grid's five identical
+//     swatches make mis-taps easy, and a save that lands in the wrong slot
+//     is otherwise indistinguishable from one that worked.
 function saveStyleSlot(index) {
   state.stylePanelDraft = getStyleDraftFromControls();
   const slots = normalizeStyleSlots(state.stylePanelDraft.styleSlots);
-  if (slots[index]?.name) {
-    state.pendingStyleSlotSaveIndex = index;
-    setEditorConfirmContent(
-      '覆寫個人樣式？',
-      '這會取代目前儲存在這個位置的配色。',
-      '',
-      '覆寫',
-      applyPendingStyleSlotSave,
-      '取消'
-    );
-    showEditorConfirmSheet();
+  const slot = slots[index];
+  const occupied = !!slot?.name;
+  // Re-saving the exact colors a slot already holds changes nothing, so
+  // there is nothing to confirm either way.
+  if (occupied && sameSlotColors(slot, state.stylePanelDraft)) {
+    saveStyleSlotDraft(index);
     return;
   }
-  saveStyleSlotDraft(index);
+  state.pendingStyleSlotSaveIndex = index;
+  setEditorConfirmContent(
+    occupied ? '覆寫個人樣式？' : `儲存為樣式 ${index + 1}？`,
+    occupied
+      ? `這會取代「${slot.name}」目前儲存的配色。`
+      : `目前的配色會存到第 ${index + 1} 個位置。`,
+    '',
+    occupied ? '覆寫' : '儲存',
+    applyPendingStyleSlotSave,
+    '取消'
+  );
+  showEditorConfirmSheet();
 }
 function saveStyleSlotDraft(index) {
   const slots = normalizeStyleSlots(state.stylePanelDraft.styleSlots);
@@ -317,6 +350,15 @@ function loadStyleSlot(index) {
   )[index];
   if (!slot || !slot.name) return;
   state.pendingStyleSlotIndex = index;
+  // Nothing of the user's own is on screen to lose - the current colors are
+  // either a built-in preset, or already exactly what this slot holds - so
+  // apply straight away instead of asking about a replacement that costs
+  // nothing.
+  const current = state.stylePanelDraft || state.applicationData;
+  if (isBuiltInPresetStyle(current) || sameSlotColors(slot, current)) {
+    applyPendingStyleSlot();
+    return;
+  }
   setEditorConfirmContent(
     '套用儲存樣式？',
     '目前的樣式將被替換。',

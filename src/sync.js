@@ -79,11 +79,14 @@ const KEEP_LOCAL_STYLE_KEY = 'orbitSyncKeepLocalStyle';
 // alongside the rest of the pairing state.
 const LAST_KNOWN_SHARED_STYLE_KEY = 'orbitSyncLastKnownStyle';
 // A one-shot safety net for the one genuinely destructive moment in this
-// whole feature: un-checking "不同步樣式顏色" immediately pulls the shared
-// style in and overwrites whatever this device had, with no other undo. Set
-// right before that happens (see orbitSyncSetKeepLocalStyle), cleared once
-// the user either restores it or dismisses it - a per-device backup, like
-// the preference itself, not tied to any one pairing.
+// whole feature: un-checking "不同步樣式顏色" immediately applies the shared
+// style/presets over whatever this device had, with no other undo. Written
+// right before that happens (see orbitSyncSetKeepLocalStyle), offered back
+// the moment there's somewhere to offer it from again - re-checking the box
+// is exactly when "did you want your own colors back, or are the shared
+// ones fine now" becomes a real question, the same shape as the schedule
+// backup's unlink-time prompt below. A per-device backup, like the
+// preference itself, not tied to any one pairing.
 const STYLE_BACKUP_KEY = 'orbitSyncStyleBackup';
 // The same kind of one-shot safety net as the style backup above, but for
 // the whole schedule: joining an existing sync immediately and irreversibly
@@ -170,15 +173,7 @@ function getLastKnownSharedStyle() {
   }
 }
 function setLastKnownSharedStyle(data) {
-  writeLocal(
-    LAST_KNOWN_SHARED_STYLE_KEY,
-    JSON.stringify({
-      proAccent: data.proAccent,
-      proSecondary: data.proSecondary,
-      proTertiary: data.proTertiary,
-      styleSlots: data.styleSlots
-    })
-  );
+  writeLocal(LAST_KNOWN_SHARED_STYLE_KEY, JSON.stringify(styleFieldsOf(data)));
 }
 function getStyleBackup() {
   try {
@@ -187,16 +182,31 @@ function getStyleBackup() {
     return null;
   }
 }
+// The four fields that make up "a style" everywhere in this file: the three
+// theme colors plus the five saved presets (styleSlots). Kept as one helper
+// so the backup, the shared-style cache, the equality check below and the
+// restore all agree on exactly what a style is - a preset the user saved
+// under the opt-out is just as much theirs to lose as the accent color is.
+function styleFieldsOf(data) {
+  return {
+    proAccent: data?.proAccent,
+    proSecondary: data?.proSecondary,
+    proTertiary: data?.proTertiary,
+    styleSlots: data?.styleSlots
+  };
+}
+// "Is there actually anything to restore here" - the same question
+// promptScheduleBackupRestore never has to ask (a schedule that came back
+// byte-identical to the one it replaced is vanishingly unlikely), but that
+// this backup does: a device that never customized anything before turning
+// the opt-out off has a backup identical to the shared style it just
+// received, and offering that back would be a popup whose two answers do
+// exactly the same thing.
+function sameStyle(a, b) {
+  return JSON.stringify(styleFieldsOf(a)) === JSON.stringify(styleFieldsOf(b));
+}
 function backUpCurrentStyle() {
-  writeLocal(
-    STYLE_BACKUP_KEY,
-    JSON.stringify({
-      proAccent: state.applicationData.proAccent,
-      proSecondary: state.applicationData.proSecondary,
-      proTertiary: state.applicationData.proTertiary,
-      styleSlots: state.applicationData.styleSlots
-    })
-  );
+  writeLocal(STYLE_BACKUP_KEY, JSON.stringify(styleFieldsOf(state.applicationData)));
 }
 function clearStyleBackup() {
   writeLocal(STYLE_BACKUP_KEY, '');
@@ -612,7 +622,6 @@ function renderSyncPanel() {
   const activeCode = document.getElementById('sync-active-code');
   const roleLabel = document.getElementById('sync-role-label');
   const keepStyleCheckbox = document.getElementById('sync-keep-local-style');
-  const styleBackupNotice = document.getElementById('sync-style-backup-notice');
   const createdCodesBox = document.getElementById('sync-created-codes');
   const managerPasscodeBox = document.getElementById('sync-manager-passcode-box');
   const upgradeBox = document.getElementById('sync-upgrade-box');
@@ -662,11 +671,11 @@ function renderSyncPanel() {
   // (nothing to upgrade *into* yet - that's what "加入同步" is for).
   if (upgradeBox) upgradeBox.hidden = !configured || !viewer;
   if (keepStyleCheckbox) keepStyleCheckbox.checked = getSyncKeepLocalStyle();
-  // Shown whenever a backed-up style is sitting around waiting on a
-  // decision - regardless of the checkbox's current state, since the user
-  // could re-check "不同步樣式顏色" again before ever coming back to deal
-  // with the backup from the last time they unchecked it.
-  if (styleBackupNotice) styleBackupNotice.hidden = !getStyleBackup();
+  // No standing "you still have a backed-up style" notice in this panel any
+  // more: the backup is offered back at the one moment it's actually wanted
+  // (re-checking the box - see promptStyleBackupRestore), the same way the
+  // schedule backup is offered right after unlinking rather than sitting
+  // here as a permanent fixture nobody scrolls to.
   applyEditorRoleLock();
 }
 // Warns before either direction of this toggle takes effect - a native
@@ -683,16 +692,16 @@ function orbitSyncSetKeepLocalStyle(checked) {
     wantsKeepLocal ? '不再同步樣式顏色？' : '恢復同步樣式顏色？',
     wantsKeepLocal
       ? '會保留這台裝置目前的配色，不再套用其他裝置的樣式。'
-      : '目前配色會在下次同步時被共用樣式取代。',
-    wantsKeepLocal ? '課表內容仍照常同步。' : '已自動備份，可按「還原保留的樣式」找回。',
+      : '共用的配色與樣式預設會立刻套用到這台裝置。',
+    wantsKeepLocal ? '課表內容仍照常同步。' : '目前的配色與樣式預設會先備份起來。',
     wantsKeepLocal ? '不再同步樣式' : '恢復同步',
     () => {
       hideEditorDiscardConfirm();
-      // The one genuinely destructive direction: turning this off means
-      // the very next sync overwrites whatever's here now. Back it up
-      // first so renderSyncPanel's recovery option (see below) has
-      // something to offer, in case the shared style wasn't actually what
-      // they wanted after all.
+      // The one genuinely destructive direction: turning this off replaces
+      // this device's colors and saved presets with the shared ones right
+      // now (see applySharedStyleNow below), not "at some point during the
+      // next sync". Back the old ones up first so the restore prompt on the
+      // way back in has something to offer.
       if (!wantsKeepLocal) backUpCurrentStyle();
       setSyncKeepLocalStyle(wantsKeepLocal);
       // The style tool's own lock (see applyEditorRoleLock) depends on this
@@ -701,6 +710,14 @@ function orbitSyncSetKeepLocalStyle(checked) {
       // needed.
       applyEditorRoleLock();
       renderSyncPanel();
+      if (wantsKeepLocal) {
+        // Nothing was overwritten here, so there's nothing to apply - but
+        // this is the moment the last kept-local style becomes wanted
+        // again, so it's where the restore offer belongs.
+        promptStyleBackupRestore();
+      } else {
+        applySharedStyleNow();
+      }
       // Don't wait for the next touch-triggered check (see the
       // activity-driven sync section below) - a style-sync change is
       // exactly the kind of moment where the user wants the effect to show
@@ -717,40 +734,96 @@ function orbitSyncSetKeepLocalStyle(checked) {
   );
   showEditorConfirmSheet();
 }
+// Turning the opt-out off used to only clear the flag and let the next poll
+// sort it out - which it never did: pullSyncSnapshot skips a document whose
+// updateTime this device has already recorded, so the shared style sat
+// there unapplied until some *other* device happened to publish a change.
+// The style this device has been ignoring is already cached locally (see
+// setLastKnownSharedStyle, written on every real pull), so apply that
+// straight away, then force one real pull to pick up anything newer.
+function applySharedStyleNow() {
+  const shared = getLastKnownSharedStyle();
+  if (shared && !sameStyle(shared, state.applicationData)) {
+    // fromSync:true because this is the shared style being adopted, not a
+    // local edit - it must not be pushed back out as if this device had
+    // just authored it.
+    applyEditorSettingsData(
+      { ...state.applicationData, ...styleFieldsOf(shared) },
+      { fromSync: true }
+    );
+  }
+  if (!isSyncProxyConfigured() || !getSyncCode()) return;
+  // force:true because the whole problem above is that this device already
+  // "has" the current document - only a forced re-read re-applies it now
+  // that the style fields are no longer being masked out.
+  pullSyncSnapshot({ force: true }).then(result => {
+    if (!result.ok) setSyncStatusUi(result.error, true);
+  });
+}
 // The recovery half of the safety net above: reapplies whatever style was
-// backed up right before the user last turned sync-style back on, and
+// backed up right before this device last went back to the shared one, and
 // re-enables the opt-out so it isn't just immediately overwritten again by
-// the very next sync. A deliberate, explicit action (its own button, not
-// bundled into some other flow) so it doesn't need its own confirmation
-// sheet on top of everything else here.
+// the very next sync.
 function orbitSyncRestoreStyleBackup() {
   const backup = getStyleBackup();
   if (!backup) return;
   // Re-enable the opt-out first - restoring the old colors only to have the
   // very next sync immediately overwrite them again would defeat the point.
   setSyncKeepLocalStyle(true);
-  const next = {
-    ...state.applicationData,
-    proAccent: backup.proAccent,
-    proSecondary: backup.proSecondary,
-    proTertiary: backup.proTertiary,
-    styleSlots: backup.styleSlots
-  };
   // fromSync:true here isn't about where the data came from - it's to get
   // the same "don't push this back out" behavior applyEditorSettingsData
   // already gives a sync-applied change, which is exactly what a pure
   // local restore also needs (setSyncKeepLocalStyle(true) above would make
   // any push substitute the shared style anyway, so this is belt-and-
   // suspenders more than strictly load-bearing).
-  applyEditorSettingsData(next, { fromSync: true });
+  applyEditorSettingsData(
+    { ...state.applicationData, ...styleFieldsOf(backup) },
+    { fromSync: true }
+  );
   clearStyleBackup();
   applyEditorRoleLock();
   renderSyncPanel();
-  setSyncStatusUi('已還原保留的樣式，並重新開啟「不同步樣式顏色」。');
+  setSyncStatusUi('已還原保留的樣式與樣式預設。');
 }
 function orbitSyncDismissStyleBackup() {
   clearStyleBackup();
   renderSyncPanel();
+}
+// The style counterpart to promptScheduleBackupRestore below, chained
+// straight out of re-checking "不同步樣式顏色": that's the point where this
+// device stops following the shared colors again, so it's the point where
+// the colors and presets it kept last time are worth offering back - rather
+// than a standing notice in the sync panel that's easy to never scroll to.
+//
+// Silently drops a backup that matches what's already on screen: a device
+// that never customized anything got back exactly what it gave up, and a
+// popup whose two answers do the same thing is just noise.
+function promptStyleBackupRestore() {
+  const backup = getStyleBackup();
+  if (!backup) return;
+  if (sameStyle(backup, state.applicationData)) {
+    clearStyleBackup();
+    renderSyncPanel();
+    return;
+  }
+  setEditorConfirmContent(
+    '找回先前保留的配色？',
+    '要換回上次保留的配色與樣式預設，還是繼續使用目前的？',
+    '',
+    '換回保留的配色',
+    () => {
+      hideEditorDiscardConfirm();
+      orbitSyncRestoreStyleBackup();
+    },
+    '繼續使用目前配色',
+    {
+      cancelHandler: () => {
+        hideEditorDiscardConfirm();
+        orbitSyncDismissStyleBackup();
+      }
+    }
+  );
+  showEditorConfirmSheet();
 }
 // The recovery half of the schedule-backup safety net (see
 // SCHEDULE_BACKUP_KEY) - reapplies whatever local schedule this device had
@@ -1226,8 +1299,6 @@ window.orbitSyncUpgradeToManager = orbitSyncUpgradeToManager;
 window.orbitSyncUnlink = orbitSyncUnlink;
 window.orbitSyncDeleteForEveryone = orbitSyncDeleteForEveryone;
 window.orbitSyncSetKeepLocalStyle = orbitSyncSetKeepLocalStyle;
-window.orbitSyncRestoreStyleBackup = orbitSyncRestoreStyleBackup;
-window.orbitSyncDismissStyleBackup = orbitSyncDismissStyleBackup;
 window.copySyncCreatedCode = copySyncCreatedCode;
 window.acknowledgeSyncCreatedCodes = acknowledgeSyncCreatedCodes;
 window.copySyncManagerPasscode = copySyncManagerPasscode;
