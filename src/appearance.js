@@ -37,17 +37,28 @@ function normalizeProTertiary(value) {
     .toUpperCase();
   return /^#[0-9A-F]{6}$/.test(color) ? color : '#91AE78';
 }
+// Picks black or white text for a solid-color badge/button/pill painted in
+// the user's own chosen accent color. This used to maximize WCAG 2's
+// gamma-linearized contrast ratio (whichever of black/white had the higher
+// ratio against the background), which is the textbook-correct approach
+// but a known bad fit for exactly this job: that formula weights the red
+// channel so lightly (0.2126, versus green's 0.7152) that a vivid, fully
+// saturated red/pink/magenta - visually one of the *brighter*, punchier
+// colors on screen - computes as "dark" and tips the ratio toward black
+// text, which reads as harsh/muddy on a color that vivid. It also produces
+// near-coin-flip results for plenty of ordinary mid-saturation colors,
+// where the two ratios differ by only a few percent - not a stable signal
+// for something that should look obviously right. Plain perceptual
+// brightness (the classic YIQ-weighted average, no gamma curve) tracks how
+// bright a color actually looks far more closely, and a single 128/255
+// threshold (the standard cutoff for this exact black-or-white decision)
+// gives consistent, unsurprising results across the whole preset palette -
+// including fixing the red/pink family specifically.
 function getReadableTextColor(value) {
   const color = normalizeProAccent(value).slice(1);
-  const channels = [0, 2, 4]
-    .map(index => parseInt(color.slice(index, index + 2), 16) / 255)
-    .map(channel =>
-      channel <= 0.03928 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4)
-    );
-  const luminance = 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
-  const whiteContrast = 1.05 / (luminance + 0.05);
-  const darkContrast = (luminance + 0.05) / 0.05;
-  return darkContrast >= whiteContrast ? '#10171A' : '#FFFFFF';
+  const [r, g, b] = [0, 2, 4].map(index => parseInt(color.slice(index, index + 2), 16));
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+  return brightness >= 128 ? '#10171A' : '#FFFFFF';
 }
 function getReadableSurfaceColor(value) {
   const color = normalizeProAccent(value).slice(1);

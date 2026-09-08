@@ -43,16 +43,15 @@
      these static fallbacks are only what paints before setStyleMode()'s
      applyProAccent() runs at boot, so they need to already match what that
      computes for the real default (DEFAULT_STYLE_PRIMARY/SECONDARY in
-     constants.js) - including --pro-accent-text, which flips to white for
-     this indigo-violet primary (getReadableTextColor picks whichever of
-     white/#10171A has more contrast; the old iOS-blue default happened to
-     read better with dark text, this one doesn't) - or there's a brief
-     wrong-contrast flash of text on top of the accent color before JS
-     corrects it. */
+     constants.js) - both --pro-accent-text and --pro-secondary-text come
+     out white for this indigo-violet/rose-magenta pair (see
+     getReadableTextColor's perceptual-brightness pick in appearance.js) -
+     or there's a brief wrong-contrast flash of text on top of the accent
+     color before JS corrects it. */
   --pro-accent:#6C5DD3;
   --pro-secondary:#E8497B;
   --pro-accent-text:#FFFFFF;
-  --pro-secondary-text:#10171A;
+  --pro-secondary-text:#FFFFFF;
   --pro-accent-readable:#6C5DD3;
   --pro-secondary-readable:#E8497B;
 
