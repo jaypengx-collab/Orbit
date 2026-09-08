@@ -354,6 +354,10 @@ function renderSyncPanel() {
 }
 function orbitSyncSetKeepLocalStyle(checked) {
   setSyncKeepLocalStyle(!!checked);
+  // The style tool's own lock (see applyEditorRoleLock) depends on this
+  // setting too, not just role - refresh it immediately so ticking the box
+  // unlocks the style button right away, no reload or re-pair needed.
+  applyEditorRoleLock();
 }
 
 // Locks the rest of the editor down to view-only for a viewer device -
@@ -366,6 +370,22 @@ function orbitSyncSetKeepLocalStyle(checked) {
 function applyEditorRoleLock() {
   const sheet = document.getElementById('editor-sheet');
   if (sheet) sheet.classList.toggle('sync-viewer-locked', isSyncViewer());
+  // The style tool is a separate top-bar overlay, not part of #editor-sheet
+  // at all, so it needs its own lock: a viewer who's still accepting synced
+  // colors (hasn't checked "不同步樣式顏色") has no real use for it - any
+  // local color change it made would just get overwritten by the next
+  // pulled update anyway, which is confusing busywork, not a real feature.
+  // A viewer who *has* opted out is exempt - that's the whole point of the
+  // opt-out - and a manager is never locked out of it at all, since setting
+  // the shared style in the first place is the manager's job.
+  const styleButton = document.getElementById('btn-style');
+  if (styleButton) {
+    const locked = isSyncViewer() && !getSyncKeepLocalStyle();
+    styleButton.classList.toggle('is-disabled', locked);
+    styleButton.title = locked
+      ? '此裝置正在同步樣式，無法自行變更。若要自訂樣式，請先在同步面板勾選「不同步樣式顏色」。'
+      : '樣式工具';
+  }
 }
 
 // ---- UI entry points, exposed on window for index.html's onclick="..." ----

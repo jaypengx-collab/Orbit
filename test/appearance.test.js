@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadApp } from './helpers/loadApp.js';
 import { seedLocalStorage } from './helpers/fixtureData.js';
 
@@ -73,5 +73,43 @@ describe('style panel: saving a preset slot marks the draft dirty', () => {
 describe('state', () => {
   it('sanity: style panel draft exists once opened', () => {
     expect(state.stylePanelDraft).toBeTruthy();
+  });
+});
+
+describe('style tool lock: a viewer still accepting synced colors cannot use it', () => {
+  let sync;
+
+  beforeAll(async () => {
+    sync = await import('../src/sync.js');
+  });
+
+  afterEach(() => {
+    sync.clearSyncPairing();
+  });
+
+  it("window.toggleStylePanel() refuses to open the panel for a plain viewer (hasn't opted out)", async () => {
+    window.closeStylePanel(); // start from a known-closed state
+    sync.setSyncPairing('CODE1234', 'viewer');
+    await window.toggleStylePanel();
+    expect(document.getElementById('style-panel').classList.contains('show')).toBe(false);
+  });
+
+  it('#btn-style is visually locked for a plain viewer, and unlocks the moment the opt-out is checked', () => {
+    sync.setSyncPairing('CODE1234', 'viewer');
+    sync.applyEditorRoleLock();
+    expect(document.getElementById('btn-style').classList.contains('is-disabled')).toBe(true);
+
+    sync.orbitSyncSetKeepLocalStyle(true);
+    expect(document.getElementById('btn-style').classList.contains('is-disabled')).toBe(false);
+    sync.setSyncKeepLocalStyle(false);
+  });
+
+  it('a manager is never locked out of the style tool, opted out or not', async () => {
+    window.closeStylePanel();
+    sync.setSyncPairing('CODE1234', 'manager');
+    sync.applyEditorRoleLock();
+    expect(document.getElementById('btn-style').classList.contains('is-disabled')).toBe(false);
+    await window.toggleStylePanel();
+    expect(document.getElementById('style-panel').classList.contains('show')).toBe(true);
   });
 });

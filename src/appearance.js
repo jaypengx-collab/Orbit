@@ -14,6 +14,7 @@ import {
   showEditorConfirmSheet,
   showEditorDiscardConfirm
 } from './editor-core.js';
+import { getSyncKeepLocalStyle, isSyncViewer } from './sync.js';
 
 // ---- js/appearance.js ----
 function normalizeProAccent(value) {
@@ -322,6 +323,14 @@ function applyPendingStyleSlot() {
   previewStyleSettings();
 }
 async function toggleStylePanel() {
+  // Belt-and-suspenders, same as saveEditor()/gemini-ocr.js's run button:
+  // src/sync.js's applyEditorRoleLock already greys #btn-style out and
+  // disables its pointer events for exactly this case, but that's a
+  // CSS/pointer-events lock, not real access control. A viewer still
+  // accepting synced colors has no real use for the style tool anyway -
+  // any local change here would just get overwritten by the next pulled
+  // update.
+  if (isSyncViewer() && !getSyncKeepLocalStyle()) return;
   const editor = document.getElementById('editor-sheet');
   if (editor.classList.contains('show')) {
     if (isEditorDirty() || (await hasUnconsumedImportData())) {

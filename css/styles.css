@@ -219,6 +219,7 @@ body.orbit-booting .dashboard-boot-loader{visibility:visible;display:flex;positi
   box-shadow:var(--glass-shadow-soft);
 }
 .top-action-btn:active{transform:scale(.9);box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.top-action-btn.is-disabled{opacity:.4;filter:grayscale(.5);pointer-events:none}
 #btn-menu.top-action-btn{width:var(--v31-hub-size);height:var(--v31-hub-size);border-radius:18px;background:linear-gradient(145deg,color-mix(in srgb,var(--pro-accent) 82%,transparent),color-mix(in srgb,var(--pro-accent) 55%,transparent) 70%);color:var(--pro-accent-text);font-size:20px;box-shadow:0 12px 30px color-mix(in srgb,var(--pro-accent) 40%,transparent),0 4px 12px rgba(0,0,0,.28);font-weight:900;line-height:1;backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%)}
 .top-actions.open #btn-menu.top-action-btn{transform:rotate(45deg) scale(.96);color:var(--pro-secondary-text);background:linear-gradient(145deg,color-mix(in srgb,var(--pro-secondary) 85%,transparent),color-mix(in srgb,var(--pro-secondary) 58%,transparent) 70%);box-shadow:0 12px 30px color-mix(in srgb,var(--pro-secondary) 38%,transparent),0 4px 12px rgba(0,0,0,.28)}
 .top-actions-menu{
