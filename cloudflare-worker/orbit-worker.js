@@ -130,9 +130,8 @@ Return valid JSON only, matching this exact schema:
 {
   "bellTimes": [],
   "breakTimes": [{"name":"午休","start":"12:00","end":"13:00"}],
-  "teacherDB": {"國文": ["國文", "陳老師", "A101"], "英文": ["英文", "王老師", "B202"]},
-  "locationDB": {"國文":"A101", "英文":"B202"},
-  "weeklySchedule": {"1": ["國文","英文",null], "2": [], "3": [], "4": [], "5": []},
+  "classes": [{"key":"c1","subject":"國文","teacher":"陳老師","location":"A101"}, {"key":"c2","subject":"英文","teacher":"王老師","location":"B202"}],
+  "weeklySchedule": {"1": ["c1","c2",null], "2": [], "3": [], "4": [], "5": []},
   "reverseWeek": false,
   "countdownEvents": [{"name":"116 學測","startDate":"2027-01-22","endDate":"2027-01-24"}]
 }
@@ -140,10 +139,9 @@ Return valid JSON only, matching this exact schema:
 Interpret the timetable visually and use your best judgment to reconstruct its structure. Rules:
 - Read class period times from the image when available. Use 24-hour "HH:MM" strings, one entry per period in order, exactly as shown (either ["08:10","09:00"] or {"start":"08:10","end":"09:00"} is acceptable). Preserve the actual times; never invent, guess, or fall back to standard/default school times. If no class times are visible anywhere, return an empty bellTimes array.
 - Identify visible subjects, teachers, classrooms, breaks, and other timetable information.
-- teacherDB: one entry per distinct subject actually visible in the photo — do not invent subjects that aren't shown. Use the subject's Chinese name as its own key in this object; if two subjects share the same name, make the keys distinct (e.g. append the teacher's name). Value is [full subject name, teacher name, classroom]. Use "" for teacher/location when that information is not readable.
-- locationDB maps each subject key to its visible classroom/location; use "" when not visible.
-- weeklySchedule: keys "1" through "5" (Monday–Friday) are REQUIRED and must all be present, even as an empty array — never omit or truncate "5" (Friday) even if it is partially cut off in the photo. Add "6" (Saturday) and/or "0" (Sunday) ONLY if the photo actually shows a column for that day; otherwise omit them entirely. Keep each day's array aligned with the detected periods (one entry per bellTimes index). Use null when a slot is genuinely empty or cannot be identified; every non-null entry must be a key that exists in teacherDB.
-- If odd/even weeks contain alternatives in the same slot, combine them with "/" (e.g. "國文/公民") and do the same for the corresponding teacher names, using one shared key for that slot.
+- classes: one entry per distinct subject actually visible in the photo — do not invent subjects that aren't shown. "key" is your own short identifier for that entry (e.g. "c1", "c2") — it is never shown to anyone, it only links weeklySchedule slots back to this entry, so make each one unique. "subject" is the full Chinese subject name. Use "" for teacher/location when that information is not readable.
+- weeklySchedule: keys "1" through "5" (Monday–Friday) are REQUIRED and must all be present, even as an empty array — never omit or truncate "5" (Friday) even if it is partially cut off in the photo. Add "6" (Saturday) and/or "0" (Sunday) ONLY if the photo actually shows a column for that day; otherwise omit them entirely. Keep each day's array aligned with the detected periods (one entry per bellTimes index). Use null when a slot is genuinely empty or cannot be identified; every non-null entry must be a "key" that exists in classes.
+- If odd/even weeks contain alternatives in the same slot, combine them with "/" (e.g. "國文/公民") in both subject and teacher, using one shared classes entry for that slot.
 - Set reverseWeek to true only when the photo clearly indicates a reversed odd/even week orientation; otherwise false.
 - Add breakTimes only for explicitly shown non-class periods such as lunch or cleaning — not empty/free periods.
 - Add countdownEvents only for clearly visible events/exams with a readable calendar date, formatted as "YYYY-MM-DD". Set startDate and endDate to the same date for a single-day event; use the visible first and last dates for a multi-day event/exam period. Only include dates you can actually read; otherwise return an empty array.
@@ -156,12 +154,33 @@ Interpret the timetable visually and use your best judgment to reconstruct its s
 // this is the actual enforcement point that stops the model name from being
 // an arbitrary passthrough to Gemini's API. Ordered fastest-first there and
 // mirrored here; see that file for why the order flipped.
-const GEMINI_ALLOWED_MODELS = [
-  'gemini-3.5-flash-lite',
-  'gemini-3.6-flash',
-  'gemini-3.7-flash',
-  'gemini-2.5-flash'
-];
+//
+// gemini-2.5-flash, which used to close out this list, is gone rather than
+// demoted: confirmed live against the real API (not assumed from a
+// changelog) that it now 404s for every caller - "no longer available to
+// new users" - so keeping it in the fallback chain would only ever waste a
+// retry.
+//
+// gemini-3.6-flash is gone too, for a worse reason: run against this
+// feature's actual prompt+schema+multi-file request shape (not just
+// pinged), it reproduced two separate real failures, not a one-off - a
+// single-file request that burned through 24576 output tokens over 94
+// seconds before finally coming back truncated and unusable, and a
+// multi-file request that came back fast but recognized just 1 of 12
+// classes. Both look like the same underlying problem: this model version
+// misbehaving specifically under schema-constrained decoding. A fallback
+// that can silently cost 94 seconds and still fail is worse than having no
+// fallback there at all, since the retry loop below waits through the full
+// thing before ever trying the next model.
+//
+// gemini-3.8-flash, the newest release, was tried as a replacement and
+// rejected for a different reason: three attempts with backoff all came
+// back 503 "high demand" - it simply isn't reliably available yet, not a
+// correctness problem. Worth reconsidering once it's out of that state.
+//
+// That leaves two, both verified correct and reasonably fast on repeated
+// single- and multi-file live runs.
+const GEMINI_ALLOWED_MODELS = ['gemini-3.5-flash-lite', 'gemini-3.7-flash'];
 
 // The exact shape src/gemini-ocr.js's normalizeAIOutput() reads back,
 // handed to the model as a response schema rather than only described in
@@ -174,11 +193,28 @@ const GEMINI_ALLOWED_MODELS = [
 // the prompt - the prompt still says what to extract and what not to invent
 // - only for the half of it that describes JSON punctuation.
 //
-// Deliberately loose in two places: bellTimes/breakTimes times stay plain
+// Deliberately loose in one place: bellTimes/breakTimes times stay plain
 // strings (normalizeTime() already accepts and repairs several forms, and a
 // stricter pattern would make the model drop a period it could otherwise
-// half-read), and weeklySchedule is a fixed set of seven arrays because a
-// schema cannot express "these keys are required, the others optional".
+// half-read); weeklySchedule is a fixed set of seven arrays because a schema
+// cannot express "these keys are required, the others optional".
+//
+// classes is an ARRAY of {key, subject, teacher, location} objects, not the
+// free-form {subjectKey: [subject, teacher, location]} map an earlier
+// version of this schema used. That map is impossible to describe here:
+// Gemini's response_schema is the OpenAPI-3.0 subset Schema object, which -
+// confirmed empirically against the real API, not just the docs - has no
+// `additionalProperties`. A request that tried to schema-constrain a
+// free-form map's values was rejected outright with a 400 before the model
+// ever ran, for every model, every time; dropping the constraint down to a
+// bare `type: 'object'` (so it was schema-legal but told the model nothing
+// about what belonged inside it) made the model leave the field empty far
+// more often than not - nothing about an undescribed nested object signals
+// "you are still expected to fill this in". An array of fully-typed objects
+// has neither problem: it is legal to describe field-by-field, and it gives
+// the model exactly as much structure as the map version's prose used to.
+// See src/gemini-ocr.js's normalizeAIOutput() for how "key" gets turned back
+// into the app's own internal id.
 const GEMINI_TIME_RANGE_SCHEMA = {
   type: 'object',
   properties: { start: { type: 'string' }, end: { type: 'string' } },
@@ -201,14 +237,19 @@ const GEMINI_RESPONSE_SCHEMA = {
         required: ['name', 'start', 'end']
       }
     },
-    // The subject keys are the model's own choice (the prompt asks for the
-    // Chinese subject name), so this is a free-form map of key -> [subject,
-    // teacher, location] rather than a fixed property list.
-    teacherDB: {
-      type: 'object',
-      additionalProperties: { type: 'array', items: { type: 'string' } }
+    classes: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          key: { type: 'string' },
+          subject: { type: 'string' },
+          teacher: { type: 'string' },
+          location: { type: 'string' }
+        },
+        required: ['key', 'subject']
+      }
     },
-    locationDB: { type: 'object', additionalProperties: { type: 'string' } },
     weeklySchedule: {
       type: 'object',
       properties: {
@@ -236,19 +277,32 @@ const GEMINI_RESPONSE_SCHEMA = {
       }
     }
   },
-  required: ['bellTimes', 'teacherDB', 'weeklySchedule']
+  required: ['bellTimes', 'classes', 'weeklySchedule']
 };
 
 // Same reasoning as AIVisionProcessor.buildGenerationConfig() (which this
 // replaces client-side) - plain structured extraction gets no benefit from
 // the models' default "thinking" pass, and different model families expose
 // that knob differently.
+//
+// maxOutputTokens is 24576, not the 8192 an earlier version of this used -
+// found by running this exact prompt+schema+model list against the real
+// API with a synthetic two-file request: gemini-3.6-flash hit the 8192 cap
+// under schema-constrained decoding (finishReason MAX_TOKENS), burned the
+// full 31 seconds doing it, and handed back JSON truncated mid-string -
+// silently unusable, and the single slowest, worst failure mode this whole
+// feature can produce. The same request finished in 4 seconds using well
+// under 1000 tokens once the cap was raised - the model was not trying to
+// say more, it just needed headroom to reach the end without being cut off
+// partway through a still-valid generation. A higher ceiling costs nothing
+// when it isn't needed (it bounds worst case, it doesn't change target
+// length), so it stays generous for every model and file count.
 function buildGenerationConfig(model) {
   return {
     response_mime_type: 'application/json',
     response_schema: GEMINI_RESPONSE_SCHEMA,
     temperature: 0.1,
-    maxOutputTokens: 8192,
+    maxOutputTokens: 24576,
     thinkingConfig: /^gemini-2\./.test(model) ? { thinkingBudget: 0 } : { thinkingLevel: 'low' }
   };
 }

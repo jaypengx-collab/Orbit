@@ -212,12 +212,28 @@ class AIVisionProcessor {
     // answered by the quickest model, and a photo the quick model can't
     // make sense of still ends up in front of the strongest one, at the
     // cost of one extra round trip in exactly the cases that need it.
-    this.geminiModels = [
-      'gemini-3.5-flash-lite',
-      'gemini-3.6-flash',
-      'gemini-3.7-flash',
-      'gemini-2.5-flash'
-    ];
+    //
+    // gemini-2.5-flash, which used to close out this list, is gone rather
+    // than demoted: confirmed live against the real API that it now 404s
+    // for every caller ("no longer available to new users"), so it would
+    // only ever waste a retry.
+    //
+    // gemini-3.6-flash is gone too, for a worse reason: run against this
+    // feature's real prompt+schema+multi-file shape, it reproduced two
+    // separate failures rather than a one-off - a single-file request that
+    // burned 94 seconds before coming back truncated (MAX_TOKENS) and
+    // unusable, and a multi-file request that came back fast but only
+    // recognized 1 of 12 classes. A fallback that can silently cost 94
+    // seconds and still fail is worse than no fallback there at all.
+    //
+    // gemini-3.8-flash was tried as a replacement and rejected for a
+    // different reason: three attempts with backoff all came back 503
+    // "high demand" - not a correctness problem, just not reliably
+    // available yet.
+    //
+    // Must match GEMINI_ALLOWED_MODELS in cloudflare-worker/orbit-worker.js
+    // exactly.
+    this.geminiModels = ['gemini-3.5-flash-lite', 'gemini-3.7-flash'];
   }
 
   // `files` is the encoded {mime_type, data} part list (see
@@ -375,57 +391,78 @@ class AIVisionProcessor {
     }
 
     // Keep the AI parser aligned to the current schema: direct property access only.
-    // The AI's own keys are only used to cross-reference locationDB/weeklySchedule
-    // entries during this parse - the app never shows or edits a class's key, so the
+    // The AI's own keys are only used to cross-reference weeklySchedule entries
+    // during this parse - the app never shows or edits a class's key, so the
     // internal id generated here doesn't need to be human-readable.
+    //
+    // `classes` (an array of {key, subject, teacher, location}) is the current
+    // shape, chosen specifically so it can be described in the Worker's
+    // response_schema: Gemini's response_schema is the OpenAPI-3.0 subset
+    // Schema object, which has no `additionalProperties` - confirmed against
+    // the real API, not just the docs, a request that tried to schema-constrain
+    // a free-form {key: [subject, teacher, location]} map (the older shape,
+    // still accepted below) was rejected outright with a 400, and dropping the
+    // constraint to a bare `type: 'object'` made the model leave it empty far
+    // too often (nothing in an unconstrained nested object tells the model
+    // it's still expected to fill it in). An array of fully-typed objects has
+    // no such problem and is what the Worker's prompt now actually asks for;
+    // the older map shape is still read here only so a client running ahead
+    // of a not-yet-redeployed Worker (or vice versa, during a rolling deploy)
+    // degrades to parsing correctly instead of silently landing an empty
+    // course list.
     const teacherDB = {};
     const locationDB = {};
     const keyMap = {};
     let courseCounter = 1;
-    if (aiResult.teacherDB && typeof aiResult.teacherDB === 'object') {
+    // Does NOT fall subject back to dbKey itself - that would have been
+    // reasonable for the legacy map shape (its key is typically the
+    // subject's own Chinese name already, e.g. teacherDB's "國文"), but
+    // would be wrong for the classes-array shape, where "key" is an opaque
+    // id like "c1" the model invented purely to link a weeklySchedule slot
+    // back to this entry (see the Worker's prompt) - never a real subject
+    // name. Callers that want the old fallback pass it in explicitly.
+    const addClass = (dbKey, subject, teacher, location) => {
+      subject = String(subject || '').trim();
+      if (!subject) return;
+      teacher = String(teacher || '')
+        .trim()
+        .replace(/／/g, '/');
+      location = String(location || '')
+        .trim()
+        .replace(/／/g, '/');
+      subject = subject.replace(/／/g, '/');
+      const key = `oc${courseCounter++}`;
+      keyMap[
+        String(dbKey || '')
+          .trim()
+          .replace(/／/g, '/')
+      ] = key;
+      teacherDB[key] = [subject, teacher, location];
+      locationDB[key] = location;
+    };
+    if (Array.isArray(aiResult.classes)) {
+      aiResult.classes.forEach(entry => {
+        if (!entry || typeof entry !== 'object') return;
+        addClass(entry.key, entry.subject, entry.teacher, entry.location);
+      });
+    } else if (aiResult.teacherDB && typeof aiResult.teacherDB === 'object') {
       Object.entries(aiResult.teacherDB).forEach(([dbKey, val]) => {
-        let subject;
-        let teacher;
-        let location;
-
-        if (Array.isArray(val)) {
-          subject = String(val[0] || dbKey).trim();
-          teacher = String(val[1] || '').trim();
-          location = String(val[2] || '').trim();
-        } else if (val && typeof val === 'object') {
-          subject = String(val.subject || dbKey).trim();
-          teacher = String(val.teacher || '').trim();
-          location = String(val.location || '').trim();
-        } else {
-          subject = String(val || dbKey).trim();
-        }
-
-        if (!subject) return;
-
-        subject = subject.replace(/／/g, '/');
-        teacher = teacher.replace(/／/g, '/');
-        location = location.replace(/／/g, '/');
-
-        const key = `oc${courseCounter++}`;
-        keyMap[
-          String(dbKey || '')
-            .trim()
-            .replace(/／/g, '/')
-        ] = key;
-        teacherDB[key] = [subject, teacher, location];
-        locationDB[key] = location;
+        if (Array.isArray(val)) addClass(dbKey, val[0] || dbKey, val[1], val[2]);
+        else if (val && typeof val === 'object')
+          addClass(dbKey, val.subject || dbKey, val.teacher, val.location);
+        else addClass(dbKey, val || dbKey, '', '');
       });
-    }
-    if (aiResult.locationDB && typeof aiResult.locationDB === 'object') {
-      Object.entries(aiResult.locationDB).forEach(([dbKey, value]) => {
-        const key =
-          keyMap[
-            String(dbKey || '')
-              .trim()
-              .replace(/／/g, '/')
-          ];
-        if (key) locationDB[key] = String(value || '').trim();
-      });
+      if (aiResult.locationDB && typeof aiResult.locationDB === 'object') {
+        Object.entries(aiResult.locationDB).forEach(([dbKey, value]) => {
+          const key =
+            keyMap[
+              String(dbKey || '')
+                .trim()
+                .replace(/／/g, '/')
+            ];
+          if (key) locationDB[key] = String(value || '').trim();
+        });
+      }
     }
 
     const weeklySchedule = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };

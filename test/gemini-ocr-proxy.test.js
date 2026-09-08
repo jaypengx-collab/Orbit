@@ -104,10 +104,10 @@ describe('AIVisionProcessor.recognizeSchedule with a configured proxy', () => {
     const processor = new AIVisionProcessor();
     const fetchMock = vi.fn(async (url, options) =>
       JSON.parse(options.body).model === 'gemini-3.5-flash-lite'
-        ? fakeGeminiResponse({ teacherDB: {}, weeklySchedule: {} })
+        ? fakeGeminiResponse({ classes: [], weeklySchedule: {} })
         : fakeGeminiResponse({
-            teacherDB: { 國文: ['國文', '陳老師', 'A101'] },
-            weeklySchedule: { 1: ['國文'] },
+            classes: [{ key: 'c1', subject: '國文', teacher: '陳老師', location: 'A101' }],
+            weeklySchedule: { 1: ['c1'] },
             bellTimes: [{ start: '08:10', end: '09:00' }]
           })
     );
@@ -118,7 +118,7 @@ describe('AIVisionProcessor.recognizeSchedule with a configured proxy', () => {
           ? { valid: true }
           : { valid: false, errors: ['沒有辨識到課程或倒數日期。'] }
     });
-    expect(result.modelUsed).toBe('gemini-3.6-flash');
+    expect(result.modelUsed).toBe('gemini-3.7-flash');
     expect(fetchMock).toHaveBeenCalledTimes(2);
     vi.unstubAllGlobals();
   });
@@ -128,13 +128,13 @@ describe('AIVisionProcessor.recognizeSchedule with a configured proxy', () => {
   // rather than a bare failure.
   it('falls back to the last attempt when no model produces a usable result', async () => {
     const processor = new AIVisionProcessor();
-    const fetchMock = vi.fn(async () => fakeGeminiResponse({ teacherDB: {}, weeklySchedule: {} }));
+    const fetchMock = vi.fn(async () => fakeGeminiResponse({ classes: [], weeklySchedule: {} }));
     vi.stubGlobal('fetch', fetchMock);
     const result = await processor.recognizeSchedule(fakeFiles(), () => {}, {
       validate: () => ({ valid: false, errors: ['沒有辨識到課程或倒數日期。'] })
     });
-    expect(result.modelUsed).toBe('gemini-2.5-flash'); // the last one tried
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(result.modelUsed).toBe('gemini-3.7-flash'); // the last one tried
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     vi.unstubAllGlobals();
   });
 
