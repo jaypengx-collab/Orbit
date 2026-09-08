@@ -101,26 +101,22 @@ function syncTestPlayPauseUi() {
   });
 })();
 
-// Press feedback for the class cards - a plain size change, the same shape
-// as the day-nav buttons' own :active (see .nav-item in styles.css), not
-// the bounce+glow an earlier version used. But a plain CSS transition on
-// .is-pressed alone (which is what that "just match nav-item" simplification
-// tried) turned out to produce literally no visible motion for an ordinary
-// fast tap: pointerdown adds .is-pressed and pointerup removes it, and for a
-// tap quick enough (routinely the case - that's the whole reason this file
-// doesn't just rely on :active), both can fire before the browser paints a
-// single frame in between. A transition has nothing to animate away from if
-// the "pressed" state was never actually rendered, so the card visibly does
-// nothing at all - worse than the slow-but-visible animation this replaced.
+// Press feedback for the class cards: a live, held-state size change, not a
+// canned one-shot animation - grows the instant the finger touches down
+// (.is-pressed), eases back the instant it lifts, tracking the actual press
+// in real time exactly the way the day-nav buttons' own :active does (see
+// .nav-item in styles.css). A separate fixed-length "replay the tap"
+// animation was tried here first (triggered on the 'click' event, i.e.
+// necessarily after the finger had already lifted) and it was never going
+// to feel immediate no matter how short it ran, because it always started
+// after the physical gesture was already over rather than during it - a
+// structural lag a shorter duration can't fix.
 //
-// .is-tapped is the fix, and the reason this needs two classes instead of
-// one: it drives a CSS *animation* (see orbit-row-tap), not a transition,
-// and an animation - once started - always plays its full declared length
-// regardless of how fast the class gets removed again. It can't be skipped
-// by the same race that breaks .is-pressed's own transition. .is-pressed is
-// kept alongside it for a genuinely held press (long enough that its own
-// transition has time to actually render), where a fixed-length animation
-// alone would spring back to normal while the finger is still down.
+// Still JS-driven rather than a bare CSS :active rule: on iOS Safari
+// specifically, :active on an element with a backdrop-filter has a history
+// of failing to composite in time for a tap this quick (see .nav-item's own
+// comment on the same issue) - .is-pressed, held for exactly as long as the
+// finger is actually down, is the reliable version of the same state.
 //
 // One delegated listener rather than per-row ones: renderList() rebuilds
 // every card from scratch on each update, so anything bound to a row would
@@ -131,7 +127,6 @@ function syncTestPlayPauseUi() {
   if (!list) return;
 
   let pressedRow = null;
-  const rowFrom = event => (event.target instanceof Element ? event.target.closest('.row') : null);
   const release = () => {
     if (!pressedRow) return;
     pressedRow.classList.remove('is-pressed');
@@ -141,7 +136,7 @@ function syncTestPlayPauseUi() {
   list.addEventListener(
     'pointerdown',
     event => {
-      const row = rowFrom(event);
+      const row = event.target instanceof Element ? event.target.closest('.row') : null;
       if (!row) return;
       release();
       pressedRow = row;
@@ -157,22 +152,6 @@ function syncTestPlayPauseUi() {
     window.addEventListener(type, release, { passive: true })
   );
   list.addEventListener('scroll', release, { passive: true });
-
-  list.addEventListener('click', event => {
-    const row = rowFrom(event);
-    if (!row) return;
-    release();
-    // Restart rather than extend, so a second tap on the same card animates
-    // again instead of being swallowed by the still-running first one.
-    row.classList.remove('is-tapped');
-    void row.offsetWidth;
-    row.classList.add('is-tapped');
-  });
-  // Name-checked because the cards' own entry animation (orbit-row-in) ends
-  // on these same elements and must not clear a tap that is still running.
-  list.addEventListener('animationend', event => {
-    if (event.animationName === 'orbit-row-tap') event.target.classList.remove('is-tapped');
-  });
 })();
 
 /* Dashboard sizing and accessible list rendering. */

@@ -104,13 +104,13 @@ describe('dashboard update() against the real app', () => {
     expect(days).toEqual([1, 3]); // only Monday and Wednesday have classes
   });
 
-  // .is-pressed alone (a plain CSS transition) turned out to produce no
-  // visible motion at all for an ordinary fast tap: pointerdown/pointerup
-  // can both fire before a single frame paints in between, so the
-  // transition has nothing to animate away from. .is-tapped's animation is
-  // what actually guarantees a fast tap is ever visible - see
-  // initSchedulePressFeedback's comment in src/dashboard-render.js.
-  describe('class cards react to being pressed and tapped', () => {
+  // A live, held-state size change - grows the instant the finger touches
+  // down, eases back the instant it lifts - rather than a fixed-length
+  // animation replayed after the fact on click. .is-pressed is the reliable
+  // stand-in for :active on touch (see initSchedulePressFeedback's comment
+  // in src/dashboard-render.js for why plain :active isn't enough on iOS
+  // Safari here).
+  describe('class cards react to being pressed', () => {
     const firstRow = () => {
       setSimTime(8, 20);
       state.viewDay = 1;
@@ -131,35 +131,6 @@ describe('dashboard update() against the real app', () => {
       row.dispatchEvent(new window.PointerEvent('pointerdown', { bubbles: true }));
       window.dispatchEvent(new window.PointerEvent('pointercancel', { bubbles: true }));
       expect(row.classList.contains('is-pressed')).toBe(false);
-    });
-
-    it('runs the tap animation on click even when press and release happen too fast to render in between', () => {
-      const row = firstRow();
-      // The exact race .is-tapped exists for: both events fire with nothing
-      // in between, same as a fast real tap would.
-      row.dispatchEvent(new window.PointerEvent('pointerdown', { bubbles: true }));
-      window.dispatchEvent(new window.PointerEvent('pointerup', { bubbles: true }));
-      row.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-      expect(row.classList.contains('is-tapped')).toBe(true);
-    });
-
-    it('restarts the tap animation on a repeat tap, and ignores the entry animation ending on the same element', () => {
-      const row = firstRow();
-      row.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-      expect(row.classList.contains('is-tapped')).toBe(true);
-      // jsdom has no AnimationEvent constructor, so the name it dispatches
-      // on is set by hand - the handler only ever reads that one property.
-      const animationEnd = name => {
-        const event = new window.Event('animationend', { bubbles: true });
-        Object.defineProperty(event, 'animationName', { value: name });
-        row.dispatchEvent(event);
-      };
-      // The cards' own entry animation ends on these same elements and must
-      // not clear a tap that is still running.
-      animationEnd('orbit-row-in');
-      expect(row.classList.contains('is-tapped')).toBe(true);
-      animationEnd('orbit-row-tap');
-      expect(row.classList.contains('is-tapped')).toBe(false);
     });
   });
 });
