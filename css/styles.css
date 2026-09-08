@@ -862,7 +862,7 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 #test-refresh-btn{flex:0 0 auto;min-height:24px;width:auto;padding:3px 7px;border-radius:7px;background:color-mix(in srgb,var(--pro-accent) 15%,transparent);color:var(--pro-accent);border:1px solid color-mix(in srgb,var(--pro-accent) 42%,transparent);box-shadow:none;font-size:9px;font-weight:800;line-height:1;letter-spacing:0;cursor:pointer;touch-action:manipulation;transition:transform .12s,background .15s}
 #test-refresh-btn:active{transform:scale(.92);background:color-mix(in srgb,var(--pro-accent) 28%,transparent)}
 #test-refresh-btn:disabled{opacity:.6;cursor:default}
-#test-reset-btn{flex:0 0 auto;margin-left:auto;min-height:24px;width:auto;padding:3px 7px;border-radius:7px;background:rgba(255,69,58,.08);color:#ff453a;border:1px solid rgba(255,69,58,.35);box-shadow:none;font-size:9px;font-weight:800;line-height:1;letter-spacing:0;cursor:pointer;touch-action:manipulation;transition:transform .12s,background .15s}
+#test-reset-btn{flex:0 0 auto;min-height:24px;width:auto;padding:3px 7px;border-radius:7px;background:rgba(255,69,58,.08);color:#ff453a;border:1px solid rgba(255,69,58,.35);box-shadow:none;font-size:9px;font-weight:800;line-height:1;letter-spacing:0;cursor:pointer;touch-action:manipulation;transition:transform .12s,background .15s}
 #test-reset-btn:active{transform:scale(.92);background:rgba(255,69,58,.16)}
 
 #test-time-slider{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:999px;background:var(--bd);margin:6px 0 2px;cursor:pointer}
