@@ -8,6 +8,17 @@
 
 /* ---- Reset ---- */
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+/* Baseline keyboard-focus ring for every plain <button> in the app (nearly
+   every control here is one - nav days, toolbar icons, style/preset chips,
+   assign-sheet cells, editor add/delete/drill buttons, sheet close buttons -
+   none of which had ANY focus-visible styling of their own beyond a couple
+   of one-off exceptions further down). :focus-visible already excludes the
+   ring on a plain mouse/touch click in every supporting browser, so this is
+   pure upside for keyboard/switch-control navigation with zero effect on
+   how tapping a button looks. Individual components below are still free to
+   override this with a more specific rule (.row, #test-time-slider, etc.
+   already do, for a ring shaped to their own geometry). */
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 @keyframes fadeInUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 @keyframes orbit-boot-spin{to{transform:rotate(360deg)}}
@@ -117,8 +128,14 @@ body{
   --status-tag-next-fg:var(--pro-accent-text);
   --status-tag-now-bg:var(--pro-secondary);
   --status-tag-now-fg:var(--pro-secondary-text);
+  /* Both stops stay within the accent's own hue (lightened, then a touch
+     deepened) rather than crossing over to --pro-secondary - every primary
+     action button in the app (save/close/confirm) reads as "the app's one
+     brand color" instead of a two-hue accent-to-secondary gradient, which
+     read as a decorative rainbow sticker rather than a single deliberate
+     button color. */
   --pro-action-bg:color-mix(in srgb,var(--pro-accent) 62%,#ffffff 22%);
-  --pro-action-bg-2:color-mix(in srgb,var(--pro-secondary) 62%,#ffffff 22%);
+  --pro-action-bg-2:color-mix(in srgb,var(--pro-accent) 88%,#000000 6%);
   --pro-action-text:var(--pro-accent-text);
   /* A third hue for spots needing to tell three theme-derived things apart
      (e.g. the three toolbar icons) without falling back to a fixed brand color. */
@@ -239,8 +256,13 @@ body.orbit-booting .dashboard-boot-loader{visibility:visible;display:flex;positi
 }
 .top-action-btn:active{transform:scale(.9);box-shadow:0 2px 8px rgba(0,0,0,.3)}
 .top-action-btn.is-disabled{opacity:.4;filter:grayscale(.5);pointer-events:none}
-#btn-menu.top-action-btn{width:var(--v31-hub-size);height:var(--v31-hub-size);border-radius:18px;background:linear-gradient(145deg,color-mix(in srgb,var(--pro-accent) 82%,transparent),color-mix(in srgb,var(--pro-accent) 55%,transparent) 70%);color:var(--pro-accent-text);font-size:20px;box-shadow:0 12px 30px color-mix(in srgb,var(--pro-accent) 40%,transparent),0 4px 12px rgba(0,0,0,.28);font-weight:900;line-height:1;backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%)}
-.top-actions.open #btn-menu.top-action-btn{transform:rotate(45deg) scale(.96);color:var(--pro-secondary-text);background:linear-gradient(145deg,color-mix(in srgb,var(--pro-secondary) 85%,transparent),color-mix(in srgb,var(--pro-secondary) 58%,transparent) 70%);box-shadow:0 12px 30px color-mix(in srgb,var(--pro-secondary) 38%,transparent),0 4px 12px rgba(0,0,0,.28)}
+/* The glow's blur/spread stay generous (it's the one control meant to read
+   as "the primary action" at a glance) but the mix percentage backs off from
+   its original 38-40% - that read as a neon sign next to the rest of the
+   app's now much quieter chrome, once every other button stopped competing
+   with its own saturated glow. */
+#btn-menu.top-action-btn{width:var(--v31-hub-size);height:var(--v31-hub-size);border-radius:18px;background:linear-gradient(145deg,color-mix(in srgb,var(--pro-accent) 82%,transparent),color-mix(in srgb,var(--pro-accent) 55%,transparent) 70%);color:var(--pro-accent-text);font-size:20px;box-shadow:0 12px 28px color-mix(in srgb,var(--pro-accent) 28%,transparent),0 4px 12px rgba(0,0,0,.3);font-weight:900;line-height:1;backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%)}
+.top-actions.open #btn-menu.top-action-btn{transform:rotate(45deg) scale(.96);color:var(--pro-secondary-text);background:linear-gradient(145deg,color-mix(in srgb,var(--pro-secondary) 85%,transparent),color-mix(in srgb,var(--pro-secondary) 58%,transparent) 70%);box-shadow:0 12px 28px color-mix(in srgb,var(--pro-secondary) 26%,transparent),0 4px 12px rgba(0,0,0,.3)}
 .top-actions-menu{
   position:absolute;top:calc(var(--v31-hub-size) + 8px);right:0;flex-direction:column;display:flex;gap:7px;padding:7px;
   border-radius:20px;opacity:0;visibility:hidden;pointer-events:none;
@@ -251,9 +273,17 @@ body.orbit-booting .dashboard-boot-loader{visibility:visible;display:flex;positi
 }
 .top-actions.open .top-actions-menu{display:flex;opacity:1;visibility:visible;pointer-events:auto;transform:translateY(0) scale(1)}
 .top-actions-menu .top-action-btn{width:44px;height:44px;font-size:17px;border-radius:13px}
-.top-actions-menu #btn-edit.top-action-btn{color:var(--pro-accent-readable);border:1px solid color-mix(in srgb,var(--pro-accent) 32%,transparent);background:linear-gradient(150deg,color-mix(in srgb,var(--pro-accent) 16%,transparent),color-mix(in srgb,var(--pro-accent) 4%,transparent));box-shadow:0 6px 16px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.06)}
-.top-actions-menu #btn-style.top-action-btn{color:var(--pro-secondary-readable);border:1px solid color-mix(in srgb,var(--pro-secondary) 32%,transparent);background:linear-gradient(150deg,color-mix(in srgb,var(--pro-secondary) 16%,transparent),color-mix(in srgb,var(--pro-secondary) 4%,transparent));box-shadow:0 6px 16px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.06)}
-.top-actions-menu #btn-transfer.top-action-btn{color:var(--pro-blend);border:1px solid color-mix(in srgb,var(--pro-blend) 32%,transparent);background:linear-gradient(150deg,color-mix(in srgb,var(--pro-blend) 16%,transparent),color-mix(in srgb,var(--pro-blend) 4%,transparent));box-shadow:0 6px 16px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.06)}
+/* One shared neutral chrome for all three menu icons - only the icon color
+   itself (via `color`, since each SVG uses stroke="currentColor") tells them
+   apart. Three separately tinted+bordered pills here (accent/secondary/a
+   third blended hue, stacked right next to each other in one small menu)
+   read as a cluster of mismatched colored badges rather than one coherent
+   tool menu; a single icon-only accent keeps them individually identifiable
+   without the menu itself looking like a confetti of brand colors. */
+.top-actions-menu .top-action-btn{border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.055);box-shadow:0 6px 16px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.06)}
+.top-actions-menu #btn-edit.top-action-btn{color:var(--pro-accent-readable)}
+.top-actions-menu #btn-style.top-action-btn{color:var(--pro-secondary-readable)}
+.top-actions-menu #btn-transfer.top-action-btn{color:var(--pro-blend)}
 .top-actions-menu .top-action-btn:active{transform:scale(.9)}
 .top-actions-menu .top-action-btn.active{box-shadow:0 0 0 2px currentColor,0 6px 16px rgba(0,0,0,.22)}
 body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibility:hidden;pointer-events:none;transition:opacity .2s,visibility .2s}
@@ -292,8 +322,18 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
   background:var(--well-fill);box-shadow:var(--well-shadow);
 }
 .break-progress-wrap{margin:0;background:rgba(255,255,255,.08);border-radius:999px;overflow:hidden;display:none;height:9px;margin-bottom:1px;box-shadow:inset 0 1px 2px rgba(0,0,0,.35)}
-.break-progress-bar{height:100%;border-radius:999px;transition:width 1s linear;background:linear-gradient(90deg,color-mix(in srgb,var(--pro-secondary) 65%,#fff 25%),color-mix(in srgb,var(--pro-accent) 65%,#fff 25%))}
-.break-progress-wrap.is-class .break-progress-bar{background:linear-gradient(90deg,var(--pro-accent),var(--pro-secondary))}
+/* One hue per state, not a two-hue accent/secondary blend that read as a
+   decorative rainbow strip regardless of what the bar was actually tracking
+   - break time tints toward --pro-secondary, class time toward --pro-accent,
+   so the color itself now carries "which state you're in" instead of
+   letting a mixed gradient dilute both. */
+.break-progress-bar{height:100%;border-radius:999px;transition:width 1s linear;background:linear-gradient(90deg,color-mix(in srgb,var(--pro-secondary) 55%,#fff 15%),var(--pro-secondary))}
+/* .is-class is toggled by dashboard.js directly on #progress-bar (this same
+   element), not on .break-progress-wrap - matching that here instead of the
+   old .break-progress-wrap.is-class ancestor selector, which never actually
+   matched anything and silently left the bar always rendering as the break
+   (secondary) gradient even while a class was active. */
+.break-progress-bar.is-class{background:linear-gradient(90deg,color-mix(in srgb,var(--pro-accent) 55%,#fff 15%),var(--pro-accent))}
 .timer-container{display:flex;align-items:baseline;gap:7px;margin-top:0}
 .timer-badge{display:flex;align-items:center;justify-content:center;text-align:center;padding:4px 10px;border-radius:10px;font-weight:700;font-family:ui-monospace,SFMono-Regular,monospace;background:color-mix(in srgb,var(--pro-accent) 16%,rgba(0,0,0,.22));border:0;color:var(--pro-accent-readable);box-shadow:inset 0 1px 3px rgba(0,0,0,.3);font-size:clamp(28px,7.8vw,36px)}
 .timer-label{font-size:10px;color:var(--orbit-muted);font-weight:600;opacity:.8}
@@ -405,7 +445,14 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
   font-size:clamp(13px,3.6vw,15px);cursor:pointer;transition:transform .12s var(--ease-glass);
   border-radius:11px;padding:8px 3px;font-weight:700;color:var(--orbit-muted);
 }
-.nav-item:active,.nav-item:focus,.nav-item:focus-visible{box-shadow:none;outline:none}
+.nav-item:active,.nav-item:focus{box-shadow:none;outline:none}
+/* Restores a real ring for keyboard/switch-control focus specifically - the
+   blanket outline:none above (and its own former :focus-visible in this
+   same rule) was written to kill the residual outline a plain mouse click
+   can leave in some browsers, but it also silently removed the one signal a
+   keyboard user tabbing across five identical day buttons had for which one
+   is focused. */
+.nav-item:focus-visible{box-shadow:none;outline:2px solid var(--accent);outline-offset:2px}
 .nav-item:active{transform:scale(.95)}
 .nav-item.is-today{color:#fff;border:2px solid var(--day-today-border);background:color-mix(in srgb,var(--pro-accent) 24%,transparent)}
 .nav-item.is-tomorrow{color:#fff;border:2px solid var(--day-tomorrow-border);background:color-mix(in srgb,var(--pro-secondary) 26%,transparent)}
