@@ -26,6 +26,7 @@
 import { state } from './state.js';
 import {
   applyEditorSettingsData,
+  cloneSettingsData,
   copyTransferText,
   decodeTransferData,
   encodeTransferData,
@@ -64,6 +65,20 @@ const LAST_KNOWN_SHARED_STYLE_KEY = 'orbitSyncLastKnownStyle';
 // the user either restores it or dismisses it - a per-device backup, like
 // the preference itself, not tied to any one pairing.
 const STYLE_BACKUP_KEY = 'orbitSyncStyleBackup';
+// The same kind of one-shot safety net as the style backup above, but for
+// the whole schedule: joining an existing sync immediately and irreversibly
+// replaces this device's local schedule with whatever the shared document
+// holds (see performSyncJoin) - the only warning beforehand is the
+// "加入會立刻用該代碼下的課表取代..." text in orbitSyncJoin's confirm sheet,
+// which is easy to click through without really registering. Backed up
+// right before that replacement actually happens, offered back the moment
+// there's somewhere to offer it from again - unlinking or deleting the sync
+// both leave this device on its own, which is exactly when "did you want
+// your old schedule back, or is the one you've been using fine" becomes a
+// real question. Per-device, not tied to any one pairing, same as the style
+// backup - a device could join, unlink, rejoin a different code, and unlink
+// again before ever dealing with the first backup.
+const SCHEDULE_BACKUP_KEY = 'orbitSyncScheduleBackup';
 const MANAGER_ROLE = 'manager';
 const VIEWER_ROLE = 'viewer';
 // 0/O/1/I excluded so a hand-copied or read-aloud code is never ambiguous.
@@ -160,6 +175,25 @@ function backUpCurrentStyle() {
 }
 function clearStyleBackup() {
   writeLocal(STYLE_BACKUP_KEY, '');
+}
+function getScheduleBackup() {
+  try {
+    return JSON.parse(readLocal(SCHEDULE_BACKUP_KEY) || 'null');
+  } catch {
+    return null;
+  }
+}
+// Takes the data to back up as a parameter, rather than reading
+// state.applicationData itself, because by the time performSyncJoin knows
+// whether it's actually needed (pullSyncSnapshot's `applied` result), the
+// join has already overwritten state.applicationData with the incoming
+// data - the pre-join snapshot has to be captured before that happens and
+// carried through.
+function backUpLocalSchedule(data) {
+  writeLocal(SCHEDULE_BACKUP_KEY, JSON.stringify(data));
+}
+function clearScheduleBackup() {
+  writeLocal(SCHEDULE_BACKUP_KEY, '');
 }
 function generateSyncCode() {
   const bytes = new Uint8Array(CODE_LENGTH);
@@ -437,6 +471,7 @@ function renderSyncPanel() {
   const roleLabel = document.getElementById('sync-role-label');
   const keepStyleCheckbox = document.getElementById('sync-keep-local-style');
   const styleBackupNotice = document.getElementById('sync-style-backup-notice');
+  const scheduleBackupNotice = document.getElementById('sync-schedule-backup-notice');
   const deleteAllBtn = document.getElementById('sync-delete-all-btn');
   if (!setupBox || !activeBox) return;
   const configured = isSyncConfigured();
@@ -463,6 +498,12 @@ function renderSyncPanel() {
   // could re-check "不同步樣式顏色" again before ever coming back to deal
   // with the backup from the last time they unchecked it.
   if (styleBackupNotice) styleBackupNotice.hidden = !getStyleBackup();
+  // Shown whenever a pre-join schedule backup is sitting around waiting on a
+  // decision - deliberately not scoped to !configured, since it's most
+  // relevant right after unlinking or deleting a sync (when this device is
+  // unpaired again), but nothing stops a device from joining a *different*
+  // sync before ever dealing with the backup from the last one.
+  if (scheduleBackupNotice) scheduleBackupNotice.hidden = !getScheduleBackup();
   applyEditorRoleLock();
 }
 // Warns before either direction of this toggle takes effect - a native
@@ -546,6 +587,25 @@ function orbitSyncRestoreStyleBackup() {
 }
 function orbitSyncDismissStyleBackup() {
   clearStyleBackup();
+  renderSyncPanel();
+}
+// The recovery half of the schedule-backup safety net (see
+// SCHEDULE_BACKUP_KEY) - reapplies whatever local schedule this device had
+// right before it last joined a sync that actually overwrote it. Only ever
+// offered after that pairing is already gone (unlinked or deleted), so
+// there's no "don't push this back out" concern to worry about the way the
+// style restore above has - isSyncConfigured() is already false by the time
+// this is reachable.
+function orbitSyncRestoreScheduleBackup() {
+  const backup = getScheduleBackup();
+  if (!backup) return;
+  applyEditorSettingsData(backup);
+  clearScheduleBackup();
+  renderSyncPanel();
+  setSyncStatusUi('已還原加入同步前的本機課表。');
+}
+function orbitSyncDismissScheduleBackup() {
+  clearScheduleBackup();
   renderSyncPanel();
 }
 
@@ -716,6 +776,10 @@ async function orbitSyncJoin() {
 }
 
 async function performSyncJoin(code, asManager) {
+  // Captured before setSyncPairing/pullSyncSnapshot can touch anything - see
+  // SCHEDULE_BACKUP_KEY's comment. Not written to storage yet: only
+  // committed below once the join actually replaces local data.
+  const preJoinSchedule = cloneSettingsData(state.applicationData);
   setSyncPairing(code, asManager ? MANAGER_ROLE : VIEWER_ROLE);
   setSyncStatusUi('正在加入同步…');
   const result = await pullSyncSnapshot({ force: true });
@@ -738,6 +802,11 @@ async function performSyncJoin(code, asManager) {
     setSyncStatusUi('找不到這組配對代碼，請確認代碼是否正確，或請對方先按「建立新同步」。', true);
     return;
   }
+  // Only actually replaced local data if pullSyncSnapshot applied something
+  // - the shared document could turn out to already match this device's
+  // schedule exactly, in which case nothing was lost and there's nothing
+  // worth offering to restore later.
+  if (result.applied) backUpLocalSchedule(preJoinSchedule);
   renderSyncPanel();
   setSyncStatusUi(asManager ? '已以管理者身份加入同步。' : '已加入同步（僅接收）。');
   startSyncLoop();
@@ -817,19 +886,10 @@ function orbitSyncDeleteForEveryone() {
       renderSyncPanel();
       setSyncStatusUi('已整個刪除同步，所有裝置都已斷開連結（本機課表不受影響）。');
     },
-    '取消',
-    {
-      extraLabel: '複製代碼',
-      extraHandler: async () => {
-        const extraBtn = document.getElementById('editor-confirm-extra-btn');
-        try {
-          await copyTransferText(code);
-          if (extraBtn) extraBtn.textContent = '已複製！';
-        } catch (error) {
-          setSyncStatusUi(`複製失敗：${error.message || error}`, true);
-        }
-      }
-    }
+    '取消'
+    // No copy-code option here (unlike orbitSyncUnlink) - once this
+    // succeeds the code is permanently dead for everyone, so a copy of it
+    // would be useless for rejoining.
   );
   showEditorConfirmSheet();
 }
@@ -841,11 +901,14 @@ window.orbitSyncDeleteForEveryone = orbitSyncDeleteForEveryone;
 window.orbitSyncSetKeepLocalStyle = orbitSyncSetKeepLocalStyle;
 window.orbitSyncRestoreStyleBackup = orbitSyncRestoreStyleBackup;
 window.orbitSyncDismissStyleBackup = orbitSyncDismissStyleBackup;
+window.orbitSyncRestoreScheduleBackup = orbitSyncRestoreScheduleBackup;
+window.orbitSyncDismissScheduleBackup = orbitSyncDismissScheduleBackup;
 
 export {
   applyEditorRoleLock,
   clearSyncPairing,
   generateSyncCode,
+  getScheduleBackup,
   getStyleBackup,
   getSyncCode,
   getSyncKeepLocalStyle,
@@ -855,8 +918,10 @@ export {
   isSyncViewer,
   orbitSyncCreate,
   orbitSyncDeleteForEveryone,
+  orbitSyncDismissScheduleBackup,
   orbitSyncDismissStyleBackup,
   orbitSyncJoin,
+  orbitSyncRestoreScheduleBackup,
   orbitSyncRestoreStyleBackup,
   orbitSyncSetKeepLocalStyle,
   orbitSyncUnlink,

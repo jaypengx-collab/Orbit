@@ -349,15 +349,15 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
   border-radius:11px;padding:8px 3px;font-weight:700;color:var(--orbit-muted);
 }
 .nav-item:active{transform:scale(.95)}
-.nav-item.is-today{color:#fff;border:2px solid var(--day-today-border);background:color-mix(in srgb,var(--pro-accent) 24%,transparent);box-shadow:0 0 0 1px color-mix(in srgb,var(--pro-accent) 32%,transparent)}
-.nav-item.is-tomorrow{color:#fff;border:2px solid var(--day-tomorrow-border);background:color-mix(in srgb,var(--pro-secondary) 26%,transparent);box-shadow:0 0 0 1px color-mix(in srgb,var(--pro-secondary) 32%,transparent)}
+.nav-item.is-today{color:#fff;border:2px solid var(--day-today-border);background:color-mix(in srgb,var(--pro-accent) 24%,transparent)}
+.nav-item.is-tomorrow{color:#fff;border:2px solid var(--day-tomorrow-border);background:color-mix(in srgb,var(--pro-secondary) 26%,transparent)}
 /* .active always wins the fill when combined with is-today/is-tomorrow — the
-   selected tab reads as the solid pill; the today/tomorrow ring only needs to
-   show up as a plain outline while browsing a different day. No drop shadow
-   here (beyond the today/tomorrow ring's hard-edged outline above): iOS
-   Safari was rendering this pill with no shadow at all while desktop Chrome
-   drew a soft one, so the blurred layer is dropped everywhere to match the
-   flatter look consistently across platforms. */
+   selected tab reads as the solid pill; the today/tomorrow state only needs
+   its 2px border while browsing a different day, no additional shadow/ring
+   on top of it. No drop shadow anywhere on these buttons: iOS Safari was
+   rendering this pill with no shadow at all while desktop Chrome drew a soft
+   one, so any shadow layer is dropped everywhere to match the flatter look
+   consistently across platforms. */
 .nav-item.active{background:linear-gradient(135deg,color-mix(in srgb,var(--pro-accent) 58%,#ffffff),color-mix(in srgb,var(--pro-accent) 28%,#ffffff));color:var(--pro-accent-text)}
 .nav-item.active.is-today{border-color:color-mix(in srgb,var(--pro-accent) 34%,transparent)}
 .nav-item.active.is-tomorrow{border-color:color-mix(in srgb,var(--pro-secondary) 72%,#ffffff 28%)}

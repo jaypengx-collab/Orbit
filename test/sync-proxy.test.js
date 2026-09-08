@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadApp } from './helpers/loadApp.js';
 import { seedLocalStorage } from './helpers/fixtureData.js';
 
@@ -406,6 +406,112 @@ describe('manager/viewer roles', () => {
   });
 });
 
+describe('a pre-join schedule backup can be recovered after unlinking or deleting', () => {
+  beforeEach(() => {
+    sync.orbitSyncDismissScheduleBackup();
+  });
+  // joinWithDifferentSchedule actually applies its payload (state.applicationData
+  // is one shared singleton for the whole file - see the warning comment near
+  // the 'Z' key above), so without this, the 'W' key it adds would still be
+  // there for the *next* test, making that test's "different" payload look
+  // identical to what's already applied and silently skip the join entirely.
+  // teacherOrder needs cleaning up too - normalizeSettingsData auto-appends
+  // any teacherDB key missing from it, so leaving a dangling 'W' there after
+  // deleting the teacherDB entry makes the *next* decoded payload (which
+  // normalizes cleanly, with no dangling entry) look spuriously different
+  // from this now-inconsistent state.applicationData, applying a "no-op"
+  // join for real and creating a bogus backup.
+  afterEach(() => {
+    delete state.applicationData.teacherDB.W;
+    state.applicationData.teacherOrder = (state.applicationData.teacherOrder || []).filter(
+      key => key !== 'W'
+    );
+  });
+
+  // A key distinct from every other test in this file's fixture mutations -
+  // see the warning comment near the 'Z' key above about shared singleton
+  // state.applicationData across this whole file.
+  async function joinWithDifferentSchedule(code = 'CODE1234', asManager = false) {
+    const { encodeTransferData } = await import('../src/editor-backup.js');
+    const incoming = {
+      ...state.applicationData,
+      teacherDB: { ...state.applicationData.teacherDB, W: ['地科', '林老師', ''] }
+    };
+    const payload = await encodeTransferData(incoming);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ exists: true, updateTime: 'now', payload })
+      }))
+    );
+    await sync.performSyncJoin(code, asManager);
+  }
+
+  it('backs up the pre-join schedule only when the join actually replaces local data', async () => {
+    expect(state.applicationData.teacherDB.W).toBeUndefined();
+    await joinWithDifferentSchedule();
+    expect(sync.isSyncConfigured()).toBe(true);
+    expect(state.applicationData.teacherDB.W).toEqual(['地科', '林老師', '']);
+    const backup = sync.getScheduleBackup();
+    expect(backup).not.toBeNull();
+    expect(backup.teacherDB.W).toBeUndefined();
+  });
+
+  it('does not create a backup when the code does not exist (nothing was actually joined)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, json: async () => ({ exists: false }) }))
+    );
+    await sync.performSyncJoin('NOBODY99', false);
+    expect(sync.isSyncConfigured()).toBe(false);
+    expect(sync.getScheduleBackup()).toBeNull();
+  });
+
+  it('unlinking shows the recovery notice, and restoring brings back the pre-join schedule', async () => {
+    await joinWithDifferentSchedule();
+    sync.renderSyncPanel();
+    sync.orbitSyncUnlink();
+    document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[1].onclick(); // 解除同步
+
+    expect(sync.isSyncConfigured()).toBe(false);
+    expect(document.getElementById('sync-schedule-backup-notice').hidden).toBe(false);
+    expect(state.applicationData.teacherDB.W).toEqual(['地科', '林老師', '']); // still the joined-in data
+
+    sync.orbitSyncRestoreScheduleBackup();
+    expect(state.applicationData.teacherDB.W).toBeUndefined();
+    expect(sync.getScheduleBackup()).toBeNull();
+    expect(document.getElementById('sync-schedule-backup-notice').hidden).toBe(true);
+    expect(document.getElementById('sync-status').textContent).toMatch(/已還原/);
+  });
+
+  it('dismissing the notice keeps the current (joined-in) schedule and clears the backup', async () => {
+    await joinWithDifferentSchedule();
+    sync.renderSyncPanel();
+    sync.orbitSyncUnlink();
+    document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[1].onclick();
+
+    sync.orbitSyncDismissScheduleBackup();
+    expect(sync.getScheduleBackup()).toBeNull();
+    expect(state.applicationData.teacherDB.W).toEqual(['地科', '林老師', '']);
+    expect(document.getElementById('sync-schedule-backup-notice').hidden).toBe(true);
+  });
+
+  it('deleting for everyone also surfaces the recovery notice', async () => {
+    await joinWithDifferentSchedule('CODE1234', true); // manager, so the delete button is available
+    sync.renderSyncPanel();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, json: async () => ({ deleted: true }) }))
+    );
+    sync.orbitSyncDeleteForEveryone();
+    await document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[1].onclick(); // 整個刪除
+
+    expect(sync.isSyncConfigured()).toBe(false);
+    expect(document.getElementById('sync-schedule-backup-notice').hidden).toBe(false);
+  });
+});
+
 // startSyncLoop() itself only ever runs once for the whole module (guarded
 // by a "started" flag) and is already triggered once at app boot via
 // bootstrap.js (see loadApp()), so its activity listeners are already bound
@@ -583,6 +689,10 @@ describe('orbitSyncDeleteForEveryone', () => {
     expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(true);
     expect(document.getElementById('editor-confirm-title').textContent).toMatch(/整個刪除/);
     expect(document.getElementById('editor-confirm-msg').textContent).toMatch(/CODE1234/);
+    // Unlike orbitSyncUnlink's confirm sheet, this one offers no "複製代碼"
+    // button - once this succeeds the code is dead for everyone, so copying
+    // it would be pointless.
+    expect(document.getElementById('editor-confirm-extra-btn').style.display).toBe('none');
 
     document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[0].onclick(); // 取消
     expect(sync.isSyncConfigured()).toBe(true);
