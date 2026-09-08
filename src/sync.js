@@ -549,27 +549,51 @@ function orbitSyncDismissStyleBackup() {
   renderSyncPanel();
 }
 
-// Locks the rest of the editor down to view-only for a viewer device -
-// everything except the always-visible "同步 / 匯入匯出" panel itself (where
-// the unlink button that gets a viewer back to full local editing lives).
-// This is a UX guardrail, not a real access-control boundary - same as the
-// rest of sync's design (see README's security section) - so it's plain
-// CSS (.sync-viewer-locked, see styles.css) rather than anything that
-// actually removes the underlying form controls.
+// Locks a viewer device out of the schedule editor entirely (its button,
+// not a greyed-out shell) and out of the AI/manual import actions in the
+// separate "同步 / 匯入匯出" sheet (where the unlink button that gets a
+// viewer back to full local editing lives - that sheet itself always stays
+// reachable). This is a UX guardrail, not a real access-control boundary -
+// same as the rest of sync's design (see README's security section) - so
+// it's plain CSS (.is-disabled/.sync-viewer-locked, see styles.css) rather
+// than anything that actually removes the underlying form controls.
 function applyEditorRoleLock() {
-  const sheet = document.getElementById('editor-sheet');
-  if (sheet) sheet.classList.toggle('sync-viewer-locked', isSyncViewer());
-  // The style tool is a separate top-bar overlay, not part of #editor-sheet
-  // at all, so it needs its own lock: a viewer who's still accepting synced
-  // colors (hasn't checked "不同步樣式顏色") has no real use for it - any
-  // local color change it made would just get overwritten by the next
-  // pulled update anyway, which is confusing busywork, not a real feature.
-  // A viewer who *has* opted out is exempt - that's the whole point of the
-  // opt-out - and a manager is never locked out of it at all, since setting
-  // the shared style in the first place is the manager's job.
+  const viewer = isSyncViewer();
+  // A viewer is never allowed into the schedule editor at all, full stop -
+  // unlike the style tool below, there's no opt-out that changes this. The
+  // schedule editor now holds nothing a viewer legitimately needs (sync
+  // status, unlink, AI/manual import all live in the separate transfer
+  // sheet instead, which stays reachable), so the button is locked outright
+  // instead of letting it open into a greyed-out shell. openEditor() itself
+  // also refuses for a viewer (editor-core.js) - the real check this button
+  // lock is only a UI shortcut for, same belt-and-suspenders reasoning as
+  // every other role lock in this file.
+  const editButton = document.getElementById('btn-edit');
+  if (editButton) {
+    editButton.classList.toggle('is-disabled', viewer);
+    editButton.title = viewer
+      ? '此裝置僅接收同步，無法編輯課表。如要自行編輯，請先在「同步 / 匯入匯出」解除同步。'
+      : '編輯課表';
+  }
+  // The transfer sheet itself stays open to both roles (a viewer needs to
+  // reach its sync status/unlink), but AI import and manual import are
+  // still real ways to overwrite the local schedule, so they get locked
+  // individually within it - see the matching .transfer-sheet.sync-viewer-
+  // locked rule in styles.css. Manual export stays enabled - reading out
+  // the currently-synced schedule isn't editing it.
+  const transferSheet = document.getElementById('transfer-sheet');
+  if (transferSheet) transferSheet.classList.toggle('sync-viewer-locked', viewer);
+  // The style tool is a separate top-bar overlay with its own opt-out-
+  // dependent lock: a viewer who's still accepting synced colors (hasn't
+  // checked "不同步樣式顏色") has no real use for it - any local color
+  // change it made would just get overwritten by the next pulled update
+  // anyway, which is confusing busywork, not a real feature. A viewer
+  // who *has* opted out is exempt - that's the whole point of the opt-out
+  // - and a manager is never locked out of it at all, since setting the
+  // shared style in the first place is the manager's job.
   const styleButton = document.getElementById('btn-style');
   if (styleButton) {
-    const locked = isSyncViewer() && !getSyncKeepLocalStyle();
+    const locked = viewer && !getSyncKeepLocalStyle();
     styleButton.classList.toggle('is-disabled', locked);
     styleButton.title = locked
       ? '此裝置正在同步樣式，無法自行變更。若要自訂樣式，請先在同步面板勾選「不同步樣式顏色」。'

@@ -23,7 +23,7 @@ beforeEach(() => {
   localStorage.removeItem('orbitOnboardingSeen');
   hideConfirmSheet();
   document.getElementById('editor-sheet').classList.remove('show');
-  document.getElementById('editor-fold-transfer').open = false;
+  document.getElementById('transfer-sheet').classList.remove('show');
 });
 
 function hideConfirmSheet() {
@@ -73,13 +73,13 @@ describe('first-run onboarding prompt', () => {
     expect(confirmSheetVisible()).toBe(false);
   });
 
-  it('"輸入配對代碼" opens the editor with the sync panel expanded and the join field focused', () => {
+  it('"輸入配對代碼" opens the standalone transfer sheet with the join field focused', () => {
     showOnboardingPrompt();
     confirmButtons()[1].onclick(); // confirmLabel slot: "輸入配對代碼"
 
     expect(confirmSheetVisible()).toBe(false);
-    expect(document.getElementById('editor-sheet').classList.contains('show')).toBe(true);
-    expect(document.getElementById('editor-fold-transfer').open).toBe(true);
+    expect(document.getElementById('transfer-sheet').classList.contains('show')).toBe(true);
+    expect(document.getElementById('editor-sheet').classList.contains('show')).toBe(false);
     expect(document.activeElement).toBe(document.getElementById('sync-join-code'));
   });
 
@@ -100,13 +100,13 @@ describe('first-run onboarding prompt', () => {
     expect(document.getElementById('editor-sheet').classList.contains('show')).toBe(true);
   });
 
-  it('the second choice\'s "用 AI 辨識照片" opens the editor with the sync/import panel expanded', () => {
+  it('the second choice\'s "用 AI 辨識照片" opens the standalone transfer sheet', () => {
     showOnboardingPrompt();
     confirmButtons()[0].onclick(); // -> second choice sheet
     confirmButtons()[1].onclick(); // confirmLabel slot: "用 AI 辨識照片"
 
     expect(confirmSheetVisible()).toBe(false);
-    expect(document.getElementById('editor-sheet').classList.contains('show')).toBe(true);
-    expect(document.getElementById('editor-fold-transfer').open).toBe(true);
+    expect(document.getElementById('transfer-sheet').classList.contains('show')).toBe(true);
+    expect(document.getElementById('editor-sheet').classList.contains('show')).toBe(false);
   });
 });

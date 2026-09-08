@@ -59,7 +59,6 @@ function syncTestPlayPauseUi() {
     if (summary) {
       summary.addEventListener('click', event => {
         if (!sheet.classList.contains('is-layered')) return;
-        if (det.id === 'editor-fold-transfer') return;
 
         // In layered mode, the active layer should stay open.
         // Prevent the native <details> close/reopen flash.
@@ -71,7 +70,6 @@ function syncTestPlayPauseUi() {
 
     det.addEventListener('toggle', () => {
       if (sheet.classList.contains('is-layered')) {
-        if (det.id === 'editor-fold-transfer') return;
         if (det.open && !det.classList.contains('active')) openEditorFold(det.id);
         else if (!det.open && det.classList.contains('active')) det.open = true;
         return;

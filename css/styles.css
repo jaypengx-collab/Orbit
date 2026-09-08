@@ -234,11 +234,10 @@ body.orbit-booting .dashboard-boot-loader{visibility:visible;display:flex;positi
 .top-actions-menu .top-action-btn{width:44px;height:44px;font-size:17px;border-radius:13px}
 .top-actions-menu #btn-edit.top-action-btn{color:var(--pro-accent-readable);border:1px solid color-mix(in srgb,var(--pro-accent) 32%,transparent);background:linear-gradient(150deg,color-mix(in srgb,var(--pro-accent) 16%,transparent),color-mix(in srgb,var(--pro-accent) 4%,transparent));box-shadow:0 6px 16px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.06)}
 .top-actions-menu #btn-style.top-action-btn{color:var(--pro-secondary-readable);border:1px solid color-mix(in srgb,var(--pro-secondary) 32%,transparent);background:linear-gradient(150deg,color-mix(in srgb,var(--pro-secondary) 16%,transparent),color-mix(in srgb,var(--pro-secondary) 4%,transparent));box-shadow:0 6px 16px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.06)}
-.top-actions-menu #btn-test.top-action-btn{color:var(--pro-blend);border:1px solid color-mix(in srgb,var(--pro-blend) 32%,transparent);background:linear-gradient(150deg,color-mix(in srgb,var(--pro-blend) 16%,transparent),color-mix(in srgb,var(--pro-blend) 4%,transparent));box-shadow:0 6px 16px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.06)}
+.top-actions-menu #btn-transfer.top-action-btn{color:var(--pro-blend);border:1px solid color-mix(in srgb,var(--pro-blend) 32%,transparent);background:linear-gradient(150deg,color-mix(in srgb,var(--pro-blend) 16%,transparent),color-mix(in srgb,var(--pro-blend) 4%,transparent));box-shadow:0 6px 16px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.06)}
 .top-actions-menu .top-action-btn:active{transform:scale(.9)}
 .top-actions-menu .top-action-btn.active{box-shadow:0 0 0 2px currentColor,0 6px 16px rgba(0,0,0,.22)}
-#btn-test.top-action-btn.sim-running{color:var(--pro-blend);background:linear-gradient(150deg,color-mix(in srgb,var(--pro-blend) 30%,transparent),color-mix(in srgb,var(--pro-blend) 8%,transparent));border-color:color-mix(in srgb,var(--pro-blend) 90%,transparent);box-shadow:0 0 0 2px color-mix(in srgb,var(--pro-blend) 32%,transparent),0 6px 18px color-mix(in srgb,var(--pro-blend) 24%,transparent)}
-body.editor-open .top-actions{opacity:0;visibility:hidden;pointer-events:none;transition:opacity .2s,visibility .2s}
+body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibility:hidden;pointer-events:none;transition:opacity .2s,visibility .2s}
 
 /* Now-stack: current class title + meta chips */
 .now-stack{
@@ -538,10 +537,9 @@ body.modal-open > .dashboard,body.modal-open > .nav-bar,body.modal-open > #sched
    leaves the rest of the same-size sheet blank, the way a normal settings
    app's sub-pages do, rather than resizing the whole sheet around it. */
 .editor-sheet.is-layered{height:calc(100dvh - 20px - env(safe-area-inset-top))}
-body.editor-open .dashboard{pointer-events:none}
+body.editor-open .dashboard,body.transfer-open .dashboard{pointer-events:none}
 .editor-sheet.is-layered .editor-fold{display:none}
 .editor-sheet.is-layered .editor-fold.active{display:block}
-.editor-sheet.is-layered #editor-fold-transfer.editor-save-tools{display:block;margin-top:10px}
 .editor-inline-options{margin-bottom:9px}
 .editor-header{display:flex;align-items:center;justify-content:space-between;min-height:32px;margin-bottom:12px;padding-top:0}
 .editor-sheet .editor-title{font-size:20px;font-weight:800;letter-spacing:-.4px}
@@ -717,63 +715,42 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .sync-role-label{font-size:11px;font-weight:700;color:var(--accent);text-align:center}
 .sync-role-label.is-viewer{color:var(--sub)}
 
-/* A viewer device (see src/sync.js's isSyncViewer/applyEditorRoleLock) can
-   see its synced schedule but not edit it - every editor page except the
-   always-visible sync/import-export panel itself (#editor-fold-transfer,
-   never selected here so its unlink button always stays reachable) has its
-   whole body made inert and dimmed. pointer-events:none on the body (rather
-   than listing input/button/etc.) also catches non-form mutation controls
-   like the countdown/teacher drag handles; it's re-enabled on drill/back
-   buttons specifically so a locked device can still navigate between pages
-   to browse read-only. This is a UX guardrail, not real access control -
-   saveEditor() itself also refuses to save for a viewer (editor-schedule.js)
-   as a second line of defense. */
-.editor-sheet.sync-viewer-locked #editor-sheet-body > details.editor-fold:not(#editor-fold-transfer) .editor-fold-body{
-  pointer-events:none;
-  opacity:.5;
-}
-.editor-sheet.sync-viewer-locked #editor-sheet-body > details.editor-fold:not(#editor-fold-transfer) .editor-fold-body .editor-drill-btn,
-.editor-sheet.sync-viewer-locked #editor-sheet-body > details.editor-fold:not(#editor-fold-transfer) .editor-fold-body .editor-back-btn{
-  pointer-events:auto;
-  opacity:1;
-}
-.editor-sheet.sync-viewer-locked .save-btn{
-  pointer-events:none;
-  opacity:.5;
-}
-/* editor-fold-transfer is otherwise exempt from the lock above (its own
-   sync create/join/unlink controls must always stay usable), but the AI
-   photo-import box and the legacy manual-backup fold's *import* button
-   live in that same always-visible panel and are still real ways to
-   overwrite the local schedule - so they get locked individually here.
-   Manual *export* stays enabled: reading out the currently-synced schedule
-   isn't editing it. gemini-ocr.js's click handler and
-   requestTransferAction() (editor-backup.js) both also refuse the
+/* A viewer device (see src/sync.js's isSyncViewer/applyEditorRoleLock) is
+   locked out of the schedule editor entirely now (#btn-edit itself is
+   disabled - see .top-action-btn.is-disabled), so there's no whole-sheet
+   dimming left to do here. The transfer sheet stays reachable either way -
+   its own sync create/join/unlink controls must always stay usable - but
+   the AI photo-import box and the legacy manual-backup fold's *import*
+   button are still real ways to overwrite the local schedule, so they get
+   locked individually. Manual *export* stays enabled: reading out the
+   currently-synced schedule isn't editing it. gemini-ocr.js's click handler
+   and requestTransferAction() (editor-backup.js) both also refuse the
    underlying action directly, same belt-and-suspenders reasoning as
    saveEditor(). */
-.editor-sheet.sync-viewer-locked #ocr-import-box,
-.editor-sheet.sync-viewer-locked #settings-import-btn{
+.transfer-sheet.sync-viewer-locked #ocr-import-box,
+.transfer-sheet.sync-viewer-locked #settings-import-btn{
   pointer-events:none;
   opacity:.5;
 }
 
-/* No network at all (navigator.onLine, checked on opening the editor and
-   kept live via the online/offline listeners - see editor-core.js's
-   applyOfflineLock): AI import and setting up sync (create/join) both need
-   a real request the moment they're used, so there's no point leaving them
-   looking usable. Unlinking an existing sync and manual export/import are
-   pure local operations and stay enabled either way. */
-.editor-sheet.is-offline #ocr-import-box,
-.editor-sheet.is-offline #sync-setup-box{
+/* No network at all (navigator.onLine, checked on opening the transfer
+   sheet and kept live via the online/offline listeners - see
+   editor-core.js's applyOfflineLock): AI import and setting up sync
+   (create/join) both need a real request the moment they're used, so
+   there's no point leaving them looking usable. Unlinking an existing sync
+   and manual export/import are pure local operations and stay enabled
+   either way. */
+.transfer-sheet.is-offline #ocr-import-box,
+.transfer-sheet.is-offline #sync-setup-box{
   pointer-events:none;
   opacity:.5;
 }
 
-/* Manual export/import, demoted inside the transfer panel now that sync is the
-   default (see editor-fold-transfer). A plain <details>, deliberately not
-   .editor-fold — it must stay outside the paged-editor/accordion machinery
-   that .editor-fold hooks into (initEditorAccordion, openEditorFold, etc.),
-   since it's just a disclosure nested inside that panel, not a page of its own. */
+/* Manual export/import, demoted inside the transfer sheet now that sync is
+   the default. A plain <details>, deliberately not .editor-fold — it must
+   stay outside the paged-editor/accordion machinery that .editor-fold hooks
+   into (initEditorAccordion, openEditorFold, etc.), since it's just a
+   disclosure inside a standalone sheet, not a page of the schedule editor. */
 .legacy-fold{margin-top:4px;border-radius:12px;border:1px solid var(--bd);overflow:hidden}
 .legacy-fold-summary{list-style:none;cursor:pointer;font-size:12px;font-weight:700;color:var(--sub);padding:10px 12px;user-select:none;-webkit-tap-highlight-color:transparent}
 .legacy-fold-summary::-webkit-details-marker{display:none}
@@ -923,6 +900,18 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
   backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
 }
 .style-panel.show{transform:translate(-50%,0)}
+
+/* Transfer sheet ("同步 / 匯入匯出"): sync setup, manual export/import, AI
+   photo import, and the tucked-away time-simulation disclosure. Built the
+   same way as .style-panel above - a flat .test-panel variant with no
+   paged/layered accordion machinery, since none of its content needs one. */
+.transfer-sheet{
+  width:min(calc(100vw - 24px),480px);max-width:480px;border-radius:28px;
+  left:50%;right:auto;transform:translate(-50%,calc(100% + 24px));max-height:calc(100dvh - 20px - env(safe-area-inset-top));overscroll-behavior:contain;
+  padding:14px 15px 15px;gap:11px;background:var(--glass-fill-strong);box-shadow:var(--glass-shadow);overflow-y:auto;
+  backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+}
+.transfer-sheet.show{transform:translate(-50%,0)}
 
 /* .editor-sheet's own padding/overflow, finished here (after .test-panel) so
    they actually win the cascade tie - see the comment on .editor-sheet's

@@ -7,12 +7,14 @@ import { DEFAULT_STYLE_PRIMARY, DEFAULT_STYLE_SECONDARY } from './constants.js';
 import { applyEditorSettingsData, cloneSettingsData, isEditorDirty } from './editor-backup.js';
 import {
   closeEditor,
+  closeTransferSheet,
   esc,
   hasUnconsumedImportData,
   hideEditorDiscardConfirm,
   setEditorConfirmContent,
   showEditorConfirmSheet,
-  showEditorDiscardConfirm
+  showEditorDiscardConfirm,
+  showTransferDiscardConfirm
 } from './editor-core.js';
 import { getSyncKeepLocalStyle, isSyncViewer } from './sync.js';
 
@@ -333,12 +335,21 @@ async function toggleStylePanel() {
   if (isSyncViewer() && !getSyncKeepLocalStyle()) return;
   const editor = document.getElementById('editor-sheet');
   if (editor.classList.contains('show')) {
-    if (isEditorDirty() || (await hasUnconsumedImportData())) {
+    if (isEditorDirty()) {
       state.pendingAfterEditorDiscard = 'style';
-      await showEditorDiscardConfirm();
+      showEditorDiscardConfirm();
       return;
     }
     closeEditor(true);
+  }
+  const transferSheet = document.getElementById('transfer-sheet');
+  if (transferSheet && transferSheet.classList.contains('show')) {
+    if (await hasUnconsumedImportData()) {
+      state.pendingAfterEditorDiscard = 'style';
+      showTransferDiscardConfirm();
+      return;
+    }
+    await closeTransferSheet(true);
   }
   const panel = document.getElementById('style-panel');
   if (panel.classList.contains('show')) {

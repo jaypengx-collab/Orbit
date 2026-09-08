@@ -3,7 +3,7 @@
 // sheets (unsaved-changes, delete-row); the other editor-*.js modules own
 // one specific sub-form each and are driven from here.
 import { state } from './state.js';
-import { openStylePanel } from './appearance.js';
+import { closeStylePanel, openStylePanel } from './appearance.js';
 import { closeTestPanel, getCountdownEvents, setOverlayVisible } from './dashboard.js';
 import {
   applyPendingSaveEditor,
@@ -27,6 +27,11 @@ import {
   moveEditorRowToPosition,
   renderEditorTeachers
 } from './editor-teachers.js';
+// Circular import, same as sync.js <-> editor-backup.js <-> appearance.js
+// elsewhere in this codebase - safe because every use here is inside a
+// function body (openEditor/toggleTestPanel-equivalent checks), never at
+// module-evaluation time.
+import { isSyncViewer } from './sync.js';
 
 // ---- js/editor-core.js ----
 // Builds a short display label for a class from its subject/teacher text.
@@ -147,7 +152,15 @@ function esc(s) {
 
 // Opens the schedule editor and prepares its editable fields.
 // Editor navigation and confirmation sheets manage unsaved changes safely.
+//
+// A viewer device is refused outright, full stop - unlike the style tool's
+// opt-out-dependent lock, there's no case where a viewer should ever get
+// into the schedule editor at all (see applyEditorRoleLock in sync.js,
+// which disables the triggering #btn-edit itself for exactly this reason -
+// this is the real access check behind that CSS/pointer-events lock, same
+// belt-and-suspenders reasoning as every other role guard in this app).
 function openEditor() {
+  if (isSyncViewer()) return;
   closeAssignSheet();
   hideEditorDiscardConfirm();
   closeTestPanel();
@@ -169,28 +182,52 @@ function openEditor() {
     openEditorFold('editor-fold-schedule');
     state.editorBaselineSnapshot = editorFormSnapshotString();
     state.editorBaselineData = settingsDataForExport();
-    setTransferStatus('');
-    applyOfflineLock();
   } catch (error) {
     console.error(error);
   }
 }
 
+// Opens the standalone "同步 / 匯入匯出" sheet - sync setup, manual
+// export/import, AI photo import, and (tucked away as an intentionally-
+// activated advanced disclosure) time simulation. Split out from the
+// schedule editor entirely so a sync viewer, who's never allowed into the
+// schedule editor at all (see openEditor above), can still reach this -
+// pairing status, unlink, and AI import/manual import each have their own
+// narrower guard instead (see applyEditorRoleLock).
+function openTransferSheet() {
+  const editor = document.getElementById('editor-sheet');
+  if (editor && editor.classList.contains('show')) {
+    if (isEditorDirty()) {
+      state.pendingAfterEditorDiscard = 'transfer';
+      showEditorDiscardConfirm();
+      return;
+    }
+    closeEditor(true);
+  }
+  hideEditorDiscardConfirm();
+  closeTestPanel();
+  closeStylePanel();
+  document.querySelector('.top-actions')?.classList.remove('open');
+  setOverlayVisible('transfer-sheet-overlay', 'transfer-sheet', true, 'transfer-open');
+  setTransferStatus('');
+  applyOfflineLock();
+}
+
 // AI import and setting up sync (creating or joining) both need a real
 // network request the moment they're used; there's no point leaving them
 // looking usable while there's plainly no connection at all. Checked right
-// when the settings sheet opens (openEditor's actual moment of interest),
-// and kept live afterward via the online/offline listeners below in case
-// connectivity changes while it's still open - no need to close and reopen
-// to notice. navigator.onLine only reliably catches "no network interface
-// at all" (e.g. airplane mode), not "connected but no real internet", but
-// that's still worth catching for free - the actual network calls
-// underneath still have their own error handling for everything else.
+// when the transfer sheet opens (openTransferSheet's actual moment of
+// interest), and kept live afterward via the online/offline listeners below
+// in case connectivity changes while it's still open - no need to close and
+// reopen to notice. navigator.onLine only reliably catches "no network
+// interface at all" (e.g. airplane mode), not "connected but no real
+// internet", but that's still worth catching for free - the actual network
+// calls underneath still have their own error handling for everything else.
 // Unlinking an existing sync (pure local state) and manual export/import
 // (also pure local) are deliberately left alone - neither needs a network.
 const OFFLINE_MESSAGE = '目前沒有網路連線，AI 匯入與跨裝置同步暫時無法使用。';
 function applyOfflineLock() {
-  const sheet = document.getElementById('editor-sheet');
+  const sheet = document.getElementById('transfer-sheet');
   if (!sheet) return;
   const offline = !navigator.onLine;
   const wasOffline = sheet.classList.contains('is-offline');
@@ -220,8 +257,7 @@ function orderEditorFolds() {
     'editor-fold-countdown',
     'editor-fold-teachers',
     'editor-fold-bells',
-    'editor-fold-breaks',
-    'editor-fold-transfer'
+    'editor-fold-breaks'
   ].forEach(id => {
     const section = document.getElementById(id);
     if (section) body.insertBefore(section, saveBtn);
@@ -391,15 +427,10 @@ function bindCountdownDrag(row) {
 function moveEditorControlsIntoLayers() {
   const sheet = document.getElementById('editor-sheet');
   const scheduleBody = document.querySelector('#editor-fold-schedule .editor-fold-body');
-  const transfer = document.getElementById('editor-fold-transfer');
   const options = document.getElementById('editor-fold-options');
   const toggleRow = options && options.querySelector('.toggle-row');
   const drillActions = scheduleBody && scheduleBody.querySelector('.editor-drill-actions');
   if (sheet) sheet.classList.add('is-layered');
-  if (transfer) {
-    transfer.classList.add('editor-save-tools');
-    transfer.open = false;
-  }
   if (toggleRow && scheduleBody && !scheduleBody.querySelector('.editor-inline-options')) {
     const wrap = document.createElement('div');
     wrap.className = 'editor-inline-options';
@@ -411,12 +442,7 @@ function moveEditorControlsIntoLayers() {
 }
 function ensureEditorBackButtons() {
   document.querySelectorAll('#editor-sheet details.editor-fold').forEach(section => {
-    if (
-      section.id === 'editor-fold-schedule' ||
-      section.id === 'editor-fold-transfer' ||
-      section.id === 'editor-fold-options'
-    )
-      return;
+    if (section.id === 'editor-fold-schedule' || section.id === 'editor-fold-options') return;
     if (section.closest('#ocr-import-result')) return;
     const body = section.querySelector('.editor-fold-body');
     if (!body || body.querySelector('.editor-back-row')) return;
@@ -437,11 +463,6 @@ function clearTransferField() {
 }
 function openEditorFold(id) {
   document.querySelectorAll('#editor-sheet details.editor-fold').forEach(section => {
-    // The transfer/OCR-import section is an always-visible tools panel, not a layer —
-    // it manages its own open/closed state (see initEditorAccordion) and must never be
-    // force-closed just because a different page layer became active, or an expanded
-    // import button the user is mid-way through using would vanish under them.
-    if (section.id === 'editor-fold-transfer') return;
     const active = section.id === id;
     section.open = active;
     section.classList.toggle('active', active);
@@ -515,28 +536,32 @@ function getEditorUnsavedDiff() {
     return '';
   }
 }
-async function showEditorDiscardConfirm() {
-  // Pasted-text or AI/OCR import data that was never actually applied isn't reflected
-  // in the settings diff below — it needs its own explanation so the user understands
-  // what they're about to lose.
-  if (!isEditorDirty() && (await hasUnconsumedImportData())) {
-    setEditorConfirmContent(
-      '尚未匯入內容？',
-      getUnconsumedImportWarningText(),
-      '',
-      '捨棄離開',
-      discardEditorChangesAndClose,
-      '返回'
-    );
-    showEditorConfirmSheet();
-    return;
-  }
+// Unsaved-schedule-changes only now - pasted-text/AI-photo import data lives
+// entirely in the standalone transfer sheet these days (see
+// showTransferDiscardConfirm below), so there's nothing else this sheet's
+// own close needs to warn about.
+function showEditorDiscardConfirm() {
   setEditorConfirmContent(
     '捨棄變更？',
     '以下尚未儲存的變更將不會套用。',
     getEditorUnsavedDiff(),
     '捨棄',
     discardEditorChangesAndClose,
+    '返回'
+  );
+  showEditorConfirmSheet();
+}
+// The transfer sheet's counterpart to showEditorDiscardConfirm above -
+// pasted-text or AI/OCR import data that was never actually applied isn't
+// reflected in any settings diff, so it gets its own explanation of what's
+// about to be lost instead.
+function showTransferDiscardConfirm() {
+  setEditorConfirmContent(
+    '尚未匯入內容？',
+    getUnconsumedImportWarningText(),
+    '',
+    '捨棄離開',
+    discardTransferChangesAndClose,
     '返回'
   );
   showEditorConfirmSheet();
@@ -575,6 +600,21 @@ function discardEditorChangesAndClose() {
   state.pendingAfterEditorDiscard = null;
   hideEditorDiscardConfirm();
   closeEditor(true);
+  applyPendingSheetAfterDiscard(pending);
+}
+// The transfer sheet's counterpart to discardEditorChangesAndClose above.
+function discardTransferChangesAndClose() {
+  const pending = state.pendingAfterEditorDiscard;
+  state.pendingAfterEditorDiscard = null;
+  hideEditorDiscardConfirm();
+  closeTransferSheet(true);
+  applyPendingSheetAfterDiscard(pending);
+}
+// Shared by both discard-and-close flows above - whichever sheet the user
+// was actually trying to switch to when the discard warning interrupted
+// them (see openTransferSheet/toggleTestPanel/toggleStylePanel, which each
+// set state.pendingAfterEditorDiscard before showing the warning).
+function applyPendingSheetAfterDiscard(pending) {
   if (pending === 'test') {
     // testsim-runtime.js monkey-patches window.openTestPanel (via a
     // window[name] = ... loop, not a plain window.openTestPanel = ...
@@ -583,6 +623,8 @@ function discardEditorChangesAndClose() {
     window.openTestPanel();
   } else if (pending === 'style') {
     openStylePanel();
+  } else if (pending === 'transfer') {
+    openTransferSheet();
   }
 }
 
@@ -638,11 +680,37 @@ function notifyDiscardedImportData() {
   }, 2500);
 }
 
-// Closes the editor, asking for confirmation when there are unsaved changes.
-async function closeEditor(force) {
+// Closes the editor, asking for confirmation when there are unsaved
+// schedule changes. Import data (pasted JSON, AI photo results) lives
+// entirely in the transfer sheet now - see closeTransferSheet below.
+function closeEditor(force) {
   const sheet = document.getElementById('editor-sheet');
 
-  if (typeof state.isOcrProcessing !== 'undefined' && state.isOcrProcessing) {
+  if (!sheet.classList.contains('show')) {
+    hideEditorDiscardConfirm();
+    setOverlayVisible('editor-sheet-overlay', 'editor-sheet', false, 'editor-open');
+    return;
+  }
+
+  if (!force && isEditorDirty()) {
+    showEditorDiscardConfirm();
+    return;
+  }
+
+  hideEditorDiscardConfirm();
+  setOverlayVisible('editor-sheet-overlay', 'editor-sheet', false, 'editor-open');
+  closeTestPanel();
+}
+// The transfer sheet's counterpart to closeEditor above - asks for
+// confirmation when there's pasted-text or AI-photo import data sitting
+// around that was never actually applied, and refuses outright while a
+// Gemini recognition request is still in flight (closing mid-request would
+// lose the result the moment it comes back with nowhere to show it).
+async function closeTransferSheet(force) {
+  const sheet = document.getElementById('transfer-sheet');
+  if (!sheet) return;
+
+  if (state.isOcrProcessing) {
     setEditorConfirmContent(
       'AI 辨識中',
       'Gemini 正在辨識課表圖片，請稍候辨識完成後再關閉，否則辨識結果將會遺失。',
@@ -657,20 +725,20 @@ async function closeEditor(force) {
 
   if (!sheet.classList.contains('show')) {
     hideEditorDiscardConfirm();
-    setOverlayVisible('editor-sheet-overlay', 'editor-sheet', false, 'editor-open');
+    setOverlayVisible('transfer-sheet-overlay', 'transfer-sheet', false, 'transfer-open');
     return;
   }
 
-  if (!force && (isEditorDirty() || (await hasUnconsumedImportData()))) {
-    showEditorDiscardConfirm();
+  if (!force && (await hasUnconsumedImportData())) {
+    showTransferDiscardConfirm();
     return;
   }
 
   hideEditorDiscardConfirm();
   const hadUnconsumedImportData = await hasUnconsumedImportData();
-  setOverlayVisible('editor-sheet-overlay', 'editor-sheet', false, 'editor-open');
+  setOverlayVisible('transfer-sheet-overlay', 'transfer-sheet', false, 'transfer-open');
   // Wipe any AI import data (pasted JSON and AI-recognized photo result) so it never lingers
-  // into the next time the editor is opened.
+  // into the next time the transfer sheet opens.
   clearTransferField();
   resetOCRImporterUI();
   state.pendingEditorImportData = null;
@@ -694,17 +762,22 @@ function toggleReverse() {
 // index.html and in generated template strings).
 window.addCountdownEventRow = addCountdownEventRow;
 window.closeEditor = closeEditor;
+window.closeTransferSheet = closeTransferSheet;
 window.discardEditorChangesAndClose = discardEditorChangesAndClose;
+window.discardTransferChangesAndClose = discardTransferChangesAndClose;
 window.hideEditorDiscardConfirm = hideEditorDiscardConfirm;
 window.openEditor = openEditor;
 window.openEditorFold = openEditorFold;
+window.openTransferSheet = openTransferSheet;
 window.toggleReverse = toggleReverse;
 
 export {
   applyOfflineLock,
   bindEditorDragReorder,
   closeEditor,
+  closeTransferSheet,
   discardEditorChangesAndClose,
+  discardTransferChangesAndClose,
   editorTimeToMinutes,
   esc,
   formatClassLabel,
@@ -714,6 +787,7 @@ export {
   hasUnconsumedImportData,
   hideEditorDiscardConfirm,
   openEditorFold,
+  openTransferSheet,
   refreshCountdownMoveButtons,
   refreshPeriodSelectOptions,
   renderCountdownEvent,
@@ -721,6 +795,7 @@ export {
   showEditorConfirmSheet,
   showEditorDiscardConfirm,
   showEditorSaveConfirm,
+  showTransferDiscardConfirm,
   sortEditorPeriodsByTime,
   syncEditorToggles
 };

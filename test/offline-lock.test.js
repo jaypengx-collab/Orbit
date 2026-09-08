@@ -23,7 +23,7 @@ describe('applyOfflineLock: AI import and setting up sync need a real connection
   it('locks the editor sheet and shows a status message when offline', () => {
     setOnline(false);
     applyOfflineLock();
-    expect(document.getElementById('editor-sheet').classList.contains('is-offline')).toBe(true);
+    expect(document.getElementById('transfer-sheet').classList.contains('is-offline')).toBe(true);
     expect(document.getElementById('ocr-import-status').textContent).toMatch(/沒有網路連線/);
     expect(document.getElementById('sync-status').textContent).toMatch(/沒有網路連線/);
   });
@@ -33,7 +33,7 @@ describe('applyOfflineLock: AI import and setting up sync need a real connection
     applyOfflineLock();
     setOnline(true);
     applyOfflineLock();
-    expect(document.getElementById('editor-sheet').classList.contains('is-offline')).toBe(false);
+    expect(document.getElementById('transfer-sheet').classList.contains('is-offline')).toBe(false);
     expect(document.getElementById('ocr-import-status').textContent).toBe('');
     expect(document.getElementById('sync-status').textContent).toBe('');
   });
@@ -47,9 +47,9 @@ describe('applyOfflineLock: AI import and setting up sync need a real connection
     expect(document.getElementById('sync-status').textContent).toBe('同步下載失敗：某個別的錯誤');
   });
 
-  it('openEditor() itself applies the lock the moment the settings sheet opens', () => {
+  it('openTransferSheet() itself applies the lock the moment the sheet opens', () => {
     setOnline(false);
-    window.openEditor();
-    expect(document.getElementById('editor-sheet').classList.contains('is-offline')).toBe(true);
+    window.openTransferSheet();
+    expect(document.getElementById('transfer-sheet').classList.contains('is-offline')).toBe(true);
   });
 });

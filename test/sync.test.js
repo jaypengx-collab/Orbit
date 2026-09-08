@@ -79,16 +79,17 @@ describe('isSyncConfigured / setSyncPairing / clearSyncPairing', () => {
   });
 });
 
-describe('the sync panel is merged into import/export, not a separate paged fold', () => {
-  // Sync used to be its own page-layer fold reached via a dedicated drill
-  // button; it's now folded into editor-fold-transfer, the always-visible
-  // tools panel at the bottom of the editor (see editor-core.js's
-  // moveEditorControlsIntoLayers/openEditorFold, which both special-case
-  // that panel so it never gets hidden by the paged schedule/teachers/bells
-  // navigation). So there's no separate drill button or fold id to check
-  // for any more - just that the sync UI lives inside that always-visible
-  // panel as its default option, ahead of the demoted manual-backup fold.
-  it('there is no dedicated "同步" drill button any more', () => {
+describe('the sync panel lives in its own standalone transfer sheet, not the schedule editor', () => {
+  // Sync, manual export/import, and AI import all used to live inside the
+  // schedule editor (first as a page-layer fold reached via a dedicated
+  // drill button, later folded into an always-visible panel at the bottom
+  // of the editor); they now live in their own separate #transfer-sheet
+  // (see editor-core.js's openTransferSheet), reachable from the top-bar
+  // toolbar independently of the schedule editor - see openEditor()'s own
+  // isSyncViewer() refusal, which is the whole reason this split exists: a
+  // viewer locked out of the schedule editor entirely still needs to reach
+  // this sheet.
+  it('there is no dedicated "同步" drill button in the schedule editor', () => {
     window.openEditor();
     const labels = [...document.querySelectorAll('.editor-drill-btn')].map(button =>
       button.textContent.trim()
@@ -96,27 +97,41 @@ describe('the sync panel is merged into import/export, not a separate paged fold
     expect(labels).not.toContain('同步');
   });
 
-  it('editor-fold-transfer is the always-visible tools panel and contains the sync UI', () => {
+  it('the schedule editor no longer contains the sync/import UI at all', () => {
     window.openEditor();
-    const transfer = document.getElementById('editor-fold-transfer');
-    expect(transfer.classList.contains('editor-save-tools')).toBe(true);
+    expect(document.getElementById('editor-sheet').querySelector('#sync-setup-box')).toBeNull();
+    expect(document.getElementById('editor-sheet').querySelector('#ocr-import-box')).toBeNull();
+  });
+
+  it('openTransferSheet() shows the standalone sheet and contains the sync UI', () => {
+    window.openTransferSheet();
+    const transfer = document.getElementById('transfer-sheet');
+    expect(transfer.classList.contains('show')).toBe(true);
     expect(transfer.querySelector('#sync-setup-box')).toBeTruthy();
     expect(transfer.querySelector('#sync-active-box')).toBeTruthy();
   });
 
   it('the manual export/import UI is demoted into a nested, collapsed disclosure', () => {
-    window.openEditor();
+    window.openTransferSheet();
     const legacyFold = document.getElementById('legacy-transfer-fold');
     expect(legacyFold).toBeTruthy();
     expect(legacyFold.open).toBe(false);
     expect(legacyFold.querySelector('#settings-transfer-text')).toBeTruthy();
-    // Sync's markup comes before the legacy fold in the panel body, matching
+    // Sync's markup comes before the legacy fold in the sheet, matching
     // "sync is the default, manual backup is the fallback".
-    const transfer = document.getElementById('editor-fold-transfer');
+    const transfer = document.getElementById('transfer-sheet');
     const syncBox = transfer.querySelector('#sync-setup-box');
     expect(
       syncBox.compareDocumentPosition(legacyFold) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
+  });
+
+  it('time simulation is tucked into its own intentionally-activated disclosure, not a toolbar button', () => {
+    expect(document.getElementById('btn-test')).toBeNull();
+    window.openTransferSheet();
+    const testFold = document.getElementById('test-mode-fold');
+    expect(testFold).toBeTruthy();
+    expect(testFold.open).toBe(false);
   });
 });
 
@@ -178,18 +193,28 @@ describe('manager/viewer roles', () => {
     expect(sync.isSyncViewer()).toBe(false);
   });
 
-  it('applyEditorRoleLock locks the editor sheet for a viewer and unlocks it for a manager', () => {
-    window.openEditor();
-    const sheet = document.getElementById('editor-sheet');
+  it('applyEditorRoleLock disables #btn-edit and locks the transfer sheet for a viewer, unlocking both for a manager', () => {
+    const editBtn = document.getElementById('btn-edit');
+    const transferSheet = document.getElementById('transfer-sheet');
     sync.setSyncPairing('CODE1234', 'viewer');
     sync.renderSyncPanel();
-    expect(sheet.classList.contains('sync-viewer-locked')).toBe(true);
+    expect(editBtn.classList.contains('is-disabled')).toBe(true);
+    expect(transferSheet.classList.contains('sync-viewer-locked')).toBe(true);
     expect(document.getElementById('sync-role-label').textContent).toMatch(/僅接收/);
 
     sync.setSyncPairing('CODE1234', 'manager');
     sync.renderSyncPanel();
-    expect(sheet.classList.contains('sync-viewer-locked')).toBe(false);
+    expect(editBtn.classList.contains('is-disabled')).toBe(false);
+    expect(transferSheet.classList.contains('sync-viewer-locked')).toBe(false);
     expect(document.getElementById('sync-role-label').textContent).toMatch(/管理者/);
+  });
+
+  it('openEditor() itself refuses for a viewer, as a second line of defense', () => {
+    sync.setSyncPairing('CODE1234', 'viewer');
+    sync.renderSyncPanel();
+    document.getElementById('editor-sheet').classList.remove('show');
+    window.openEditor();
+    expect(document.getElementById('editor-sheet').classList.contains('show')).toBe(false);
   });
 
   it('saveEditor refuses to save while locked as a viewer, as a second line of defense', async () => {

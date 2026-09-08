@@ -15,10 +15,12 @@ import { dayNames, formatCountdownEventDate, normalizeCountdownEvents } from './
 import { isEditorDirty } from './editor-backup.js';
 import {
   closeEditor,
+  closeTransferSheet,
   esc,
   hasUnconsumedImportData,
   hideEditorDiscardConfirm,
-  showEditorDiscardConfirm
+  showEditorDiscardConfirm,
+  showTransferDiscardConfirm
 } from './editor-core.js';
 import { closeAssignSheet } from './editor-teachers.js';
 import {
@@ -36,12 +38,25 @@ import { computeDashboardViewModel } from './schedule-calc.js';
 async function toggleTestPanel() {
   const editorSheet = document.getElementById('editor-sheet');
   if (editorSheet.classList.contains('show')) {
-    if (isEditorDirty() || (await hasUnconsumedImportData())) {
+    if (isEditorDirty()) {
       state.pendingAfterEditorDiscard = 'test';
-      await showEditorDiscardConfirm();
+      showEditorDiscardConfirm();
       return;
     }
     closeEditor(true);
+  }
+  // Reachable via a button *inside* the transfer sheet itself (see
+  // index.html's #test-mode-fold) - unlike the toolbar buttons, this one
+  // isn't hidden while the transfer sheet is open, so this check is the
+  // normal, expected path here, not just defensive belt-and-suspenders.
+  const transferSheet = document.getElementById('transfer-sheet');
+  if (transferSheet && transferSheet.classList.contains('show')) {
+    if (await hasUnconsumedImportData()) {
+      state.pendingAfterEditorDiscard = 'test';
+      showTransferDiscardConfirm();
+      return;
+    }
+    await closeTransferSheet(true);
   }
   state.testPanelOpen = !state.testPanelOpen;
   setOverlayVisible('test-panel-overlay', 'debug-panel', state.testPanelOpen);
@@ -144,6 +159,7 @@ bindSheetDragToDismiss('debug-panel', closeTestPanel);
 bindSheetDragToDismiss('style-panel', closeStylePanel);
 bindSheetDragToDismiss('sheet', closeModal);
 bindSheetDragToDismiss('editor-sheet', () => closeEditor());
+bindSheetDragToDismiss('transfer-sheet', () => closeTransferSheet());
 // Changes the visible day when a navigation tab is pressed, sliding the
 // schedule list in from the side the newly picked tab sits on relative to
 // the one that was active (so hopping right along the week bar reads as
@@ -196,9 +212,11 @@ document.addEventListener('keydown', event => {
   else if (document.getElementById('debug-panel')?.classList.contains('show')) closeTestPanel();
   else if (document.getElementById('style-panel')?.classList.contains('show')) closeStylePanel();
   else if (document.getElementById('editor-sheet')?.classList.contains('show')) closeEditor();
+  else if (document.getElementById('transfer-sheet')?.classList.contains('show'))
+    closeTransferSheet();
   else setToolHubState(false);
 });
-['btn-edit', 'btn-test', 'btn-style'].forEach(id => {
+['btn-edit', 'btn-transfer', 'btn-style'].forEach(id => {
   const btn = document.getElementById(id);
   if (btn) btn.addEventListener('click', () => setTimeout(() => setToolHubState(false), 80));
 });

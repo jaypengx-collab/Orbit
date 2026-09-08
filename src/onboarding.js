@@ -31,16 +31,11 @@ function markOnboardingSeen() {
   }
 }
 
-// openEditorFold() (editor-core.js) deliberately skips editor-fold-transfer -
-// it's an always-visible tools panel, not a page in the paged nav - so
-// opening it (its <details> "open" attribute, which drives the accordion
-// disclosure) is done directly here instead. Must happen *after*
-// window.openEditor(), which resets it closed as part of laying out the
-// editor's paged view (moveEditorControlsIntoLayers).
+// Sync setup and AI import both live in the standalone "同步 / 匯入匯出"
+// sheet now, not inside the schedule editor - opening it directly is the
+// whole thing, no fold to expand afterward.
 function openSyncPanel() {
-  window.openEditor();
-  const transfer = document.getElementById('editor-fold-transfer');
-  if (transfer) transfer.open = true;
+  window.openTransferSheet();
 }
 
 function focusSyncJoinField() {
