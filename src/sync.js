@@ -231,6 +231,16 @@ async function writeSyncDoc(code, payload) {
   return { ok: true, updateTime: doc.updateTime || '' };
 }
 
+// Wipes the shared document on the server outright - see
+// orbitSyncDeleteForEveryone. Unlike writeSyncDoc/fetchSyncDoc, this isn't
+// something syncTick's regular loop ever calls; it only ever runs as a
+// deliberate, manager-triggered, confirmed action.
+async function deleteSyncDoc(code) {
+  const response = await fetch(proxyUrl(code), { method: 'DELETE' });
+  if (!response.ok) return { ok: false, error: await proxyErrorMessage(response) };
+  return { ok: true };
+}
+
 // The "has anything actually changed" check syncTick uses to decide whether
 // to push ignores style fields entirely once this device has opted out of
 // style sync - otherwise its own permanently-different local color would
@@ -427,6 +437,7 @@ function renderSyncPanel() {
   const roleLabel = document.getElementById('sync-role-label');
   const keepStyleCheckbox = document.getElementById('sync-keep-local-style');
   const styleBackupNotice = document.getElementById('sync-style-backup-notice');
+  const deleteAllBtn = document.getElementById('sync-delete-all-btn');
   if (!setupBox || !activeBox) return;
   const configured = isSyncConfigured();
   setupBox.hidden = configured;
@@ -439,6 +450,13 @@ function renderSyncPanel() {
       : '身份：管理者 — 可以編輯課表，變更會同步到其他裝置。';
     roleLabel.classList.toggle('is-viewer', viewer);
   }
+  // Deleting the shared document affects every paired device, not just this
+  // one - only a manager gets the button at all (a viewer can't publish a
+  // change either, so wiping the shared document isn't a "my data" decision
+  // it should get to make). Purely a UI guardrail, same caveat as the rest
+  // of this file's role locks - see orbitSyncDeleteForEveryone's own
+  // isSyncViewer() check for the part that actually matters.
+  if (deleteAllBtn) deleteAllBtn.hidden = !configured || isSyncViewer();
   if (keepStyleCheckbox) keepStyleCheckbox.checked = getSyncKeepLocalStyle();
   // Shown whenever a backed-up style is sitting around waiting on a
   // decision - regardless of the checkbox's current state, since the user
@@ -737,10 +755,65 @@ function orbitSyncUnlink() {
   );
   showEditorConfirmSheet();
 }
+// The strictly more destructive sibling of orbitSyncUnlink above: that one
+// only ever forgets this device's own pairing, leaving the shared document
+// (and every other device still reading it) untouched. This one reaches
+// into the server and deletes the shared document itself, so every device
+// paired under this code loses its sync target at once - the next time any
+// of them syncs, the code simply resolves to nothing any more (see
+// pullSyncSnapshot's `exists: false` path). There is no undo and no way to
+// warn the other devices first beyond what this device's own confirmation
+// text says, so this gets its own, more explicit warning than a plain
+// unlink - manager-only (see the `sync-delete-all-btn` hidden toggle in
+// renderSyncPanel, and the isSyncViewer() guard below as the real check a
+// hidden button alone never is, same reasoning as every other role lock in
+// this file).
+function orbitSyncDeleteForEveryone() {
+  if (isSyncViewer()) return;
+  const code = getSyncCode();
+  if (!isSyncConfigured()) return;
+  if (!navigator.onLine) {
+    setSyncStatusUi('目前沒有網路連線，無法刪除同步。', true);
+    return;
+  }
+  setEditorConfirmContent(
+    '整個刪除這組同步？',
+    `這會把伺服器上的共用課表整個刪除，配對代碼「${code}」立刻失效：所有用這組代碼加入的裝置（不只這一台）都會斷開連結，之後同步時會發現代碼已經不存在，各自變回自己最後一次收到的本機課表。此動作無法復原。`,
+    '',
+    '整個刪除',
+    async () => {
+      hideEditorDiscardConfirm();
+      setSyncStatusUi('正在刪除同步…');
+      const result = await deleteSyncDoc(code);
+      if (!result.ok) {
+        setSyncStatusUi(`刪除失敗：${result.error}`, true);
+        return;
+      }
+      clearSyncPairing();
+      renderSyncPanel();
+      setSyncStatusUi('已整個刪除同步，所有裝置都已斷開連結（本機課表不受影響）。');
+    },
+    '取消',
+    {
+      extraLabel: '複製代碼',
+      extraHandler: async () => {
+        const extraBtn = document.getElementById('editor-confirm-extra-btn');
+        try {
+          await copyTransferText(code);
+          if (extraBtn) extraBtn.textContent = '已複製！';
+        } catch (error) {
+          setSyncStatusUi(`複製失敗：${error.message || error}`, true);
+        }
+      }
+    }
+  );
+  showEditorConfirmSheet();
+}
 
 window.orbitSyncCreate = orbitSyncCreate;
 window.orbitSyncJoin = orbitSyncJoin;
 window.orbitSyncUnlink = orbitSyncUnlink;
+window.orbitSyncDeleteForEveryone = orbitSyncDeleteForEveryone;
 window.orbitSyncSetKeepLocalStyle = orbitSyncSetKeepLocalStyle;
 window.orbitSyncRestoreStyleBackup = orbitSyncRestoreStyleBackup;
 window.orbitSyncDismissStyleBackup = orbitSyncDismissStyleBackup;
@@ -757,6 +830,7 @@ export {
   isSyncProxyConfigured,
   isSyncViewer,
   orbitSyncCreate,
+  orbitSyncDeleteForEveryone,
   orbitSyncDismissStyleBackup,
   orbitSyncJoin,
   orbitSyncRestoreStyleBackup,

@@ -693,10 +693,17 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .settings-transfer-text:focus{border-color:color-mix(in srgb,var(--accent) 58%,transparent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)}
 .settings-transfer-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .settings-transfer-actions>.settings-transfer-btn:only-child{grid-column:1/-1}
+/* A sibling button hidden via the `hidden` attribute (e.g. sync-delete-all-btn
+   for a viewer) still counts as a DOM child, so :only-child above never
+   matches - without this the one remaining visible button would sit in a
+   single grid column instead of taking the full row like it visually should. */
+.settings-transfer-actions:has(>[hidden])>:not([hidden]){grid-column:1/-1}
 .settings-transfer-btn{border-radius:13px;padding:11px 12px;background:color-mix(in srgb,var(--pro-accent) 10%,rgba(255,255,255,.09));color:#F8FAFC;border:1px solid color-mix(in srgb,var(--pro-accent) 18%,rgba(255,255,255,.12));font-weight:800;cursor:pointer;transition:transform .12s,background .15s}
 .settings-transfer-btn:active{transform:scale(.97);background:color-mix(in srgb,var(--pro-accent) 18%,rgba(255,255,255,.16))}
 .settings-transfer-btn:disabled{opacity:.5;cursor:default;pointer-events:none}
 .settings-transfer-btn.primary{min-height:42px;box-shadow:none;border-radius:12px;background:linear-gradient(135deg,var(--pro-action-bg),var(--pro-action-bg-2));color:var(--pro-action-text);backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%)}
+.settings-transfer-btn.danger{background:rgba(255,69,58,.08);color:#ff453a;border-color:rgba(255,69,58,.35)}
+.settings-transfer-btn.danger:active{background:rgba(255,69,58,.16)}
 .settings-transfer-btn.primary:active{box-shadow:0 3px 10px color-mix(in srgb,var(--pro-accent) 20%,transparent)}
 .settings-transfer-status{min-height:18px;font-size:11px;line-height:1.35;color:var(--sub);white-space:pre-line}
 

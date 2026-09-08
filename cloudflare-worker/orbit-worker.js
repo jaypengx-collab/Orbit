@@ -5,11 +5,12 @@
 //   POST      /gemini  - AI schedule-photo import (see src/gemini-ocr.js).
 //                         Holds the real Gemini API key server-side so end
 //                         users never need one of their own.
-//   GET/PATCH /sync     - cross-device sync (see src/sync.js). Holds a
+//   GET/PATCH/DELETE /sync - cross-device sync (see src/sync.js). Holds a
 //                         Firebase service-account key server-side and
 //                         proxies Firestore, so the pairing code isn't the
 //                         only thing standing between the internet and
-//                         that Firestore project.
+//                         that Firestore project. DELETE wipes the shared
+//                         document outright (see orbitSyncDeleteForEveryone).
 //
 // Combined into one file/one deployment purely for setup convenience - one
 // Worker, one KV binding, one set of secrets to manage - not for any
@@ -42,7 +43,7 @@ function isAllowedOrigin(origin) {
 function corsHeaders(origin) {
   return {
     'Access-Control-Allow-Origin': isAllowedOrigin(origin) ? origin : 'null',
-    'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     Vary: 'Origin'
   };
@@ -280,6 +281,12 @@ const MAX_PAYLOAD_LENGTH = 20000;
 // throwaway Firestore documents or burn write quota.
 const SYNC_READ_RATE_LIMIT = 6000;
 const SYNC_WRITE_RATE_LIMIT = 300;
+// A manager deleting the whole shared document (see src/sync.js's
+// orbitSyncDeleteForEveryone) is rare and destructive by nature - once per
+// pairing at most in any normal flow - so this gets its own tight limit,
+// tighter than an ordinary write, on its own counter (kind 'delete') rather
+// than sharing the write bucket.
+const SYNC_DELETE_RATE_LIMIT = 20;
 
 function base64UrlFromBytes(bytes) {
   let binary = '';
@@ -393,9 +400,28 @@ async function firestorePatch(env, code, payload) {
   return { updateTime: doc.updateTime || '' };
 }
 
+// Wipes the shared document entirely - see src/sync.js's
+// orbitSyncDeleteForEveryone. Unlike unlinking (a purely client-side, one
+// device forgetting its own pairing code), this is the one operation that
+// actually reaches into Firestore and removes the document every paired
+// device reads from, so every device sharing this code loses its sync
+// target at once. A 404 (already gone, e.g. a retry after a dropped
+// response) is treated the same as success - deleting something that's
+// already deleted isn't an error from the caller's point of view.
+async function firestoreDelete(env, code) {
+  const token = await getFirebaseAccessToken(env);
+  const response = await fetch(firestoreDocUrl(env, code), {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok && response.status !== 404) {
+    throw new Error(await firestoreErrorMessage(response));
+  }
+}
+
 async function handleSyncRequest(request, env, headers, ip) {
-  if (request.method !== 'GET' && request.method !== 'PATCH') {
-    return json({ error: { message: 'GET or PATCH only' } }, 405, headers);
+  if (request.method !== 'GET' && request.method !== 'PATCH' && request.method !== 'DELETE') {
+    return json({ error: { message: 'GET, PATCH or DELETE only' } }, 405, headers);
   }
 
   const code = (new URL(request.url).searchParams.get('code') || '').trim().toUpperCase();
@@ -403,8 +429,13 @@ async function handleSyncRequest(request, env, headers, ip) {
     return json({ error: { message: 'Invalid pairing code' } }, 400, headers);
   }
 
-  const kind = request.method === 'GET' ? 'read' : 'write';
-  const limit = kind === 'write' ? SYNC_WRITE_RATE_LIMIT : SYNC_READ_RATE_LIMIT;
+  const kind = request.method === 'GET' ? 'read' : request.method === 'PATCH' ? 'write' : 'delete';
+  const limit =
+    kind === 'write'
+      ? SYNC_WRITE_RATE_LIMIT
+      : kind === 'delete'
+        ? SYNC_DELETE_RATE_LIMIT
+        : SYNC_READ_RATE_LIMIT;
   const rateLimit = await isRateLimited(env, ip, `sync:${kind}`, limit);
   headers['X-RateLimit-Backend'] = rateLimit.backend;
   if (rateLimit.limited) {
@@ -419,6 +450,10 @@ async function handleSyncRequest(request, env, headers, ip) {
     if (request.method === 'GET') {
       const result = await firestoreGet(env, code);
       return json(result, 200, headers);
+    }
+    if (request.method === 'DELETE') {
+      await firestoreDelete(env, code);
+      return json({ deleted: true }, 200, headers);
     }
     let body;
     try {

@@ -557,3 +557,85 @@ describe('orbitSyncJoin checks the code exists before ever warning about overwri
     expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(false);
   });
 });
+
+describe('orbitSyncDeleteForEveryone', () => {
+  it('is hidden from a viewer and refuses even if called directly, with no network request', async () => {
+    sync.setSyncPairing('CODE1234', 'viewer');
+    sync.renderSyncPanel();
+    expect(document.getElementById('sync-delete-all-btn').hidden).toBe(true);
+
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    sync.orbitSyncDeleteForEveryone();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(false);
+  });
+
+  it('is visible to a manager, warns before doing anything, and reverts nothing on cancel', async () => {
+    sync.setSyncPairing('CODE1234');
+    sync.renderSyncPanel();
+    expect(document.getElementById('sync-delete-all-btn').hidden).toBe(false);
+
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    sync.orbitSyncDeleteForEveryone();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(true);
+    expect(document.getElementById('editor-confirm-title').textContent).toMatch(/整個刪除/);
+    expect(document.getElementById('editor-confirm-msg').textContent).toMatch(/CODE1234/);
+
+    document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[0].onclick(); // 取消
+    expect(sync.isSyncConfigured()).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('confirming sends a DELETE for this code and clears the local pairing on success', async () => {
+    sync.setSyncPairing('CODE1234');
+    sync.renderSyncPanel();
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ deleted: true }) }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    sync.orbitSyncDeleteForEveryone();
+    await document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[1].onclick(); // 整個刪除
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, options] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${PROXY_URL}?code=CODE1234`);
+    expect(options.method).toBe('DELETE');
+    expect(sync.isSyncConfigured()).toBe(false);
+    expect(document.getElementById('sync-status').textContent).toMatch(/已整個刪除同步/);
+  });
+
+  it('a failed DELETE surfaces an error and leaves the device still paired', async () => {
+    sync.setSyncPairing('CODE1234');
+    sync.renderSyncPanel();
+    const fetchMock = vi.fn(async () => ({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: { message: 'Upstream request failed' } })
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    sync.orbitSyncDeleteForEveryone();
+    await document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[1].onclick();
+
+    expect(sync.isSyncConfigured()).toBe(true);
+    expect(document.getElementById('sync-status').textContent).toMatch(/刪除失敗/);
+  });
+
+  it('refuses while offline, without making any network request', async () => {
+    sync.setSyncPairing('CODE1234');
+    sync.renderSyncPanel();
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    sync.orbitSyncDeleteForEveryone();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(sync.isSyncConfigured()).toBe(true);
+    expect(document.getElementById('sync-status').textContent).toMatch(/沒有網路連線/);
+    expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(false);
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+  });
+});
