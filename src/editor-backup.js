@@ -40,7 +40,7 @@ import {
 } from './editor-schedule.js';
 import { renderEditorTeachers } from './editor-teachers.js';
 import { buildSchedule } from './schedule.js';
-import { isSyncViewer, setSyncStatusUi } from './sync.js';
+import { isSyncConfigured, isSyncViewer, pushSyncSnapshot, setSyncStatusUi } from './sync.js';
 
 // ---- js/editor-backup.js ----
 // Reads the editor form and converts it into the app data shape.
@@ -593,6 +593,19 @@ function dayDiffLabel(day) {
   const labels = { 0: '週日', 1: '週一', 2: '週二', 3: '週三', 4: '週四', 5: '週五', 6: '週六' };
   return labels[day] || `第 ${day} 天`;
 }
+// True when two identity-key arrays hold exactly the same multiset but in a
+// different sequence - a pure drag-reorder with no addition or removal.
+// Every per-item diff in describeSettingsDiff below compares by identity
+// (a teacher key, a countdown event's name+dates), never by array position,
+// so reordering items with no other change produces zero diff lines on its
+// own - this is the one check that actually looks at position.
+function isPureReorder(beforeKeys, afterKeys) {
+  if (beforeKeys.length !== afterKeys.length) return false;
+  if (beforeKeys.every((key, index) => key === afterKeys[index])) return false;
+  const sortedBefore = [...beforeKeys].sort();
+  const sortedAfter = [...afterKeys].sort();
+  return sortedBefore.every((key, index) => key === sortedAfter[index]);
+}
 function describeSettingsDiff(current, next, { isImport = false } = {}) {
   const lines = [];
   const teacherItems = [];
@@ -618,6 +631,13 @@ function describeSettingsDiff(current, next, { isImport = false } = {}) {
     }
   });
   pushDiff(lines, '課程與老師', teacherItems);
+  if (
+    isPureReorder(
+      Array.isArray(current.teacherOrder) ? current.teacherOrder : [],
+      Array.isArray(next.teacherOrder) ? next.teacherOrder : []
+    )
+  )
+    lines.push('課程順序已調整。');
 
   const locationItems = [];
   const locationKeys = [
@@ -704,6 +724,8 @@ function describeSettingsDiff(current, next, { isImport = false } = {}) {
     if (!matchedCurrent.has(index)) countdownItems.push(`移除活動：${eventText(event)}`);
   });
   pushDiff(lines, '倒數活動', countdownItems);
+  if (isPureReorder(currentCountdownEvents.map(eventText), nextCountdownEvents.map(eventText)))
+    lines.push('倒數活動順序已調整。');
   if (!!current.reverseWeek !== !!next.reverseWeek)
     lines.push(
       `單雙週對調：${current.reverseWeek ? '開啟' : '關閉'} -> ${next.reverseWeek ? '開啟' : '關閉'}`
@@ -758,11 +780,11 @@ function describeSettingsDiff(current, next, { isImport = false } = {}) {
       );
   });
   pushDiff(lines, '個人樣式', styleSlotItems);
-  const maxLines = 70;
-  if (lines.length > maxLines) {
-    const hidden = lines.length - maxLines;
-    return lines.slice(0, maxLines).join('\n') + `\n...還有 ${hidden} 項變更未顯示。`;
-  }
+  // No line cap here - the diff box that displays this (#editor-import-diff,
+  // see editor-core.js's setEditorConfirmContent) already scrolls
+  // (max-height + overflow:auto in styles.css), so a very long diff is
+  // still fully there, just scrollable, instead of being silently cut off
+  // with no way to see what got hidden.
   return lines.length ? lines.join('\n') : '沒有變更。';
 }
 // Import is decoded and previewed first; confirmation is required before saving.
@@ -1015,7 +1037,17 @@ function showEditorImportConfirm(current, next, isMerge, preserveStyle = false) 
   );
   showEditorConfirmSheet();
 }
-function applyEditorSettingsData(next, { closeAfter = false, statusMessage = '' } = {}) {
+// `fromSync` distinguishes "this device's own edit just got saved" from
+// "this data arrived from another device via sync.js's pullSyncSnapshot" -
+// the two need different feedback (a viewer never *saved* anything, so a
+// "已儲存" toast would be actively misleading - see the toast text below)
+// and different side effects (only a genuine local save should turn around
+// and push to sync; echoing back data sync itself just pulled would just
+// bounce the same write straight back out).
+function applyEditorSettingsData(
+  next,
+  { closeAfter = false, statusMessage = '', fromSync = false } = {}
+) {
   state.applicationData = cloneSettingsData(next);
   state.applicationData.proAccent = normalizeProAccent(state.applicationData.proAccent);
   state.applicationData.proSecondary = normalizeProSecondary(state.applicationData.proSecondary);
@@ -1037,9 +1069,21 @@ function applyEditorSettingsData(next, { closeAfter = false, statusMessage = '' 
   window.update();
   if (statusMessage) setTransferStatus(statusMessage);
   const toast = document.getElementById('save-toast');
+  toast.textContent = fromSync ? '已從其他裝置更新' : '已儲存';
   toast.classList.add('show');
   setTimeout(() => toast.classList.remove('show'), 2500);
   if (closeAfter) setTimeout(() => closeEditor(true), 400);
+  // A real local change (never one sync itself just applied) pushes right
+  // away instead of waiting for the next poll tick - see sync.js's syncTick
+  // for the regular interval this supplements, not replaces: a failed push
+  // here still gets picked up by the next tick's own push-then-pull pass.
+  // Fire-and-forget - a slow or failed push is surfaced via the status line
+  // but must never block or fail the save that already happened locally.
+  if (!fromSync && isSyncConfigured() && !isSyncViewer()) {
+    pushSyncSnapshot().then(result => {
+      if (!result.ok) setSyncStatusUi(result.error, true);
+    });
+  }
 }
 function applyPendingImportSettings() {
   if (!state.pendingEditorImportData) {

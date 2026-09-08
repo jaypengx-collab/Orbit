@@ -760,6 +760,8 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .ocr-import-filename{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
 #ocr-import-detect{width:100%}
 #ocr-import-detect:disabled{opacity:.45;filter:grayscale(.4);cursor:not-allowed}
+#ocr-import-image-label.is-disabled{opacity:.45;filter:grayscale(.4);cursor:not-allowed;pointer-events:none}
+.ocr-import-eta{min-height:16px;font-size:10.5px;line-height:1.3;color:var(--sub)}
 .ocr-import-image-wrap{position:relative;flex:0 0 auto;display:none;align-items:center;justify-content:center;width:36px;height:36px;border:1px solid var(--bd);border-radius:9px;background:rgba(0,0,0,.18);overflow:hidden}
 .ocr-import-image-wrap.has-image{display:flex}
 .ocr-import-image-preview{display:block;width:100%;height:100%;object-fit:cover;background:transparent;-webkit-user-select:none;user-select:none}

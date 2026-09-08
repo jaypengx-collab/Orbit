@@ -28,6 +28,10 @@ afterAll(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   sync.clearSyncPairing();
+  // Deliberately NOT cleared by clearSyncPairing (it's a per-device
+  // preference, not pairing state - see sync.js) so tests that touch it
+  // must reset it themselves.
+  sync.setSyncKeepLocalStyle(false);
   document.getElementById('sync-join-code').value = '';
   document.getElementById('sync-join-as-manager').checked = false;
 });
@@ -35,6 +39,108 @@ afterEach(() => {
 describe('sync with a proxy Worker configured', () => {
   it('reports the proxy as configured', () => {
     expect(sync.isSyncProxyConfigured()).toBe(true);
+  });
+});
+
+describe('a local save pushes immediately; a sync-applied pull does not push back', () => {
+  it('applyEditorSettingsData (a real local save) PATCHes the proxy right away and shows the "已儲存" toast', async () => {
+    sync.setSyncPairing('CODE1234');
+    const { applyEditorSettingsData } = await import('../src/editor-backup.js');
+    const fetchMock = vi.fn(async (url, options) => {
+      expect(options.method).toBe('PATCH');
+      return { ok: true, json: async () => ({ updateTime: 'now' }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    applyEditorSettingsData(state.applicationData, { statusMessage: '' });
+    // The push fires without being awaited inside applyEditorSettingsData -
+    // wait for it to actually happen rather than guessing a tick count
+    // (encodeTransferData's compression pipeline may take more than a
+    // microtask or two to settle).
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(document.getElementById('save-toast').textContent).toBe('已儲存');
+  });
+
+  it('a viewer applying an incoming sync pull never pushes back, and shows a different toast', async () => {
+    sync.setSyncPairing('CODE1234', 'viewer');
+    const { encodeTransferData, normalizeSettingsData } = await import('../src/editor-backup.js');
+    // A key distinct from every other test in this file's fixture mutations
+    // - state.applicationData is one shared singleton for the whole file,
+    // so reusing another test's added-teacher key/value would make this
+    // payload look identical to already-applied state by the time it runs.
+    const remoteData = normalizeSettingsData({
+      ...state.applicationData,
+      teacherDB: { ...state.applicationData.teacherDB, Y: ['公民', '某老師', ''] }
+    });
+    const payload = await encodeTransferData(remoteData);
+    const fetchMock = vi.fn(async (url, options) => {
+      // A viewer must never PATCH under any circumstance.
+      expect(options?.method).not.toBe('PATCH');
+      return { ok: true, json: async () => ({ exists: true, updateTime: 'now', payload }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await sync.pullSyncSnapshot();
+    expect(result.applied).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1); // the GET only, no follow-up PATCH
+    expect(document.getElementById('save-toast').textContent).toBe('已從其他裝置更新');
+  });
+});
+
+describe('a receiving device can opt out of syncing style/color', () => {
+  it("keeps this device's own colors when the incoming payload has different ones, while still applying other changes", async () => {
+    sync.setSyncPairing('CODE1234', 'viewer');
+    sync.setSyncKeepLocalStyle(true);
+    const localAccent = state.applicationData.proAccent;
+    const { encodeTransferData, normalizeSettingsData } = await import('../src/editor-backup.js');
+    // A real content change alongside the color change - color is never the
+    // *only* difference here, so this actually exercises "apply everything
+    // except style" rather than "there's nothing left to apply once style
+    // is neutralized" (a color-only payload would just no-op, telling us
+    // nothing about whether the opt-out itself works).
+    const remoteData = normalizeSettingsData({
+      ...state.applicationData,
+      teacherDB: { ...state.applicationData.teacherDB, X: ['音樂', '洪老師', ''] },
+      proAccent: '#123456',
+      proSecondary: '#654321'
+    });
+    const payload = await encodeTransferData(remoteData);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ exists: true, updateTime: 'now', payload })
+      }))
+    );
+
+    const result = await sync.pullSyncSnapshot();
+    expect(result.applied).toBe(true);
+    expect(state.applicationData.teacherDB.X).toEqual(['音樂', '洪老師', '']);
+    expect(state.applicationData.proAccent).toBe(localAccent);
+    expect(state.applicationData.proAccent).not.toBe('#123456');
+  });
+
+  it('applies incoming colors normally when the opt-out is off', async () => {
+    sync.setSyncPairing('CODE1234', 'viewer');
+    expect(sync.getSyncKeepLocalStyle()).toBe(false);
+    const { encodeTransferData, normalizeSettingsData } = await import('../src/editor-backup.js');
+    const remoteData = normalizeSettingsData({
+      ...state.applicationData,
+      proAccent: '#123456',
+      proSecondary: '#654321'
+    });
+    const payload = await encodeTransferData(remoteData);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ exists: true, updateTime: 'now', payload })
+      }))
+    );
+
+    const result = await sync.pullSyncSnapshot();
+    expect(result.applied).toBe(true);
+    expect(state.applicationData.proAccent).toBe('#123456');
   });
 });
 

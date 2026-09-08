@@ -555,7 +555,43 @@ class ImportPreview {
   }
 }
 
-function mountOCRImporter({ runButton, imagePreview, status, result, onImport }) {
+// A rough, hand-picked estimate (typical case: the first model in the
+// fallback list succeeds on the first try) - not measured from real usage
+// data, since this app has no telemetry. Purely cosmetic: it's there so the
+// wait has a visible countdown instead of a static spinner, which makes an
+// unavoidable several-second wait feel shorter. Running noticeably over
+// this estimate (a retried model, a slow connection) just degrades to an
+// honest "taking longer than usual" message rather than a wrong countdown.
+const ESTIMATED_RECOGNITION_SECONDS = 15;
+function startEtaTimer(etaElement) {
+  if (!etaElement) return () => {};
+  const startedAt = Date.now();
+  const tick = () => {
+    const elapsedSeconds = Math.round((Date.now() - startedAt) / 1000);
+    const remaining = ESTIMATED_RECOGNITION_SECONDS - elapsedSeconds;
+    etaElement.textContent =
+      remaining > 0
+        ? `已等待 ${elapsedSeconds} 秒，預估還需約 ${remaining} 秒…`
+        : `已等待 ${elapsedSeconds} 秒，比預期久一點，請再稍候…`;
+  };
+  tick();
+  const timer = setInterval(tick, 1000);
+  return () => {
+    clearInterval(timer);
+    etaElement.textContent = '';
+  };
+}
+
+function mountOCRImporter({
+  runButton,
+  imageInput,
+  imageLabel,
+  etaElement,
+  imagePreview,
+  status,
+  result,
+  onImport
+}) {
   const preprocessor = new ImagePreprocessor();
   const validator = new DataValidator();
   const aiProcessor = new AIVisionProcessor();
@@ -590,7 +626,15 @@ function mountOCRImporter({ runButton, imagePreview, status, result, onImport })
       return;
     }
     runButton.disabled = true;
+    // Also locks the "選擇圖片" control itself - picking a different photo
+    // mid-recognition would abandon the in-flight request with no way to
+    // cancel it, and the file input's disabled state is what actually stops
+    // its <label> from opening the file picker (a disabled control's label
+    // is a no-op by spec) - imageLabel just needs the matching visual style.
+    if (imageInput) imageInput.disabled = true;
+    imageLabel?.classList.add('is-disabled');
     state.isOcrProcessing = true;
+    const stopEta = startEtaTimer(etaElement);
     try {
       const workingCanvas = capCanvasDimension(source.canvas, 1600);
 
@@ -610,7 +654,10 @@ function mountOCRImporter({ runButton, imagePreview, status, result, onImport })
     } catch (error) {
       status(error.message, true);
     } finally {
+      stopEta();
       runButton.disabled = false;
+      if (imageInput) imageInput.disabled = false;
+      imageLabel?.classList.remove('is-disabled');
       state.isOcrProcessing = false;
     }
   });
@@ -624,7 +671,9 @@ let ocrImporterController;
 function activateOCRImporter() {
   if (ocrImporterPromise) return ocrImporterPromise;
   const input = document.getElementById('ocr-import-image');
+  const imageLabel = document.getElementById('ocr-import-image-label');
   const runButton = document.getElementById('ocr-import-detect');
+  const etaElement = document.getElementById('ocr-import-eta');
   const imagePreview = document.getElementById('ocr-import-image-preview');
   const statusElement = document.getElementById('ocr-import-status');
   const result = document.getElementById('ocr-import-result');
@@ -632,6 +681,9 @@ function activateOCRImporter() {
   ocrImporterPromise = new Promise((resolve, reject) => {
     const config = {
       runButton,
+      imageInput: input,
+      imageLabel,
+      etaElement,
       imagePreview,
       result,
       onImport: data => {
@@ -644,12 +696,11 @@ function activateOCRImporter() {
               Array.isArray(data.breakTimes) && data.breakTimes.length
                 ? data.breakTimes
                 : settingsDataForExport().breakTimes,
-            // A photo recognized with no classes (e.g. one taken just for a countdown date)
-            // carries no real signal about odd/even week orientation — keep the existing
-            // setting instead of silently resetting it to the AI's unset default.
-            reverseWeek: Object.keys(data.teacherDB || {}).length
-              ? data.reverseWeek
-              : settingsDataForExport().reverseWeek,
+            // Odd/even week orientation isn't something a single photo can
+            // reliably signal either way (nothing in a timetable photo
+            // marks which physical week it was taken in) - AI import never
+            // touches this setting, recognized classes or not.
+            reverseWeek: settingsDataForExport().reverseWeek,
             proAccent: settingsDataForExport().proAccent,
             proSecondary: settingsDataForExport().proSecondary,
             proTertiary: settingsDataForExport().proTertiary,

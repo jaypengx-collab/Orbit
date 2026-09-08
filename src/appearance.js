@@ -277,6 +277,14 @@ function saveStyleSlotDraft(index) {
     secondary: state.stylePanelDraft.proSecondary
   };
   state.stylePanelDraft.styleSlots = slots;
+  // Saving a slot only ever touches the in-memory draft - it isn't real
+  // until confirmStyleSettings()/applyPendingStyleSave() commits the whole
+  // draft. Without marking dirty here, closeStylePanel() saw nothing to
+  // warn about and let the panel close with no confirmation, silently
+  // losing the slot save the moment renderStylePanel() next rebuilds the
+  // draft fresh from the (still unchanged) applicationData - same risk
+  // loadStyleSlot already avoids via previewStyleSettings().
+  document.getElementById('style-panel')?.classList.add('style-draft-dirty');
   renderStyleSlots();
   setStylePanelMode('editor');
 }

@@ -47,7 +47,12 @@ const LAST_UPDATE_TIME_KEY = 'orbitSyncLastUpdateTime';
 // opportunistically below so an old pairing doesn't leave a stale value
 // sitting in localStorage forever.
 const LEGACY_PROJECT_ID_KEY = 'orbitSyncProjectId';
-const POLL_INTERVAL_MS = 8000;
+// A per-device (not per-pairing) preference - deliberately survives
+// clearSyncPairing/setSyncPairing, since it's about *this device's own*
+// taste in colors, not something tied to any one pairing code.
+const KEEP_LOCAL_STYLE_KEY = 'orbitSyncKeepLocalStyle';
+const MIN_POLL_INTERVAL_MS = 8000;
+const MAX_POLL_INTERVAL_MS = 60000;
 const MANAGER_ROLE = 'manager';
 const VIEWER_ROLE = 'viewer';
 // 0/O/1/I excluded so a hand-copied or read-aloud code is never ambiguous.
@@ -92,6 +97,19 @@ function getSyncRole() {
 }
 function isSyncViewer() {
   return isSyncConfigured() && getSyncRole() === VIEWER_ROLE;
+}
+// A receiving device's own opt-out of the shared color scheme - once set,
+// pullSyncSnapshot (see below) keeps this device's own proAccent/
+// proSecondary/proTertiary/styleSlots untouched no matter what a manager
+// device publishes, while still applying every other synced change
+// normally. Most useful for a viewer (who never publishes style changes of
+// their own anyway), but not restricted to one - nothing about wanting your
+// own device's colors left alone requires being read-only.
+function getSyncKeepLocalStyle() {
+  return readLocal(KEEP_LOCAL_STYLE_KEY) === '1';
+}
+function setSyncKeepLocalStyle(value) {
+  writeLocal(KEEP_LOCAL_STYLE_KEY, value ? '1' : '');
 }
 function generateSyncCode() {
   const bytes = new Uint8Array(CODE_LENGTH);
@@ -171,6 +189,12 @@ async function pushSyncSnapshot() {
     const result = await writeSyncDoc(code, payload);
     if (!result.ok) throw new Error(result.error);
     writeLocal(LAST_UPDATE_TIME_KEY, result.updateTime);
+    // Owned here, not by callers - applyEditorSettingsData's own
+    // immediate-push-on-save (see editor-backup.js) and syncTick's regular
+    // poll both funnel through this one function, so this is the one place
+    // that reliably knows "what we last actually pushed matches what's live
+    // right now" regardless of which caller triggered it.
+    lastPushedSnapshot = JSON.stringify(state.applicationData);
     return { ok: true };
   } catch (error) {
     return { ok: false, error: `同步上傳失敗：${error.message || error}` };
@@ -200,11 +224,17 @@ async function pullSyncSnapshot({ force = false } = {}) {
     const next = normalizeSettingsData(await decodeTransferData(doc.payload), {
       requireMarker: true
     });
+    if (getSyncKeepLocalStyle()) {
+      next.proAccent = state.applicationData.proAccent;
+      next.proSecondary = state.applicationData.proSecondary;
+      next.proTertiary = state.applicationData.proTertiary;
+      next.styleSlots = state.applicationData.styleSlots;
+    }
     if (JSON.stringify(next) === JSON.stringify(state.applicationData)) {
       writeLocal(LAST_UPDATE_TIME_KEY, doc.updateTime);
       return { ok: true, applied: false, exists: true };
     }
-    applyEditorSettingsData(next, { statusMessage: '已從其他裝置同步課表。' });
+    applyEditorSettingsData(next, { statusMessage: '已從其他裝置同步課表。', fromSync: true });
     writeLocal(LAST_UPDATE_TIME_KEY, doc.updateTime);
     lastPushedSnapshot = JSON.stringify(state.applicationData);
     return { ok: true, applied: true, exists: true };
@@ -233,43 +263,87 @@ function setSyncStatusUi(message, isError) {
 // mutation somehow slipped past the editor's UI lock (see
 // src/editor-core.js's applyEditorRoleLock). It only ever pulls, so it stays
 // a pure mirror of whatever a manager device published.
+//
+// Returns whether anything actually changed (a successful push, or a pull
+// that applied something) - runScheduledSyncTick uses that to decide
+// whether to keep polling quickly or back off, see below.
 async function syncTick() {
-  if (!isSyncConfigured() || document.hidden || syncInFlight) return;
+  if (!isSyncConfigured() || document.hidden || syncInFlight) return false;
   syncInFlight = true;
   try {
-    if (isEditorDirty()) return;
+    if (isEditorDirty()) return false;
     if (isSyncViewer()) {
       const result = await pullSyncSnapshot();
       if (!result.ok) setSyncStatusUi(result.error, true);
-      return;
+      return !!result.applied;
     }
     const currentSnapshot = JSON.stringify(state.applicationData);
     if (currentSnapshot !== lastPushedSnapshot) {
       const result = await pushSyncSnapshot();
-      if (result.ok) lastPushedSnapshot = currentSnapshot;
-      else setSyncStatusUi(result.error, true);
-      return;
+      if (!result.ok) setSyncStatusUi(result.error, true);
+      return result.ok;
     }
     const result = await pullSyncSnapshot();
     if (!result.ok) setSyncStatusUi(result.error, true);
+    return !!result.applied;
   } finally {
     syncInFlight = false;
   }
 }
 
 let syncTimer = null;
+let currentPollIntervalMs = MIN_POLL_INTERVAL_MS;
+
+function scheduleSyncTick(delayMs) {
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(runScheduledSyncTick, delayMs);
+}
+// Backs off after ticks that find nothing to do, instead of polling at a
+// fixed cadence forever - two idle devices sitting on an unchanged schedule
+// for hours have no reason to keep checking every few seconds (reading that
+// often is most of sync's actual request volume - pushes only ever happen
+// right after a real edit). Any real change - a push, or a pull that
+// applied something - resets straight back to the fast interval, since
+// that's exactly when the other side is most likely to change something
+// again soon. See triggerImmediateSync below for the other half of this:
+// resetting the backoff the moment the app becomes active again, so a long
+// idle interval never shows up as felt staleness.
+async function runScheduledSyncTick() {
+  const changed = await syncTick();
+  currentPollIntervalMs = changed
+    ? MIN_POLL_INTERVAL_MS
+    : Math.min(currentPollIntervalMs * 1.5, MAX_POLL_INTERVAL_MS);
+  scheduleSyncTick(currentPollIntervalMs);
+}
 function startSyncLoop() {
   if (syncTimer) return;
   lastPushedSnapshot = JSON.stringify(state.applicationData);
-  syncTick();
-  syncTimer = setInterval(syncTick, POLL_INTERVAL_MS);
+  currentPollIntervalMs = MIN_POLL_INTERVAL_MS;
+  runScheduledSyncTick();
 }
+// Jumps the next tick to "now" and resets the backoff, instead of leaving
+// the app waiting out however long is left on a backed-off interval. Used
+// for exactly the moments a poll-interval approach otherwise handles
+// poorly: the tab was just backgrounded/suspended and is now active again,
+// so whatever's been missed should show up immediately, not up to a minute
+// later. A no-op before startSyncLoop has ever run (nothing to reschedule
+// yet - its own first tick already covers that case).
+function triggerImmediateSync() {
+  if (!syncTimer) return;
+  currentPollIntervalMs = MIN_POLL_INTERVAL_MS;
+  scheduleSyncTick(0);
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') triggerImmediateSync();
+});
+window.addEventListener('pageshow', triggerImmediateSync);
 
 function renderSyncPanel() {
   const setupBox = document.getElementById('sync-setup-box');
   const activeBox = document.getElementById('sync-active-box');
   const activeCode = document.getElementById('sync-active-code');
   const roleLabel = document.getElementById('sync-role-label');
+  const keepStyleCheckbox = document.getElementById('sync-keep-local-style');
   if (!setupBox || !activeBox) return;
   const configured = isSyncConfigured();
   setupBox.hidden = configured;
@@ -282,7 +356,11 @@ function renderSyncPanel() {
       : '身份：管理者 — 可以編輯課表，變更會同步到其他裝置。';
     roleLabel.classList.toggle('is-viewer', viewer);
   }
+  if (keepStyleCheckbox) keepStyleCheckbox.checked = getSyncKeepLocalStyle();
   applyEditorRoleLock();
+}
+function orbitSyncSetKeepLocalStyle(checked) {
+  setSyncKeepLocalStyle(!!checked);
 }
 
 // Locks the rest of the editor down to view-only for a viewer device -
@@ -471,25 +549,30 @@ function orbitSyncUnlink() {
 window.orbitSyncCreate = orbitSyncCreate;
 window.orbitSyncJoin = orbitSyncJoin;
 window.orbitSyncUnlink = orbitSyncUnlink;
+window.orbitSyncSetKeepLocalStyle = orbitSyncSetKeepLocalStyle;
 
 export {
   applyEditorRoleLock,
   clearSyncPairing,
   generateSyncCode,
   getSyncCode,
+  getSyncKeepLocalStyle,
   getSyncRole,
   isSyncConfigured,
   isSyncProxyConfigured,
   isSyncViewer,
   orbitSyncCreate,
   orbitSyncJoin,
+  orbitSyncSetKeepLocalStyle,
   orbitSyncUnlink,
   performSyncJoin,
   pullSyncSnapshot,
   pushSyncSnapshot,
   renderSyncPanel,
+  setSyncKeepLocalStyle,
   setSyncPairing,
   setSyncStatusUi,
   startSyncLoop,
-  syncTick
+  syncTick,
+  triggerImmediateSync
 };
