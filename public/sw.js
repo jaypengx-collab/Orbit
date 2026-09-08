@@ -20,6 +20,19 @@
 const APP_VERSION = '__APP_VERSION__';
 const CACHE_NAME = 'orbit-cache-' + APP_VERSION;
 
+// How long to wait on the network before falling back to the cached shell.
+// Right after a deploy, the edge/CDN can leave a request hanging (neither
+// resolving nor erroring) instead of failing outright while it propagates -
+// a plain `fetch()` with no timeout would then wait forever, which is what
+// leaves a standalone home-screen install stuck on its boot spinner (a
+// Safari tab has its own loading UI and OS-level retry/kill behavior that
+// eventually unsticks it; the app's own boot code has neither). Racing the
+// fetch against this timeout caps the wait so the app always renders,
+// worst case from yesterday's cached copy - the network fetch below keeps
+// running in the background and updates the cache whenever it does land,
+// so the very next load already has the fresh copy.
+const NETWORK_TIMEOUT_MS = 4000;
+
 self.addEventListener('install', () => {
   // Finish installing and take over immediately rather than waiting for
   // every open tab to close first - an update shouldn't need the user to
@@ -51,19 +64,42 @@ self.addEventListener('fetch', event => {
 });
 
 // HTML shell: always prefer a fresh network copy (and cache it for the
-// offline fallback below); only fall back to whatever's cached when the
-// network request itself fails outright.
+// offline fallback below); fall back to whatever's cached both when the
+// network request fails outright and when it's simply taking too long (see
+// NETWORK_TIMEOUT_MS above). The network fetch itself is never abandoned -
+// it keeps running so a slow-but-eventually-successful response still gets
+// cached for next time, even after a timeout fallback already answered
+// this particular load.
 async function networkFirst(request) {
+  const fetchPromise = fetch(request);
+  // Update the cache whenever the network eventually responds, even if a
+  // timeout fallback below already answered this particular load - and
+  // swallow a failure here, since that's handled below instead.
+  fetchPromise
+    .then(response => {
+      if (response && response.ok) {
+        caches.open(CACHE_NAME).then(cache => cache.put(request, response.clone()));
+      }
+    })
+    .catch(() => {});
+
   try {
-    const response = await fetch(request);
-    if (response && response.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, response.clone());
-    }
-    return response;
+    return await Promise.race([
+      fetchPromise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('sw: network timeout')), NETWORK_TIMEOUT_MS)
+      )
+    ]);
   } catch {
     const cached = await caches.match(request);
-    return cached || Response.error();
+    if (cached) return cached;
+    // Nothing cached to fall back to (e.g. the very first visit) - there's
+    // nothing else to show, so just keep waiting on the real network.
+    try {
+      return await fetchPromise;
+    } catch {
+      return Response.error();
+    }
   }
 }
 
