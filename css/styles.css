@@ -87,24 +87,184 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   --glass-blur:20px;
   --glass-sat:130%;
   --glass-bright:104%;
-  --glass-fill:color-mix(in srgb,var(--orbit-panel) 22%,transparent);
-  --glass-fill-strong:color-mix(in srgb,var(--orbit-panel-strong) 30%,transparent);
+  /* How wide the refracting band at each glass edge is, and the extra pass
+     over the backdrop it applies there — see the "Liquid Glass material"
+     section below for what actually draws it. Kept as tokens so a component
+     with a much smaller box (a 40px toolbar button) can narrow the band
+     without having to restate the whole rule. */
+  --glass-rim:16px;
+  --glass-lens:blur(3px) brightness(1.16) saturate(1.45);
+  /* Specular sheen painted ON the glass, as background layers rather than
+     shadows: one broad diagonal streak for the light source, a hot spot
+     bleeding in from the top-left corner, and a much weaker bounce coming
+     back up from the bottom-right. Folded straight into the two fill tokens
+     below, so every surface that already reads one of them picks the sheen
+     up without a single component rule changing. Both fills are only ever
+     read as a `background` (verified across this file — never as a border
+     or shadow color), which is what makes promoting them from a flat color
+     to a layer list safe to do in one place. */
+  --glass-specular:
+    linear-gradient(157deg,rgba(255,255,255,.10),rgba(255,255,255,.03) 24%,rgba(255,255,255,0) 47%,rgba(255,255,255,0) 74%,rgba(255,255,255,.055)),
+    radial-gradient(130% 95% at 10% -14%,rgba(255,255,255,.095),transparent 56%),
+    radial-gradient(95% 75% at 106% 114%,rgba(255,255,255,.055),transparent 60%);
+  --glass-fill:var(--glass-specular),color-mix(in srgb,var(--orbit-panel) 22%,transparent);
+  --glass-fill-strong:var(--glass-specular),color-mix(in srgb,var(--orbit-panel-strong) 30%,transparent);
   /* The real technique (verified against a from-scratch Apple Liquid Glass
      recreation, not a guess): no gradient border, no mask-composite ring.
-     Just a stack of plain inset box-shadows — a tight bright rim all the
-     way around, a softer wider glow outside it, and a couple of very soft
-     dark washes from the top for depth — folded straight into the outer
-     drop-shadow token so every glass surface picks it up automatically. */
+     Just a stack of plain inset box-shadows — folded straight into the
+     outer drop-shadow token so every glass surface picks it up
+     automatically. What changed since: the rim is no longer one uniform
+     hairline all the way around. Real glass catches the light hardest where
+     the surface turns away from the viewer, so the top edge now gets a
+     tight, genuinely bright specular line, the bottom edge a dimmer one
+     from light bouncing back up through the material, and the two sides
+     something in between — which is what makes the panel read as a curved
+     slab with thickness instead of a flat outlined rectangle. */
   --glass-edge-shadow:
-    inset 0 0 0 1px rgba(255,255,255,.14),
-    inset 0 1px 1px rgba(255,255,255,.4),
-    inset 0 0 14px rgba(255,255,255,.07),
-    inset 0 8px 22px rgba(0,0,0,.08);
-  --glass-shadow:var(--glass-edge-shadow),0 22px 54px rgba(0,8,16,.4),0 2px 10px rgba(0,0,0,.28);
-  --glass-shadow-soft:var(--glass-edge-shadow),0 10px 24px rgba(0,8,16,.26),0 1px 5px rgba(0,0,0,.18);
-  --well-fill:rgba(3,9,13,.4);
-  --well-shadow:inset 0 1px 4px rgba(0,0,0,.4),inset 0 -1px 0 rgba(255,255,255,.03);
+    inset 0 0 0 1px rgba(255,255,255,.15),
+    inset 0 1.5px 1px -.5px rgba(255,255,255,.55),
+    inset 0 -1.5px 1px -.5px rgba(255,255,255,.22),
+    inset 1.5px 0 1.5px -1.5px rgba(255,255,255,.28),
+    inset -1.5px 0 1.5px -1.5px rgba(255,255,255,.28),
+    inset 0 0 18px rgba(255,255,255,.06),
+    inset 0 10px 26px -6px rgba(0,0,0,.10);
+  /* Three falloffs instead of two: a 1px contact shadow that keeps the panel
+     visually touching what's under it, a mid-range one for the body of the
+     drop, and the wide ambient one. A single wide blur alone reads as a
+     sticker floating an inch off the page; the contact term is what sells
+     the panel as resting on the background. */
+  --glass-shadow:var(--glass-edge-shadow),0 1px 1px rgba(0,0,0,.18),0 4px 12px rgba(0,8,16,.26),0 22px 54px rgba(0,8,16,.42);
+  --glass-shadow-soft:var(--glass-edge-shadow),0 1px 1px rgba(0,0,0,.14),0 3px 8px rgba(0,8,16,.2),0 12px 28px rgba(0,8,16,.28);
+  /* The well keeps its "recessed, no blur, no shine" job, but gains a short
+     shade falling from its top lip and a faint hairline all round, so the
+     glass sitting above it has something with visible depth to sit against
+     rather than a flat dark rectangle. */
+  --well-fill:linear-gradient(180deg,rgba(0,0,0,.16),rgba(0,0,0,0) 42%),rgba(3,9,13,.42);
+  --well-shadow:inset 0 1px 4px rgba(0,0,0,.45),inset 0 0 0 1px rgba(255,255,255,.03),inset 0 -1px 0 rgba(255,255,255,.045);
   --ease-glass:cubic-bezier(.16,1,.3,1);
+  /* Overshoots slightly on the way back. Used for the release half of a
+     press (the push itself stays short and linear-ish) so a tapped control
+     springs back the way something soft-bodied would instead of easing back
+     to rest like a rigid box. */
+  --ease-liquid:cubic-bezier(.34,1.42,.5,1);
+}
+
+/* ============================================================================
+   Liquid Glass material — edge refraction
+   The tokens above describe the glass as a flat translucent slab. This block
+   is the part that can't be expressed as a token, because it needs a SECOND
+   sampling of the backdrop: a soft band hugging every glass edge that blurs
+   and brightens what's behind it once more, on top of what the panel itself
+   already did. That's what real glass does — light bends hardest where the
+   surface curves away at the rim — and it's the single biggest difference
+   between "a translucent panel" and something that reads as a physical piece
+   of glass sitting on the wallpaper.
+
+   Mechanics worth knowing before editing:
+   - It's a ::after on each glass surface, always position:absolute. Every
+     panel here is display:flex, so a static pseudo-element would become a
+     real flex item and take up space; absolute positioning is what keeps it
+     purely decorative. pointer-events:none for the same reason — it must
+     never eat a tap meant for the control underneath.
+   - The band is drawn with four additive linear-gradient masks (one per
+     edge, fading inward over --glass-rim). mask-composite defaults to `add`,
+     so listing them is enough — no `exclude`/`xor` ring trick needed, and
+     the soft inward falloff looks far more like refraction than a hard ring
+     would anyway.
+   - --glass-rim is read here rather than baked into a mask token on :root,
+     because a custom property that references another one resolves at ITS
+     OWN declaring element — a --glass-rim-mask declared on :root would
+     freeze to :root's rim width and ignore every per-component override.
+     Same trap the --pro-* aliases on body document.
+   - backdrop-filter on a descendant samples the nearest ancestor backdrop
+     root, which is the panel itself (it has its own backdrop-filter), so
+     this composes with the panel's blur instead of fighting it.
+   - z-index:-1 is load-bearing, not a nudge. Glass refracts what is BEHIND
+     it; the controls sitting ON it are not distorted. Painted above the
+     content (where an ::after lands by default) the band hazes over
+     whatever happens to be within a rim's width of an edge — the week
+     badge, the countdown card, the first line of a sheet — which reads as
+     a blur bug rather than as a material. A negative z-index puts it back
+     under the content and above the panel's own fill, which is exactly
+     where the refraction belongs. Every host below establishes a stacking
+     context (isolation, a transform, or position+z-index) so the band
+     cannot escape behind an ancestor.
+   ========================================================================= */
+/* The @supports is a safety interlock, not decoration. The band's whole
+   shape IS its mask — unmasked, the same element is a full-panel wash of
+   tinted blur across every glass surface in the app, which is far worse
+   than simply not having the effect. So the rule only exists at all where
+   one of the two mask spellings is understood. (Worth knowing when reading
+   the built CSS: the minifier resolves each property against its browser
+   targets and emits only the prefixed form, so the unprefixed declarations
+   here are the source of truth, not what ships.) */
+@supports ((-webkit-mask-image:linear-gradient(#000,#000)) or (mask-image:linear-gradient(#000,#000))){
+  .dashboard::after,
+  .top-action-btn::after,
+  .top-actions-menu::after,
+  .modal-sheet::after,
+  .test-panel::after,
+  .editor-confirm-sheet::after{
+    content:"";position:absolute;inset:0;z-index:-1;
+    border-radius:inherit;pointer-events:none;
+    backdrop-filter:var(--glass-lens);-webkit-backdrop-filter:var(--glass-lens);
+    background:var(--glass-dispersion);
+    -webkit-mask-image:
+      linear-gradient(to right,#000,transparent var(--glass-rim)),
+      linear-gradient(to left,#000,transparent var(--glass-rim)),
+      linear-gradient(to bottom,#000,transparent var(--glass-rim)),
+      linear-gradient(to top,#000,transparent var(--glass-rim));
+    mask-image:
+      linear-gradient(to right,#000,transparent var(--glass-rim)),
+      linear-gradient(to left,#000,transparent var(--glass-rim)),
+      linear-gradient(to bottom,#000,transparent var(--glass-rim)),
+      linear-gradient(to top,#000,transparent var(--glass-rim));
+  }
+}
+/* Small boxes need a proportionally narrower band — a 16px rim on a 40px
+   button is the whole button, which turns the lens into a flat wash. */
+.top-action-btn::after{--glass-rim:9px}
+.top-actions-menu::after{--glass-rim:11px}
+/* The hub is the one .top-action-btn that isn't glass: it's a solid accent
+   gradient, the app's single primary action. A refraction band has nothing
+   real to refract there, and because the open state rotates the button 45°
+   the band's four bright edges land on the diagonals and turn a soft
+   squircle into a hard-edged diamond. Its own accent glow already does the
+   job the rim does elsewhere. */
+#btn-menu.top-action-btn::after{display:none}
+/* .style-panel is the one .test-panel variant that scrolls its own box
+   instead of an inner -body element, so an absolutely-positioned rim inside
+   it would slide away from the edge it exists to hug. It keeps the sheen and
+   the specular border like everything else; it just doesn't get the second
+   refraction pass. */
+.style-panel::after{display:none}
+/* The slow highlight drift across the dashboard: one soft, very dim hot spot
+   wandering over the largest piece of glass in the app. This is the "liquid"
+   half of Liquid Glass — without it the material is convincing but inert,
+   and a panel this size is the only place there's room for the movement to
+   read as light rather than as something animating for its own sake. Sits on
+   ::before because .dashboard's children are all position:relative: a
+   ::before at z-index 0 paints beneath every one of them, so the highlight
+   travels under the content the way light through glass would, instead of
+   sweeping across the text on top of it. */
+@keyframes glassDrift{
+  from{transform:translate3d(-7%,-5%,0) scale(1)}
+  to{transform:translate3d(11%,8%,0) scale(1.16)}
+}
+.dashboard::before{
+  content:"";position:absolute;inset:-30%;z-index:0;pointer-events:none;
+  background:radial-gradient(38% 46% at 30% 22%,rgba(255,255,255,.085),transparent 62%);
+  animation:glassDrift 26s var(--ease-glass) infinite alternate;
+}
+@media (prefers-reduced-motion:reduce){.dashboard::before{animation:none}}
+/* Someone who has asked the OS for less transparency wants less of exactly
+   this effect, so the rim drops its extra backdrop pass and keeps only the
+   (opaque-safe) chromatic edge. */
+@media (prefers-reduced-transparency:reduce){
+  .dashboard::after,.top-action-btn::after,.top-actions-menu::after,
+  .modal-sheet::after,.test-panel::after,.editor-confirm-sheet::after{
+    backdrop-filter:none;-webkit-backdrop-filter:none;
+  }
 }
 
 /* ---- Base ---- */
@@ -140,6 +300,13 @@ body{
   /* A third hue for spots needing to tell three theme-derived things apart
      (e.g. the three toolbar icons) without falling back to a fixed brand color. */
   --pro-blend:color-mix(in srgb,var(--pro-accent) 50%,var(--pro-secondary) 50%);
+  /* Chromatic fringing for the glass rim (used by the "Liquid Glass
+     material" section). A real lens edge splits light, so opposite corners
+     of the band pick up opposite ends of the theme's own two-color pair
+     instead of a neutral white glow. Declared here rather than at :root for
+     the same reason as everything else in this block — a --pro-* alias
+     resolved at :root would freeze to the default accent forever. */
+  --glass-dispersion:linear-gradient(135deg,color-mix(in srgb,var(--pro-accent) 24%,transparent),transparent 34%,transparent 66%,color-mix(in srgb,var(--pro-secondary) 20%,transparent));
   font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif;
   /* No env(safe-area-inset-bottom) here, on purpose: unlike the top notch
      (which really does sit over content) and the sides, the home indicator
@@ -177,7 +344,7 @@ body::before{
    Dashboard card
    ========================================================================= */
 .dashboard{
-  isolation:isolate;contain:layout paint;overflow:hidden;
+  isolation:isolate;contain:layout paint;overflow:hidden;position:relative;
   width:min(420px,100%);flex:0 0 auto;margin:6px auto 8px 2px;box-sizing:border-box;
   min-height:0;height:clamp(272px,41dvh,320px);max-height:clamp(272px,41dvh,320px);
   padding:10px 10px 12px;gap:6px;
@@ -248,13 +415,14 @@ body.orbit-booting .dashboard-boot-loader{visibility:visible;display:flex;positi
 
 .top-actions{position:relative;margin-left:auto;flex:0 0 auto;align-self:center;display:flex;align-items:center;flex-direction:row;padding:0;z-index:20}
 .top-action-btn{
+  position:relative;isolation:isolate;
   width:40px;height:40px;border-radius:13px;color:var(--txt);font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;
-  transition:transform .15s var(--ease-glass),opacity .15s,box-shadow .2s,background .2s,border-color .2s;
+  transition:transform .3s var(--ease-liquid),opacity .15s,box-shadow .2s,background .2s,border-color .2s;
   padding:0;border:none;background:var(--glass-fill-strong);
   backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);
   box-shadow:var(--glass-shadow-soft);
 }
-.top-action-btn:active{transform:scale(.9);box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.top-action-btn:active{transform:scale(.9);box-shadow:0 2px 8px rgba(0,0,0,.3);transition-duration:.08s}
 .top-action-btn.is-disabled{opacity:.4;filter:grayscale(.5);pointer-events:none}
 /* The glow's blur/spread stay generous (it's the one control meant to read
    as "the primary action" at a glance) but the mix percentage backs off from
@@ -442,7 +610,7 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
      shows. */
   border:1px solid var(--orbit-line);
   box-shadow:none;outline:none;
-  font-size:clamp(13px,3.6vw,15px);cursor:pointer;transition:transform .12s var(--ease-glass);
+  font-size:clamp(13px,3.6vw,15px);cursor:pointer;transition:transform .3s var(--ease-liquid);
   border-radius:11px;padding:8px 3px;font-weight:700;color:var(--orbit-muted);
 }
 .nav-item:active,.nav-item:focus{box-shadow:none;outline:none}
@@ -453,7 +621,7 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
    keyboard user tabbing across five identical day buttons had for which one
    is focused. */
 .nav-item:focus-visible{box-shadow:none;outline:2px solid var(--accent);outline-offset:2px}
-.nav-item:active{transform:scale(.95)}
+.nav-item:active{transform:scale(.95);transition-duration:.08s}
 .nav-item.is-today{color:#fff;border:2px solid var(--day-today-border);background:color-mix(in srgb,var(--pro-accent) 24%,transparent)}
 .nav-item.is-tomorrow{color:#fff;border:2px solid var(--day-tomorrow-border);background:color-mix(in srgb,var(--pro-secondary) 26%,transparent)}
 /* .active always wins the fill when combined with is-today/is-tomorrow — the
@@ -511,13 +679,13 @@ body.orbit-suppress-list-animation .animate-list .row{animation:none}
    color silently fell back to plain --accent regardless of anything here. */
 .row{
   --row-accent:var(--pro-accent);
-  transition:transform .2s var(--ease-glass),border-color .2s,background .2s,box-shadow .2s;
+  transition:transform .34s var(--ease-liquid),border-color .2s,background .2s,box-shadow .2s;
   cursor:pointer;height:76px;padding:11px 13px;margin-bottom:8px;display:flex;align-items:center;gap:10px;overflow:hidden;
   border-radius:var(--orbit-radius-md);border:1px solid color-mix(in srgb,var(--row-accent) 14%,transparent);box-shadow:none;
   background:linear-gradient(135deg,color-mix(in srgb,var(--row-accent) 11%,var(--orbit-panel)),var(--orbit-panel) 65%);
 }
 .row:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.row:active{transform:scale(.98)}
+.row:active{transform:scale(.98);transition-duration:.08s}
 @media (hover:hover){.row:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--row-accent) 34%,transparent)}}
 /* The accent stripe lives on .content (spanning both the name and meta
    lines) rather than just .row-name, so the meta line's left edge lines up
@@ -1344,12 +1512,23 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
    blue hue took over the whole panel - "blue-grey plastic" instead of the
    black glass the website actually reads as. */
 @media (display-mode:standalone){
-  :root{
+  /* Declared on body, not :root, for the reason the design-tokens block at
+     the top spells out: these two read --pro-accent/--pro-secondary, and JS
+     only ever overrides those on <body>. Resolved at :root they would be
+     frozen to the default indigo/rose forever, so the whole point of this
+     fallback — panels that carry the user's OWN theme color when there's no
+     backdrop-filter left to intensify body's gradients through — silently
+     didn't happen for anyone who had picked a different color. The specular
+     sheen rides along in front so an unblurred panel still catches light
+     across its face instead of reading as flat paint. */
+  body{
     --glass-fill:
+      var(--glass-specular),
       radial-gradient(120% 70% at 10% -10%,color-mix(in srgb,var(--pro-accent) 14%,transparent),transparent 60%),
       radial-gradient(100% 70% at 110% 0%,color-mix(in srgb,var(--pro-secondary) 12%,transparent),transparent 65%),
       color-mix(in srgb,#0B1117 68%,transparent);
     --glass-fill-strong:
+      var(--glass-specular),
       radial-gradient(120% 70% at 10% -10%,color-mix(in srgb,var(--pro-accent) 10%,transparent),transparent 60%),
       radial-gradient(100% 70% at 110% 0%,color-mix(in srgb,var(--pro-secondary) 8%,transparent),transparent 65%),
       color-mix(in srgb,#0d1620 76%,transparent);
@@ -1358,9 +1537,15 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
   .modal-sheet, .test-panel, .style-panel, .editor-confirm-sheet,
   .assign-sheet, .top-actions-menu, .row.is-now, .row.is-next,
   .close-btn, .save-btn, .editor-primary-btn, .settings-transfer-btn.primary,
-  .style-apply-btn, .teacher-assign, .editor-sheet, .modal-overlay, .editor-confirm-overlay{
+  .style-apply-btn, .teacher-assign, .editor-sheet, .modal-overlay, .editor-confirm-overlay,
+  .dashboard::after, .top-action-btn::after, .top-actions-menu::after,
+  .modal-sheet::after, .test-panel::after, .editor-confirm-sheet::after{
     backdrop-filter:none !important;-webkit-backdrop-filter:none !important;
   }
+  /* The edge rim loses its refraction pass along with everything else here,
+     but its masked chromatic band needs no backdrop at all, so it stays: on
+     panels that are now nearly opaque it's the one thing still marking where
+     the glass ends, and it costs nothing to keep. */
   /* body's own 100dvh (dynamic viewport height) is meant to shrink for a
      browser toolbar that can show/hide - useful in a normal Safari tab,
      meaningless in standalone, since there is no toolbar to ever show.
