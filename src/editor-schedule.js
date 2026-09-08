@@ -242,7 +242,7 @@ function saveEditor() {
 function showEditorTimeConflict(message) {
   setEditorConfirmContent(
     '時間有重疊',
-    '目前設定無法儲存。請調整其中一個時間，讓課堂與特殊時段不要互相覆蓋。',
+    '請調整時間，避免課堂與特殊時段重疊。',
     message,
     '前往調整時間',
     () => {

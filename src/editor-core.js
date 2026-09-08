@@ -713,7 +713,7 @@ async function closeTransferSheet(force) {
   if (state.isOcrProcessing) {
     setEditorConfirmContent(
       'AI 辨識中',
-      'Gemini 正在辨識課表圖片，請稍候辨識完成後再關閉，否則辨識結果將會遺失。',
+      '請等辨識完成再關閉，否則結果會遺失。',
       '',
       '知道了',
       hideEditorDiscardConfirm,

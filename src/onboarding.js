@@ -76,7 +76,7 @@ function showOnboardingPrompt() {
   markOnboardingSeen();
   setEditorConfirmContent(
     '開始使用 Orbit AI',
-    '如果班上已經有人用 Orbit AI 建立同步課表，輸入配對代碼就能直接使用同一份課表；沒有的話也可以自己建立。',
+    '有配對代碼的話，輸入即可加入班上的課表；沒有的話可以自己建立。',
     '',
     '輸入配對代碼',
     () => {

@@ -28,6 +28,17 @@
   --v31-hub-size:46px;
   --v31-radius-xl:24px;
 
+  /* Shared size for every full-width "primary action" button (confirm-sheet
+     buttons, save/close/apply buttons in the editor/style/transfer sheets) -
+     these all play the same OK/Cancel/Save role in different popups, so they
+     read as one consistent control instead of each sheet having its own
+     button height/radius/font-size. Icon-only buttons, day-nav tabs, and
+     small grid chips are a different UI category on purpose and keep their
+     own sizing. */
+  --action-btn-h:46px;
+  --action-btn-radius:14px;
+  --action-btn-font:15px;
+
   /* User-tunable theme (JS overrides these as inline styles on <body>) */
   --pro-accent:#0A84FF;
   --pro-secondary:#5856D6;
@@ -530,7 +541,7 @@ body.modal-open > .dashboard,body.modal-open > .nav-bar,body.modal-open > #sched
 .occ-row-period{color:var(--txt);font-family:ui-monospace,monospace;font-size:12px;font-weight:600}
 .occ-row-time{color:var(--sub);font-size:10px;margin-top:1px;background:transparent}
 #sheet .close-btn{flex-shrink:0;margin-top:0}
-.close-btn{width:100%;padding:14px;border-radius:16px;border:none;font-size:15px;font-weight:700;cursor:pointer;transition:transform .15s,opacity .15s,box-shadow .2s;margin-top:4px;background:linear-gradient(135deg,var(--pro-action-bg),var(--pro-action-bg-2));color:var(--pro-action-text);box-shadow:0 8px 22px color-mix(in srgb,var(--pro-accent) 20%,transparent);backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%)}
+.close-btn{width:100%;min-height:var(--action-btn-h);padding:14px;border-radius:var(--action-btn-radius);border:none;font-size:var(--action-btn-font);font-weight:700;cursor:pointer;transition:transform .15s,opacity .15s,box-shadow .2s;margin-top:4px;background:linear-gradient(135deg,var(--pro-action-bg),var(--pro-action-bg-2));color:var(--pro-action-text);box-shadow:0 8px 22px color-mix(in srgb,var(--pro-accent) 20%,transparent);backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%)}
 .close-btn:active{transform:scale(.96);opacity:.85;box-shadow:0 3px 10px color-mix(in srgb,var(--pro-accent) 24%,transparent)}
 
 /* ============================================================================
@@ -612,7 +623,7 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .editor-confirm-title{font-size:19px;font-weight:800;text-align:center;letter-spacing:-.4px;margin:0 0 12px}
 .editor-confirm-msg{font-size:14px;font-weight:500;color:var(--sub);text-align:center;line-height:1.5;margin:0 auto 22px;max-width:30ch}
 .editor-confirm-actions{display:flex;flex-direction:column;gap:12px}
-.editor-confirm-btn{width:100%;min-height:50px;padding:13px 18px;border-radius:16px;border:none;font-size:16px;font-weight:700;cursor:pointer;transition:transform .15s,opacity .15s,box-shadow .15s;touch-action:manipulation;font-family:inherit;white-space:normal;line-height:1.2}
+.editor-confirm-btn{width:100%;min-height:var(--action-btn-h);padding:13px 18px;border-radius:var(--action-btn-radius);border:none;font-size:var(--action-btn-font);font-weight:700;cursor:pointer;transition:transform .15s,opacity .15s,box-shadow .15s;touch-action:manipulation;font-family:inherit;white-space:normal;line-height:1.2}
 .editor-confirm-btn:active{transform:scale(.96);opacity:.88}
 .editor-confirm-btn.primary{background:var(--accent);color:var(--pro-accent-text);box-shadow:0 4px 16px color-mix(in srgb,var(--pro-accent) 35%,transparent)}
 .editor-confirm-btn.danger{background:transparent;color:#ff453a;border:1px solid rgba(255,69,58,.35);font-weight:700}
@@ -727,10 +738,10 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
    matches - without this the one remaining visible button would sit in a
    single grid column instead of taking the full row like it visually should. */
 .settings-transfer-actions:has(>[hidden])>:not([hidden]){grid-column:1/-1}
-.settings-transfer-btn{border-radius:13px;padding:11px 12px;background:color-mix(in srgb,var(--pro-accent) 10%,rgba(255,255,255,.09));color:#F8FAFC;border:1px solid color-mix(in srgb,var(--pro-accent) 18%,rgba(255,255,255,.12));font-weight:800;cursor:pointer;transition:transform .12s,background .15s}
+.settings-transfer-btn{min-height:var(--action-btn-h);font-size:var(--action-btn-font);border-radius:var(--action-btn-radius);padding:11px 12px;background:color-mix(in srgb,var(--pro-accent) 10%,rgba(255,255,255,.09));color:#F8FAFC;border:1px solid color-mix(in srgb,var(--pro-accent) 18%,rgba(255,255,255,.12));font-weight:800;cursor:pointer;transition:transform .12s,background .15s}
 .settings-transfer-btn:active{transform:scale(.97);background:color-mix(in srgb,var(--pro-accent) 18%,rgba(255,255,255,.16))}
 .settings-transfer-btn:disabled{opacity:.5;cursor:default;pointer-events:none}
-.settings-transfer-btn.primary{min-height:42px;box-shadow:none;border-radius:12px;background:linear-gradient(135deg,var(--pro-action-bg),var(--pro-action-bg-2));color:var(--pro-action-text);backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%)}
+.settings-transfer-btn.primary{box-shadow:none;background:linear-gradient(135deg,var(--pro-action-bg),var(--pro-action-bg-2));color:var(--pro-action-text);backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%)}
 .settings-transfer-btn.danger{background:rgba(255,69,58,.08);color:#ff453a;border-color:rgba(255,69,58,.35)}
 .settings-transfer-btn.danger:active{background:rgba(255,69,58,.16)}
 .settings-transfer-btn.primary:active{box-shadow:0 3px 10px color-mix(in srgb,var(--pro-accent) 20%,transparent)}
@@ -838,15 +849,15 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 #ocr-import-result .editor-fold-body{display:block}
 #ocr-import-result .schedule-periods{overflow-x:auto;flex-wrap:nowrap;padding-bottom:3px}
 #ocr-import-result .period-select{flex:0 0 110px;width:110px;min-width:110px;min-height:40px}
-#ocr-import-result .settings-transfer-btn{min-height:42px;border-radius:12px;font-family:inherit;font-weight:800}
+#ocr-import-result .settings-transfer-btn{min-height:var(--action-btn-h);border-radius:var(--action-btn-radius);font-family:inherit;font-weight:800}
 
-.save-btn{width:100%;padding:14px;font-size:16px;font-weight:700;cursor:pointer;transition:transform .15s,opacity .15s,box-shadow .15s;margin-top:10px;min-height:42px;border:none;border-radius:14px;background:linear-gradient(135deg,var(--pro-action-bg),var(--pro-action-bg-2));color:var(--pro-action-text);box-shadow:0 8px 22px color-mix(in srgb,var(--pro-accent) 20%,transparent);backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%)}
+.save-btn{width:100%;padding:14px;font-size:var(--action-btn-font);font-weight:700;cursor:pointer;transition:transform .15s,opacity .15s,box-shadow .15s;margin-top:10px;min-height:var(--action-btn-h);border:none;border-radius:var(--action-btn-radius);background:linear-gradient(135deg,var(--pro-action-bg),var(--pro-action-bg-2));color:var(--pro-action-text);box-shadow:0 8px 22px color-mix(in srgb,var(--pro-accent) 20%,transparent);backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%)}
 .save-btn:active{transform:scale(.97);opacity:.9;box-shadow:0 3px 10px color-mix(in srgb,var(--pro-accent) 22%,transparent)}
 /* A normal flow element at the end of the form, not pinned to the bottom of
    the viewport the whole time - it only shows up once someone's actually
    scrolled through (and, in layered mode, drilled into) the section they
    came to edit, same as any other "confirm" button at the end of a form. */
-.editor-sheet .save-btn{border-radius:16px;padding:15px;margin-top:12px;box-shadow:0 6px 20px color-mix(in srgb,var(--pro-accent) 24%,transparent);font-size:16px;font-weight:700;min-height:46px}
+.editor-sheet .save-btn{border-radius:var(--action-btn-radius);padding:13px 18px;margin-top:12px;box-shadow:0 6px 20px color-mix(in srgb,var(--pro-accent) 24%,transparent);font-size:var(--action-btn-font);font-weight:700;min-height:var(--action-btn-h)}
 .save-toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ok);color:var(--pro-secondary-text);padding:10px 20px;border-radius:20px;font-size:14px;font-weight:700;opacity:0;z-index:300;transition:opacity .3s,transform .3s;pointer-events:none}
 .save-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
@@ -868,7 +879,7 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .assign-box.assigned{background:color-mix(in srgb,var(--ok) 22%,transparent);border-color:var(--ok);color:var(--ok);box-shadow:0 0 0 1px color-mix(in srgb,var(--ok) 35%,transparent)}
 .teacher-assign{min-height:40px;padding:0 14px;border:0;border-radius:13px;background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 72%,#fff 18%),color-mix(in srgb,var(--accent) 48%,#fff 18%));color:var(--pro-accent-text);font-weight:850;letter-spacing:.04em;box-shadow:0 6px 16px color-mix(in srgb,var(--accent) 22%,transparent);touch-action:manipulation;transition:transform .12s;backdrop-filter:blur(14px) saturate(180%);-webkit-backdrop-filter:blur(14px) saturate(180%)}
 .teacher-assign:active{transform:scale(.95)}
-.assign-sheet .editor-confirm-btn{margin-top:8px;min-height:46px;width:100%}
+.assign-sheet .editor-confirm-btn{margin-top:8px;min-height:var(--action-btn-h);width:100%}
 @media (max-width:480px){.assign-sheet{width:calc(100vw - 20px);max-height:calc(100dvh - 28px);padding:14px;border-radius:20px}.teacher-assign{min-height:44px;padding:0 13px}.assign-day-row{grid-template-columns:39px minmax(0,1fr);gap:6px}.assign-periods{grid-template-columns:repeat(auto-fit,minmax(58px,1fr));gap:6px}.assign-box{min-height:48px;font-size:11px}}
 @media (max-width:430px){.assign-day-tabs{gap:4px}.assign-sheet{padding:15px;width:calc(100vw - 20px);border-radius:20px}}
 @media (max-width:390px){.editor-confirm-btn{flex:1 1 0}}
@@ -1034,7 +1045,7 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .style-panel .style-slot:hover{border-color:color-mix(in srgb,var(--pro-accent) 58%,var(--orbit-line))}
 .style-panel .style-color-well{border-color:var(--orbit-line)}
 .style-panel .style-cancel-btn{background:transparent;border-color:var(--orbit-line);color:var(--orbit-muted)}
-.style-panel .style-apply-btn{font-size:16px;font-weight:700;background:color-mix(in srgb,var(--pro-accent) 78%,transparent);color:var(--pro-action-text,#092027);box-shadow:0 8px 18px color-mix(in srgb,var(--pro-accent) 18%,transparent)}
+.style-panel .style-apply-btn{font-size:var(--action-btn-font);font-weight:700;background:color-mix(in srgb,var(--pro-accent) 78%,transparent);color:var(--pro-action-text,#092027);box-shadow:0 8px 18px color-mix(in srgb,var(--pro-accent) 18%,transparent)}
 .style-panel .style-preset-chip.default .style-preset-swatch{background:linear-gradient(110deg,#0A84FF 0 48%,#5856D6 52% 100%)}
 .style-panel .style-preset-chip.rose .style-preset-swatch{background:linear-gradient(110deg,#F06F61 0 48%,#C44C78 52% 100%)}
 .style-panel .style-preset-chip.ocean .style-preset-swatch{background:linear-gradient(110deg,#18B7A0 0 48%,#2E6FD8 52% 100%)}
@@ -1073,10 +1084,10 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .style-preview-status{display:flex;align-items:center;gap:7px;padding:8px 2px 0;color:var(--sub);font-size:10px;font-weight:800}
 .style-preview-status-dot{width:7px;height:7px;border-radius:50%;background:var(--pro-accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--pro-accent) 16%,transparent)}
 .style-panel-actions{display:grid;grid-template-columns:1fr 1.5fr;gap:8px;margin-top:2px;position:sticky;bottom:0;z-index:2;padding-top:8px;background:inherit}
-.style-panel-actions button{min-height:40px;border-radius:10px;font:900 12px inherit;cursor:pointer;transition:transform .12s}
+.style-panel-actions button{min-height:var(--action-btn-h);border-radius:var(--action-btn-radius);font-size:var(--action-btn-font);font-weight:900;font-family:inherit;cursor:pointer;transition:transform .12s}
 .style-panel-actions button:active{transform:scale(.96)}
-.style-apply-btn{border:none;background:color-mix(in srgb,var(--pro-accent) 78%,transparent);color:var(--pro-accent-text,#092027);box-shadow:0 8px 20px color-mix(in srgb,var(--pro-accent) 24%,transparent);min-height:42px;border-radius:13px;backdrop-filter:blur(14px) saturate(180%);-webkit-backdrop-filter:blur(14px) saturate(180%)}
-.style-cancel-btn{background:transparent;border:1px solid color-mix(in srgb,var(--pro-accent) 20%,transparent);color:var(--orbit-coral);min-height:42px;border-radius:12px}
+.style-apply-btn{border:none;background:color-mix(in srgb,var(--pro-accent) 78%,transparent);color:var(--pro-accent-text,#092027);box-shadow:0 8px 20px color-mix(in srgb,var(--pro-accent) 24%,transparent);min-height:var(--action-btn-h);border-radius:var(--action-btn-radius);backdrop-filter:blur(14px) saturate(180%);-webkit-backdrop-filter:blur(14px) saturate(180%)}
+.style-cancel-btn{background:transparent;border:1px solid color-mix(in srgb,var(--pro-accent) 20%,transparent);color:var(--orbit-coral);min-height:var(--action-btn-h);border-radius:var(--action-btn-radius)}
 
 @media (max-width:390px){#style-editor-content{max-height:calc(100dvh - 138px)}.style-panel{max-width:none}}
 /* 內建預設 (built-in presets) on a phone: a horizontal swipe row of fixed-

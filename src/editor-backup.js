@@ -170,7 +170,7 @@ function runTransferAction(action) {
       setEditorConfirmContent(
         '覆寫匯出內容？',
         '匯出會覆寫目前文字欄位中的內容。',
-        '目前欄位已有設定文字，確定要以新的匯出內容取代嗎？',
+        '確定要以新內容取代嗎？',
         '覆寫並匯出',
         confirmExportOverwrite,
         '取消'
@@ -199,7 +199,7 @@ function requestTransferAction(action) {
   const label = action === 'export' ? '匯出' : '匯入';
   setEditorConfirmContent(
     `要先儲存目前設定嗎？`,
-    `目前有尚未儲存的變更。請選擇是否先儲存再${label}。`,
+    `有尚未儲存的變更，是否先儲存再${label}？`,
     '',
     `儲存後${label}`,
     () => {
@@ -1103,7 +1103,7 @@ function applyPendingImportSettings() {
 function resetAllAppData() {
   setEditorConfirmContent(
     '重設所有資料？',
-    '這會清除這台裝置上所有 Orbit AI 資料（課表、樣式、同步設定等），並回到最初的開始畫面，此動作無法復原。如果這台裝置目前有加入同步，其他裝置的課表不受影響。',
+    '會清除這台裝置的所有資料（課表、樣式、同步等）並回到初始畫面，此動作無法復原；其他同步裝置不受影響。',
     '',
     '重設',
     () => {
