@@ -1196,11 +1196,28 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 #ocr-import-detect{width:100%}
 #ocr-import-detect:disabled{opacity:.45;filter:grayscale(.4);cursor:not-allowed}
 #ocr-import-image-label.is-disabled{opacity:.45;filter:grayscale(.4);cursor:not-allowed;pointer-events:none}
-/* A single static line (see startEtaTimer) rather than a per-second
-   countdown, so it takes no reserved height while there is nothing to
-   estimate. */
-.ocr-import-eta{font-size:10.5px;line-height:1.3;color:var(--sub)}
-.ocr-import-eta:empty{display:none}
+/* The estimate itself is a single static line (see startEtaTimer), not a
+   per-second countdown - see that function's comment for why. But a static
+   line alone gives no live signal that anything is happening, which matters
+   more the longer a request runs; #ocr-import-eta-elapsed is a small,
+   visually secondary ticking clock sitting beside it for exactly that job -
+   "is this still alive", not "when will it be done" - so it stays out of
+   the way instead of competing with the estimate for attention. `hidden`
+   by default (native browser behavior, not the :empty trick the single-line
+   version used) so it reserves no height until an import actually starts;
+   .ocr-import-eta[hidden] below wins over the flex display this element
+   needs to lay its two spans out side by side. */
+.ocr-import-eta{display:flex;align-items:baseline;gap:8px;font-size:10.5px;line-height:1.3;color:var(--sub)}
+.ocr-import-eta[hidden]{display:none}
+#ocr-import-eta-estimate{flex:1 1 auto;min-width:0}
+/* aria-hidden in the markup keeps this out of the role="status" region's
+   announcements - a screen reader hearing "已等待 1 秒", "已等待 2 秒" every
+   single second is exactly the kind of noise the static estimate replaced a
+   countdown to avoid; sighted users still see it tick. Muted and slightly
+   smaller than the estimate line, and tabular-nums so the ticking digit
+   doesn't jitter the line's width every second. */
+.ocr-import-eta-elapsed{flex:0 0 auto;font-size:10px;opacity:.65;font-variant-numeric:tabular-nums}
+.ocr-import-eta-elapsed:empty{display:none}
 /* One thumbnail per decodable file picked, side by side - the box grows
    with the selection rather than only ever showing the first, so "I meant
    to send two of these" is visible before the request goes out. Not a

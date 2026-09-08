@@ -762,6 +762,19 @@ class ImportPreview {
 // finished) made the app look broken rather than busy. One unchanging
 // sentence sets the expectation and then stops competing for attention.
 //
+// A static line alone has a real gap though: it gives no signal that the
+// request is actually still running, as opposed to just stuck. So there's a
+// second, deliberately quieter element next to it - #ocr-import-eta-elapsed,
+// a small ticking "已等待 N 秒" clock - answering a different question
+// ("is this alive") from the one the estimate answers ("when will it be
+// done"). It's the matchmaking-queue pattern in full: a fixed "estimated
+// wait" plus a separate, visually secondary "time in queue" that keeps
+// counting - not a revival of the old shrinking-number countdown, which
+// tried to make one number do both jobs and did neither well. See the CSS
+// for why it's aria-hidden: getting read aloud every second would be the
+// same "watched pot" problem the countdown had, just moved into a screen
+// reader.
+//
 // The estimate itself is derived rather than fixed: the number of files
 // genuinely changes how long this takes - each one is separately uploaded
 // and separately read - so quoting the same figure for a single screenshot
@@ -776,23 +789,40 @@ const ETA_PER_EXTRA_FILE_SECONDS = 3;
 // that an ordinary bit of variance never trips it, tight enough that a
 // genuinely stuck request doesn't sit under a confident-looking estimate
 // forever. A model fallback (see recognizeSchedule) is the usual reason.
+// The elapsed clock keeps ticking either side of this threshold - it isn't
+// an estimate that can be "wrong", so there's nothing about crossing it
+// that needs to change how the clock itself behaves.
 const ETA_OVERRUN_FACTOR = 1.8;
 function estimateRecognitionSeconds(fileCount) {
   return ETA_BASE_SECONDS + Math.max(0, fileCount - 1) * ETA_PER_EXTRA_FILE_SECONDS;
 }
 function startEtaTimer(etaElement, fileCount = 1) {
   if (!etaElement) return () => {};
+  const estimateSpan = etaElement.querySelector('#ocr-import-eta-estimate') || etaElement;
+  const elapsedSpan = etaElement.querySelector('#ocr-import-eta-elapsed');
   const estimate = estimateRecognitionSeconds(fileCount);
-  etaElement.textContent = `預估等待時間 約 ${estimate} 秒`;
-  const timer = setTimeout(
+  etaElement.hidden = false;
+  estimateSpan.textContent = `預估等待時間 約 ${estimate} 秒`;
+  const startedAt = Date.now();
+  const tickElapsed = () => {
+    if (!elapsedSpan) return;
+    const elapsedSeconds = Math.round((Date.now() - startedAt) / 1000);
+    elapsedSpan.textContent = `已等待 ${elapsedSeconds} 秒`;
+  };
+  tickElapsed();
+  const elapsedInterval = setInterval(tickElapsed, 1000);
+  const overrunTimer = setTimeout(
     () => {
-      etaElement.textContent = '比預估久一點，仍在辨識中…';
+      estimateSpan.textContent = '比預估久一點，仍在辨識中…';
     },
     Math.round(estimate * ETA_OVERRUN_FACTOR * 1000)
   );
   return () => {
-    clearTimeout(timer);
-    etaElement.textContent = '';
+    clearInterval(elapsedInterval);
+    clearTimeout(overrunTimer);
+    etaElement.hidden = true;
+    estimateSpan.textContent = '';
+    if (elapsedSpan) elapsedSpan.textContent = '';
   };
 }
 
@@ -1035,5 +1065,6 @@ export {
   AIVisionProcessor,
   estimateRecognitionSeconds,
   isGeminiProxyConfigured,
+  startEtaTimer,
   warmUpGeminiProxy
 };

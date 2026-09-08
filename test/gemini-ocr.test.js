@@ -1,15 +1,16 @@
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadApp } from './helpers/loadApp.js';
 import { seedLocalStorage } from './helpers/fixtureData.js';
 
 let AIVisionProcessor;
 let isGeminiProxyConfigured;
 let estimateRecognitionSeconds;
+let startEtaTimer;
 
 beforeAll(async () => {
   seedLocalStorage();
   await loadApp();
-  ({ AIVisionProcessor, estimateRecognitionSeconds, isGeminiProxyConfigured } =
+  ({ AIVisionProcessor, estimateRecognitionSeconds, isGeminiProxyConfigured, startEtaTimer } =
     await import('../src/gemini-ocr.js'));
 });
 
@@ -117,5 +118,83 @@ describe('AIVisionProcessor.parseResponse turns the AI JSON into the app-interna
       })
     );
     expect(Object.keys(candidate.teacherDB)).toHaveLength(0);
+  });
+});
+
+// The matchmaking-queue pattern in full: a fixed estimate that never
+// changes, plus a separate, quieter "time in queue" clock that does. They
+// answer different questions ("when will it be done" vs. "is this still
+// alive") and must not be conflated back into one shifting number - that
+// was the whole problem with the countdown this replaced.
+describe('startEtaTimer runs a static estimate and a separate ticking elapsed clock', () => {
+  function buildEtaElement() {
+    const el = document.createElement('div');
+    el.hidden = true;
+    el.innerHTML =
+      '<span id="ocr-import-eta-estimate"></span>' + '<span id="ocr-import-eta-elapsed"></span>';
+    document.body.appendChild(el);
+    return el;
+  }
+
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    document.body.innerHTML = '';
+  });
+
+  it('shows the estimate immediately and un-hides the element', () => {
+    const el = buildEtaElement();
+    startEtaTimer(el, 1);
+    expect(el.hidden).toBe(false);
+    expect(el.querySelector('#ocr-import-eta-estimate').textContent).toMatch(/預估等待時間/);
+  });
+
+  it('starts the elapsed clock at 0 and ticks it every second, without touching the estimate', () => {
+    const el = buildEtaElement();
+    startEtaTimer(el, 1);
+    const estimateText = el.querySelector('#ocr-import-eta-estimate').textContent;
+    expect(el.querySelector('#ocr-import-eta-elapsed').textContent).toBe('已等待 0 秒');
+
+    vi.advanceTimersByTime(3000);
+    expect(el.querySelector('#ocr-import-eta-elapsed').textContent).toBe('已等待 3 秒');
+    // Well under this file count's overrun threshold - the estimate itself
+    // must still read exactly as it did at the start.
+    expect(el.querySelector('#ocr-import-eta-estimate').textContent).toBe(estimateText);
+  });
+
+  it('switches the estimate to the overrun message once past threshold, and the clock keeps counting through it', () => {
+    const el = buildEtaElement();
+    startEtaTimer(el, 1); // 5s estimate, 1.8x overrun -> 9s
+    vi.advanceTimersByTime(9000);
+    expect(el.querySelector('#ocr-import-eta-estimate').textContent).toMatch(/比預估久一點/);
+    expect(el.querySelector('#ocr-import-eta-elapsed').textContent).toBe('已等待 9 秒');
+
+    vi.advanceTimersByTime(2000);
+    expect(el.querySelector('#ocr-import-eta-elapsed').textContent).toBe('已等待 11 秒');
+  });
+
+  it('stopping clears both spans, re-hides the element, and cancels every pending timer', () => {
+    const el = buildEtaElement();
+    const stop = startEtaTimer(el, 1);
+    vi.advanceTimersByTime(2000);
+    stop();
+
+    expect(el.hidden).toBe(true);
+    expect(el.querySelector('#ocr-import-eta-estimate').textContent).toBe('');
+    expect(el.querySelector('#ocr-import-eta-elapsed').textContent).toBe('');
+
+    // No lingering interval/timeout re-populating either span after stop().
+    vi.advanceTimersByTime(10000);
+    expect(el.querySelector('#ocr-import-eta-estimate').textContent).toBe('');
+    expect(el.querySelector('#ocr-import-eta-elapsed').textContent).toBe('');
+  });
+
+  it('a higher file count raises the estimate, which the elapsed clock has no opinion on either way', () => {
+    const el = buildEtaElement();
+    startEtaTimer(el, 4);
+    expect(el.querySelector('#ocr-import-eta-estimate').textContent).toMatch(
+      new RegExp(String(estimateRecognitionSeconds(4)))
+    );
+    expect(el.querySelector('#ocr-import-eta-elapsed').textContent).toBe('已等待 0 秒');
   });
 });
