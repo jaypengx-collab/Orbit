@@ -476,7 +476,7 @@ function updateExamCountdownIfDayChanged() {
 function update() {
   updateExamCountdownIfDayChanged();
   const dom = getDashboardDom();
-  let now = new Date();
+  const now = new Date();
   if (window.MANUALLY_TEST) {
     const h = Math.floor((window.TEST_TIME_SEC || 0) / 3600),
       m = Math.floor(((window.TEST_TIME_SEC || 0) % 3600) / 60),

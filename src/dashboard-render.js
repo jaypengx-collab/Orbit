@@ -125,7 +125,7 @@ function shrinkFontToFit(el, available, defaultSize, minSize) {
   }
   el.style.fontSize = Math.floor(best) + 'px';
 }
-let titleFitState = { key: '', raf: 0 };
+const titleFitState = { key: '', raf: 0 };
 function fitNowTitleText(force = false) {
   const title = document.getElementById('now-name');
   const stack = document.querySelector('.now-stack');
@@ -181,7 +181,7 @@ function fitNowTitleText(force = false) {
 // real (balanced, keep-all) two-line wrap when even the smallest legible
 // size still can't fit it, so long teacher/room names never get clipped or
 // shrunk into illegibility.
-let nextMetaFitState = { key: '', raf: 0 };
+const nextMetaFitState = { key: '', raf: 0 };
 function fitNextMetaText(force = false) {
   const el = document.getElementById('next-meta-text');
   if (!el) return;
