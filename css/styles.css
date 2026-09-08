@@ -352,23 +352,26 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
   border-radius:var(--orbit-radius-md);
 }
 .nav-item{
-  /* Neither box-shadow rule above this ever removed was actually the whole
-     story: a plain <button> keeps its native OS chrome - including a subtle
-     shadow/bevel - until appearance is explicitly reset, and every other
-     property here is happy to just sit on top of that chrome instead of
-     replacing it. A regular Safari/Chrome tab is lenient enough to mostly
-     hide it once background/border are overridden, but Safari's "Add to
-     Home Screen" standalone mode renders form controls through a stricter
-     path that keeps showing it regardless - exactly the platform-specific
-     shadow already reported here once, after both of those box-shadow
-     removals still didn't fix it for that mode. This is the actual reset
-     that removes the browser's own default appearance instead of trying to
-     paint over it. */
+  /* Every previous attempt here (removing the is-today/is-tomorrow ring,
+     -webkit-appearance:none alone, dropping .nav-bar's own background) still
+     left a shadow/glass look on these buttons that specifically vanishes on
+     click - that's the tell of a *pressed-state* native control effect,
+     not a static one any of those earlier fixes were actually built to
+     touch: browsers commonly render a plain <button> "raised" at rest and
+     flatten it on :active, and separately, mobile Safari overlays its own
+     translucent tap-highlight on top of a tapped element regardless of
+     appearance. appearance:none alone doesn't reliably suppress either of
+     those on every WebKit version, so this now resets both explicitly
+     (box-shadow:none in every state, plus killing the tap-highlight
+     overlay outright) instead of relying on appearance reset alone. */
   -webkit-appearance:none;appearance:none;
+  -webkit-tap-highlight-color:transparent;
   flex:1;min-width:0;min-height:46px;height:46px;border:none;background:transparent;
+  box-shadow:none;outline:none;
   font-size:clamp(13px,3.6vw,15px);cursor:pointer;transition:transform .12s var(--ease-glass),background .2s,border-color .2s,color .2s,box-shadow .2s;
   border-radius:11px;padding:8px 3px;font-weight:700;color:var(--orbit-muted);
 }
+.nav-item:active,.nav-item:focus,.nav-item:focus-visible{box-shadow:none;outline:none}
 .nav-item:active{transform:scale(.95)}
 .nav-item.is-today{color:#fff;border:2px solid var(--day-today-border);background:color-mix(in srgb,var(--pro-accent) 24%,transparent)}
 .nav-item.is-tomorrow{color:#fff;border:2px solid var(--day-tomorrow-border);background:color-mix(in srgb,var(--pro-secondary) 26%,transparent)}
