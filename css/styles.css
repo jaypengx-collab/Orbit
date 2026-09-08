@@ -735,6 +735,15 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .sync-style-backup-notice .editor-hint-body{margin:0}
 .sync-role-label{font-size:11px;font-weight:700;color:var(--accent);text-align:center}
 .sync-role-label.is-viewer{color:var(--sub)}
+/* The two-code display shown once right after creating a sync (see
+   src/sync.js's showCreatedSyncCodes) - a row per code, each with its own
+   copy button, so the manager and viewer codes are never visually
+   ambiguous about which is which. */
+.sync-code-row{display:flex;flex-direction:column;gap:6px}
+.sync-code-row-label{font-size:11px;font-weight:700;color:var(--sub)}
+.sync-code-row-value{display:flex;align-items:stretch;gap:8px}
+.sync-code-row-value .sync-active-code{flex:1;min-width:0;font-size:18px;padding:10px}
+.sync-code-row-value .settings-transfer-btn{flex:0 0 auto;padding:0 14px}
 
 /* A viewer device (see src/sync.js's isSyncViewer/applyEditorRoleLock) is
    locked out of the schedule editor entirely now (#btn-edit itself is

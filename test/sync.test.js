@@ -21,7 +21,6 @@ beforeAll(async () => {
 beforeEach(() => {
   sync.clearSyncPairing();
   document.getElementById('sync-join-code').value = '';
-  document.getElementById('sync-join-as-manager').checked = false;
 });
 
 afterEach(() => {
@@ -50,15 +49,6 @@ describe('sync without a proxy Worker configured', () => {
     expect(sync.isSyncConfigured()).toBe(false);
     expect(document.getElementById('sync-status').textContent).toMatch(/尚未設定/);
     expect(fetchMock).not.toHaveBeenCalled();
-  });
-});
-
-describe('generateSyncCode', () => {
-  it('produces an 8-character code from the unambiguous alphabet only', () => {
-    const code = sync.generateSyncCode();
-    expect(code).toHaveLength(8);
-    expect(code).toMatch(/^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8}$/);
-    expect(code).not.toMatch(/[01OI]/);
   });
 });
 

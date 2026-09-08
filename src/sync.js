@@ -81,9 +81,6 @@ const STYLE_BACKUP_KEY = 'orbitSyncStyleBackup';
 const SCHEDULE_BACKUP_KEY = 'orbitSyncScheduleBackup';
 const MANAGER_ROLE = 'manager';
 const VIEWER_ROLE = 'viewer';
-// 0/O/1/I excluded so a hand-copied or read-aloud code is never ambiguous.
-const CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
-const CODE_LENGTH = 8;
 
 function readLocal(key) {
   try {
@@ -110,14 +107,19 @@ function getSyncCode() {
 function isSyncConfigured() {
   return !!getSyncCode();
 }
-// Devices that created or explicitly joined-as-manager a sync can edit and
-// publish changes; every other paired device defaults to (and can only
-// become) a viewer - it receives updates but is locked out of editing (see
-// isSyncViewer's callers: syncTick never pushes for one, and the editor UI
-// locks itself down - src/editor-core.js's applyEditorRoleLock). A device
-// paired before this feature existed has no role recorded yet; treating that
-// as 'manager' preserves its previous (both-can-edit) behavior rather than
-// retroactively locking someone out.
+// Which role a device has is decided entirely by which of the two codes it
+// was given (see the Worker's handleSyncRequest) - the code a device typed
+// in to create or join resolves to 'manager' or 'viewer' on the server, and
+// that resolved role is what setSyncPairing stores here, never a choice the
+// client makes for itself. A manager can edit and publish changes; a viewer
+// receives updates but is locked out of editing (see isSyncViewer's
+// callers: syncTick never pushes for one, and the editor UI locks itself
+// down - src/editor-core.js's applyEditorRoleLock) - and, unlike before,
+// the Worker itself refuses a viewer's code on PATCH/DELETE too, so this
+// isn't just a client-side convention any more. A device paired before this
+// feature existed has no role recorded yet; treating that as 'manager'
+// preserves its previous (both-can-edit) behavior rather than retroactively
+// locking someone out.
 function getSyncRole() {
   return readLocal(ROLE_KEY).trim() === VIEWER_ROLE ? VIEWER_ROLE : MANAGER_ROLE;
 }
@@ -195,11 +197,6 @@ function backUpLocalSchedule(data) {
 function clearScheduleBackup() {
   writeLocal(SCHEDULE_BACKUP_KEY, '');
 }
-function generateSyncCode() {
-  const bytes = new Uint8Array(CODE_LENGTH);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, byte => CODE_ALPHABET[byte % CODE_ALPHABET.length]).join('');
-}
 function setSyncPairing(code, role = MANAGER_ROLE) {
   writeLocal(
     CODE_KEY,
@@ -243,15 +240,45 @@ async function fetchSyncDoc(code) {
   // as "not found" (a real code that just has nothing published under it
   // yet) so the user sees the same friendly "找不到這組配對代碼" either way,
   // instead of a raw "Invalid pairing code".
-  if (response.status === 400) return { ok: true, exists: false, updateTime: '', payload: '' };
+  if (response.status === 400) {
+    return { ok: true, exists: false, updateTime: '', payload: '', role: null };
+  }
   if (!response.ok) return { ok: false, error: await proxyErrorMessage(response) };
   const data = await response.json();
   return {
     ok: true,
     exists: !!data.exists,
     updateTime: data.updateTime || '',
-    payload: data.payload || ''
+    payload: data.payload || '',
+    // Which of the two codes this one turned out to be - resolved by the
+    // Worker (see its handleSyncRequest), never asserted by the client. Only
+    // meaningful when `exists` is true.
+    role: data.role === MANAGER_ROLE ? MANAGER_ROLE : data.role === VIEWER_ROLE ? VIEWER_ROLE : null
   };
+}
+
+// Mints a brand new pairing (two fresh, unrelated codes - see the Worker's
+// handleSyncCreate) with `payload` as its starting shared schedule. Unlike
+// every other request here, this one carries no code at all - there's
+// nothing to look up yet, the server is creating something new.
+async function createSyncDoc(payload) {
+  try {
+    const response = await fetch(SYNC_PROXY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ payload })
+    });
+    if (!response.ok) return { ok: false, error: await proxyErrorMessage(response) };
+    const data = await response.json();
+    return {
+      ok: true,
+      managerCode: data.managerCode,
+      viewerCode: data.viewerCode,
+      updateTime: data.updateTime || ''
+    };
+  } catch (error) {
+    return { ok: false, error: `建立同步失敗：${error.message || error}` };
+  }
 }
 
 async function writeSyncDoc(code, payload) {
@@ -335,11 +362,16 @@ async function pushSyncSnapshot() {
 // was anything new to apply) - performSyncJoin() needs that distinction to
 // refuse joining a code nobody has actually created yet, which callers
 // that only care about `applied` (syncTick's regular polling) can ignore.
-async function pullSyncSnapshot({ force = false } = {}) {
+//
+// Accepts an already-fetched `doc` (performSyncJoin's own role-check GET)
+// instead of always issuing its own - joining would otherwise cost two GETs
+// for the exact same document (one just to learn the role, one to actually
+// pull) when the first one already had everything this function needs.
+async function pullSyncSnapshot({ force = false, doc: prefetchedDoc = null } = {}) {
   const code = getSyncCode();
   if (!isSyncProxyConfigured() || !code) return { ok: false, error: '尚未設定同步。' };
   try {
-    const doc = await fetchSyncDoc(code);
+    const doc = prefetchedDoc || (await fetchSyncDoc(code));
     if (!doc.ok) throw new Error(doc.error);
     if (!doc.exists) return { ok: true, applied: false, exists: false };
     if (!doc.payload) return { ok: true, applied: false, exists: true };
@@ -464,6 +496,40 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('pageshow', syncOnAppActive);
 
+// Held only in memory, never localStorage - see orbitSyncCreate/
+// showCreatedSyncCodes. The viewer code in particular is never sent by the
+// server again once this is cleared, so this is genuinely the one and only
+// chance to see it; losing it before copying it down means creating a new
+// sync from scratch.
+let pendingCreatedCodes = null;
+
+function showCreatedSyncCodes(managerCode, viewerCode) {
+  pendingCreatedCodes = { managerCode, viewerCode };
+  const managerCopyBtn = document.getElementById('sync-created-manager-copy');
+  const viewerCopyBtn = document.getElementById('sync-created-viewer-copy');
+  if (managerCopyBtn) managerCopyBtn.textContent = '複製';
+  if (viewerCopyBtn) viewerCopyBtn.textContent = '複製';
+  renderSyncPanel();
+}
+function acknowledgeSyncCreatedCodes() {
+  pendingCreatedCodes = null;
+  renderSyncPanel();
+}
+async function copySyncCreatedCode(which) {
+  if (!pendingCreatedCodes) return;
+  const code =
+    which === 'viewer' ? pendingCreatedCodes.viewerCode : pendingCreatedCodes.managerCode;
+  const button = document.getElementById(
+    which === 'viewer' ? 'sync-created-viewer-copy' : 'sync-created-manager-copy'
+  );
+  try {
+    await copyTransferText(code);
+    if (button) button.textContent = '已複製！';
+  } catch (error) {
+    setSyncStatusUi(`複製失敗：${error.message || error}`, true);
+  }
+}
+
 function renderSyncPanel() {
   const setupBox = document.getElementById('sync-setup-box');
   const activeBox = document.getElementById('sync-active-box');
@@ -472,7 +538,23 @@ function renderSyncPanel() {
   const keepStyleCheckbox = document.getElementById('sync-keep-local-style');
   const styleBackupNotice = document.getElementById('sync-style-backup-notice');
   const deleteAllBtn = document.getElementById('sync-delete-all-btn');
+  const createdCodesBox = document.getElementById('sync-created-codes');
   if (!setupBox || !activeBox) return;
+  // The freshly-created two-code display takes over the whole panel until
+  // acknowledged - showing the setup/active boxes underneath it at the same
+  // time would just be confusing, and there's nothing useful to do in this
+  // panel until the user has dealt with (i.e. copied down) these codes.
+  if (createdCodesBox) createdCodesBox.hidden = !pendingCreatedCodes;
+  if (pendingCreatedCodes) {
+    setupBox.hidden = true;
+    activeBox.hidden = true;
+    const managerCodeEl = document.getElementById('sync-created-manager-code');
+    const viewerCodeEl = document.getElementById('sync-created-viewer-code');
+    if (managerCodeEl) managerCodeEl.textContent = pendingCreatedCodes.managerCode;
+    if (viewerCodeEl) viewerCodeEl.textContent = pendingCreatedCodes.viewerCode;
+    applyEditorRoleLock();
+    return;
+  }
   const configured = isSyncConfigured();
   setupBox.hidden = configured;
   activeBox.hidden = !configured;
@@ -710,29 +792,37 @@ async function orbitSyncCreate() {
     return;
   }
   await withButtonDisabled('sync-create-btn', async () => {
-    setSyncPairing(generateSyncCode());
     setSyncStatusUi('正在建立同步…');
-    const result = await pushSyncSnapshot();
+    const payload = await encodeTransferData(state.applicationData);
+    const result = await createSyncDoc(payload);
     if (!result.ok) {
-      clearSyncPairing();
       setSyncStatusUi(result.error, true);
       return;
     }
+    // This device becomes the manager - it already has the schedule that
+    // was just published, so there's nothing left to pull.
+    setSyncPairing(result.managerCode, MANAGER_ROLE);
+    writeLocal(LAST_UPDATE_TIME_KEY, result.updateTime);
+    lastPushedSnapshot = snapshotForComparison(state.applicationData);
+    // The viewer code is never stored anywhere and never sent back by the
+    // server again once this response is gone - it exists nowhere but this
+    // one reply and whatever the user copies out of it now. showCreatedSyncCodes
+    // holds both codes on-screen (see renderSyncPanel) until acknowledged.
+    showCreatedSyncCodes(result.managerCode, result.viewerCode);
     renderSyncPanel();
-    setSyncStatusUi('同步已建立，可在另一台裝置輸入代碼加入。');
     startSyncLoop();
   });
 }
-// A lightweight existence check, deliberately not going through
+// A lightweight existence-and-role check, deliberately not going through
 // setSyncPairing/pullSyncSnapshot - those read the *currently paired* code
 // from localStorage, but orbitSyncJoin needs to check a code before
 // committing to anything (or showing a warning that only makes sense if the
-// code actually has data to overwrite with).
+// code actually has data to overwrite with, and that names the right role).
 async function checkSyncCodeExists(code) {
   try {
     const doc = await fetchSyncDoc(code);
     if (!doc.ok) return { ok: false, error: `同步檢查失敗：${doc.error}` };
-    return { ok: true, exists: doc.exists };
+    return { ok: true, exists: doc.exists, role: doc.role };
   } catch (error) {
     return { ok: false, error: `同步檢查失敗：${error.message || error}` };
   }
@@ -752,12 +842,6 @@ async function orbitSyncJoin() {
     setSyncStatusUi('請輸入配對代碼。', true);
     return;
   }
-  // Joining defaults to view-only (the whole point of a manager/viewer
-  // split: most joining devices should just receive updates) - checking
-  // "以管理者身份加入" is how a second editable device gets added on
-  // purpose, matching "one or more devices as manager" rather than "exactly
-  // one".
-  const asManager = !!document.getElementById('sync-join-as-manager')?.checked;
   const normalizedCode = code.toUpperCase();
 
   await withButtonDisabled('sync-join-btn', async () => {
@@ -766,7 +850,11 @@ async function orbitSyncJoin() {
     // to overwrite with, so warning about data loss and then failing anyway
     // (the bug performSyncJoin's own `exists` check already prevents) was
     // just a confusing, pointless extra step. Fail fast with the real error
-    // instead.
+    // instead. This same check also resolves which role the typed code
+    // actually is - there's no "以管理者身份加入" choice any more; the
+    // server decides that from the code itself (see the Worker's
+    // handleSyncRequest), so this is purely to tell the user what to expect
+    // before they confirm, not to ask them to pick.
     setSyncStatusUi('正在檢查配對代碼…');
     const check = await checkSyncCodeExists(normalizedCode);
     if (!check.ok) {
@@ -783,14 +871,18 @@ async function orbitSyncJoin() {
     // so this warns before doing anything, rather than silently replacing
     // data the user might not have backed up.
     setSyncStatusUi('');
+    const roleText =
+      check.role === MANAGER_ROLE
+        ? '管理者代碼（可以編輯課表）'
+        : '接收者代碼（僅能接收，無法編輯）';
     setEditorConfirmContent(
       '加入同步？',
-      '這組代碼下已經有課表，加入後會立刻用該課表取代這台裝置目前的課表，且無法復原。建立同步的裝置目前的課表不會受影響。',
+      `這是一組「${roleText}」。這組代碼下已經有課表，加入後會立刻用該課表取代這台裝置目前的課表，且無法復原。建立同步的裝置目前的課表不會受影響。`,
       '',
       '仍要加入',
       () => {
         hideEditorDiscardConfirm();
-        performSyncJoin(normalizedCode, asManager);
+        performSyncJoin(normalizedCode);
       },
       '取消'
     );
@@ -798,31 +890,41 @@ async function orbitSyncJoin() {
   });
 }
 
-async function performSyncJoin(code, asManager) {
+async function performSyncJoin(code) {
   // Captured before setSyncPairing/pullSyncSnapshot can touch anything - see
   // SCHEDULE_BACKUP_KEY's comment. Not written to storage yet: only
   // committed below once the join actually replaces local data.
   const preJoinSchedule = cloneSettingsData(state.applicationData);
-  setSyncPairing(code, asManager ? MANAGER_ROLE : VIEWER_ROLE);
   setSyncStatusUi('正在加入同步…');
-  const result = await pullSyncSnapshot({ force: true });
-  if (!result.ok) {
-    clearSyncPairing();
-    setSyncStatusUi(result.error, true);
+  const doc = await fetchSyncDoc(code);
+  if (!doc.ok) {
+    setSyncStatusUi(doc.error, true);
     return;
   }
   // "加入同步" only ever joins a sync someone already created (with
-  // "建立新同步", which auto-generates its own code and immediately
-  // publishes) - "not found" here means this code was mistyped or never
-  // created, not "an empty sync to adopt." Bug this used to have: this case
-  // reported success and paired the device anyway (worse for a viewer, who'd
-  // then just sit there forever receiving nothing, thinking it was synced).
-  // Refusing outright, for both roles, also removes the old "join as
-  // manager silently creates/publishes under whatever code you typed"
-  // fallback - that's what "建立新同步" is for.
-  if (!result.exists) {
-    clearSyncPairing();
+  // "建立新同步", which mints its own two codes and immediately publishes) -
+  // "not found" here means this code was mistyped or never created, not "an
+  // empty sync to adopt." Bug this used to have: this case used to report
+  // success and pair the device anyway (worse for a viewer, who'd then just
+  // sit there forever receiving nothing, thinking it was synced). Refusing
+  // outright also removes the old "join as manager silently
+  // creates/publishes under whatever code you typed" fallback - that's what
+  // "建立新同步" is for.
+  if (!doc.exists) {
     setSyncStatusUi('找不到這組配對代碼，請確認代碼是否正確，或請對方先按「建立新同步」。', true);
+    return;
+  }
+  // The role is whatever the server resolved this code to (see
+  // fetchSyncDoc) - never a choice made here. Paired immediately so the
+  // pull below (reusing this same fetch - see pullSyncSnapshot's `doc`
+  // option, which avoids a second, redundant GET for the same document)
+  // applies against the right role's local storage keys.
+  const role = doc.role === MANAGER_ROLE ? MANAGER_ROLE : VIEWER_ROLE;
+  setSyncPairing(code, role);
+  const result = await pullSyncSnapshot({ force: true, doc });
+  if (!result.ok) {
+    clearSyncPairing();
+    setSyncStatusUi(result.error, true);
     return;
   }
   // Only actually replaced local data if pullSyncSnapshot applied something
@@ -831,7 +933,7 @@ async function performSyncJoin(code, asManager) {
   // worth offering to restore later.
   if (result.applied) backUpLocalSchedule(preJoinSchedule);
   renderSyncPanel();
-  setSyncStatusUi(asManager ? '已以管理者身份加入同步。' : '已加入同步（僅接收）。');
+  setSyncStatusUi(role === MANAGER_ROLE ? '已以管理者身份加入同步。' : '已加入同步（僅接收）。');
   startSyncLoop();
 }
 // Unlinking discards the only copy of the pairing code this device has -
@@ -895,7 +997,7 @@ function orbitSyncDeleteForEveryone() {
   }
   setEditorConfirmContent(
     '整個刪除這組同步？',
-    `這會把伺服器上的共用課表整個刪除，配對代碼「${code}」立刻失效：所有用這組代碼加入的裝置（不只這一台）都會斷開連結，之後同步時會發現代碼已經不存在，各自變回自己最後一次收到的本機課表。此動作無法復原。`,
+    '這會把伺服器上的共用課表整個刪除，這組同步底下的管理者代碼與接收者代碼會一起立刻失效：所有用這兩組代碼加入的裝置（不只這一台）都會斷開連結，之後同步時會發現代碼已經不存在，各自變回自己最後一次收到的本機課表。此動作無法復原。',
     '',
     '整個刪除',
     async () => {
@@ -926,11 +1028,13 @@ window.orbitSyncDeleteForEveryone = orbitSyncDeleteForEveryone;
 window.orbitSyncSetKeepLocalStyle = orbitSyncSetKeepLocalStyle;
 window.orbitSyncRestoreStyleBackup = orbitSyncRestoreStyleBackup;
 window.orbitSyncDismissStyleBackup = orbitSyncDismissStyleBackup;
+window.copySyncCreatedCode = copySyncCreatedCode;
+window.acknowledgeSyncCreatedCodes = acknowledgeSyncCreatedCodes;
 
 export {
+  acknowledgeSyncCreatedCodes,
   applyEditorRoleLock,
   clearSyncPairing,
-  generateSyncCode,
   getScheduleBackup,
   getStyleBackup,
   getSyncCode,

@@ -281,26 +281,48 @@
     <button type="button" class="editor-close" onclick="closeTransferSheet()" aria-label="關閉">×</button>
   </div>
   <div class="settings-transfer-box" id="sync-setup-box">
-    <div class="editor-hint-body" id="sync-setup-hint">同步會把課表存到 Orbit AI 內建的同步伺服器，讓多台裝置自動保持一致，不需要自己申請任何帳號。建立同步的這台裝置是「管理者」，可以編輯課表；之後用代碼加入的裝置預設是「僅接收」，只會收到更新、無法編輯。</div>
+    <div class="editor-hint-body" id="sync-setup-hint">同步會把課表存到 Orbit AI 內建的同步伺服器，讓多台裝置自動保持一致，不需要自己申請任何帳號。建立同步後會拿到兩組代碼：「管理者代碼」可以編輯課表，變更會同步到其他裝置；「接收者代碼」只會收到更新，無法編輯——用哪一組代碼加入，就決定了那台裝置的身份，加入時不用另外選擇。</div>
     <div class="settings-transfer-actions">
       <button type="button" id="sync-create-btn" class="settings-transfer-btn" onclick="orbitSyncCreate()">
-        建立新同步（成為管理者）
+        建立新同步
       </button>
     </div>
     <div class="sync-divider">或加入現有同步</div>
-    <input id="sync-join-code" class="settings-transfer-text sync-input" type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="輸入配對代碼">
-    <label class="sync-role-checkbox">
-      <input type="checkbox" id="sync-join-as-manager">
-      以管理者身份加入（可編輯課表，而不只是接收）
-    </label>
+    <input id="sync-join-code" class="settings-transfer-text sync-input" type="text" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="輸入管理者或接收者代碼">
     <div class="settings-transfer-actions">
       <button type="button" id="sync-join-btn" class="settings-transfer-btn primary" onclick="orbitSyncJoin()">
         加入同步
       </button>
     </div>
   </div>
+  <div class="settings-transfer-box" id="sync-created-codes" hidden>
+    <div class="editor-hint-body">同步已建立！請先把兩組代碼分別存好——離開這個畫面後就不會再顯示，尤其是接收者代碼，遺失後無法再次查看，只能整個刪除同步重建。</div>
+    <div class="sync-code-row">
+      <div class="sync-code-row-label">管理者代碼（可以編輯課表）</div>
+      <div class="sync-code-row-value">
+        <div id="sync-created-manager-code" class="sync-active-code"></div>
+        <button type="button" id="sync-created-manager-copy" class="settings-transfer-btn" onclick="copySyncCreatedCode('manager')">
+          複製
+        </button>
+      </div>
+    </div>
+    <div class="sync-code-row">
+      <div class="sync-code-row-label">接收者代碼（僅能接收，無法編輯）</div>
+      <div class="sync-code-row-value">
+        <div id="sync-created-viewer-code" class="sync-active-code"></div>
+        <button type="button" id="sync-created-viewer-copy" class="settings-transfer-btn" onclick="copySyncCreatedCode('viewer')">
+          複製
+        </button>
+      </div>
+    </div>
+    <div class="settings-transfer-actions">
+      <button type="button" class="settings-transfer-btn primary" onclick="acknowledgeSyncCreatedCodes()">
+        我已保存好兩組代碼
+      </button>
+    </div>
+  </div>
   <div class="settings-transfer-box" id="sync-active-box" hidden>
-    <div class="editor-hint-body">此裝置已配對同步。在另一台裝置輸入下方代碼即可加入：</div>
+    <div class="editor-hint-body">此裝置已配對同步。把下方這組代碼分享給其他裝置，對方就能以跟這台裝置一樣的身份加入：</div>
     <div id="sync-active-code" class="sync-active-code"></div>
     <div id="sync-role-label" class="sync-role-label"></div>
     <label class="sync-role-checkbox">

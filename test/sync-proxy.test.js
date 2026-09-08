@@ -33,7 +33,6 @@ afterEach(() => {
   // must reset it themselves.
   sync.setSyncKeepLocalStyle(false);
   document.getElementById('sync-join-code').value = '';
-  document.getElementById('sync-join-as-manager').checked = false;
 });
 
 describe('sync with a proxy Worker configured', () => {
@@ -246,6 +245,27 @@ describe('pushSyncSnapshot', () => {
     expect(result.ok).toBe(false);
     expect(result.error).toMatch(/請求過於頻繁/);
   });
+
+  // The actual server-side enforcement this whole two-code split exists for
+  // (see the Worker's handleSyncRequest PATCH branch): a viewer's code is
+  // now refused a write by the Worker itself, not just hidden from by the
+  // client's own UI lock - a 403 with this message is what that refusal
+  // looks like over the wire, and it must surface as an ordinary push
+  // failure, not a crash or a silently-swallowed error.
+  it('a 403 from the proxy (a viewer code somehow attempting to write) surfaces as an ordinary push failure', async () => {
+    sync.setSyncPairing('CODE1234', 'manager'); // client-side role is irrelevant here - only the Worker's answer matters
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: false,
+        status: 403,
+        json: async () => ({ error: { message: '此代碼僅能接收，無法寫入課表。' } })
+      }))
+    );
+    const result = await sync.pushSyncSnapshot();
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/僅能接收/);
+  });
 });
 
 describe('pullSyncSnapshot', () => {
@@ -312,18 +332,43 @@ describe('pullSyncSnapshot', () => {
 // state with no network call either way - see test/sync.test.js for that
 // coverage, not duplicated here.
 describe('orbitSyncCreate UI wiring', () => {
-  it('pairs with no manual input, PATCHing the proxy immediately', async () => {
-    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ updateTime: 'now' }) }));
+  afterEach(() => {
+    // The two-code display is in-memory-only state (see showCreatedSyncCodes
+    // in src/sync.js), not cleared by clearSyncPairing - dismiss it
+    // explicitly so it doesn't leak into a later test's renderSyncPanel().
+    sync.acknowledgeSyncCreatedCodes();
+  });
+
+  it('POSTs with no manual input, pairs as manager with the returned manager code, and shows both codes once', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ managerCode: 'MANAGER1', viewerCode: 'VIEWER22', updateTime: 'now' })
+    }));
     vi.stubGlobal('fetch', fetchMock);
 
     await sync.orbitSyncCreate();
 
     expect(sync.isSyncConfigured()).toBe(true);
-    expect(document.getElementById('sync-active-box').hidden).toBe(false);
-    expect(document.getElementById('sync-active-code').textContent).toBe(sync.getSyncCode());
+    expect(sync.getSyncCode()).toBe('MANAGER1');
+    expect(sync.getSyncRole()).toBe('manager');
     const [url, options] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${PROXY_URL}?code=${sync.getSyncCode()}`);
-    expect(options.method).toBe('PATCH');
+    expect(url).toBe(PROXY_URL); // no ?code= - there's nothing to look up yet
+    expect(options.method).toBe('POST');
+    const body = JSON.parse(options.body);
+    expect(body.payload.startsWith('[ORBIT]')).toBe(true);
+
+    // Both boxes stay hidden until the codes are acknowledged - showing
+    // sync-active-box underneath the codes at the same time would bury the
+    // one-time viewer code under other UI before it's actually been copied.
+    expect(document.getElementById('sync-active-box').hidden).toBe(true);
+    expect(document.getElementById('sync-created-codes').hidden).toBe(false);
+    expect(document.getElementById('sync-created-manager-code').textContent).toBe('MANAGER1');
+    expect(document.getElementById('sync-created-viewer-code').textContent).toBe('VIEWER22');
+
+    sync.acknowledgeSyncCreatedCodes();
+    expect(document.getElementById('sync-created-codes').hidden).toBe(true);
+    expect(document.getElementById('sync-active-box').hidden).toBe(false);
+    expect(document.getElementById('sync-active-code').textContent).toBe('MANAGER1');
   });
 
   it('refuses while offline, without making any network request', async () => {
@@ -341,10 +386,17 @@ describe('orbitSyncCreate UI wiring', () => {
 });
 
 describe('manager/viewer roles', () => {
+  afterEach(() => {
+    sync.acknowledgeSyncCreatedCodes();
+  });
+
   it('orbitSyncCreate always pairs this device as manager', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => ({ ok: true, json: async () => ({ updateTime: 'now' }) }))
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ managerCode: 'MANAGER1', viewerCode: 'VIEWER22', updateTime: 'now' })
+      }))
     );
     await sync.orbitSyncCreate();
     expect(sync.getSyncRole()).toBe('manager');
@@ -354,42 +406,46 @@ describe('manager/viewer roles', () => {
   // These exercise performSyncJoin directly - the actual pairing/pull/push
   // logic - rather than orbitSyncJoin's confirm-sheet wrapper (see the
   // "orbitSyncJoin warns before wiping local data" suite below for that).
-  it('performSyncJoin refuses a code nothing has been published under yet, for either role', async () => {
+  it('performSyncJoin refuses a code nothing has been published under yet', async () => {
     const fetchMock = vi.fn(async (url, options) => {
-      // {exists:false} must never lead to a PATCH, for either role -
-      // "加入" only ever joins an existing sync; a fresh/nonexistent code is
-      // a bug report ("joining a non-existent sync works"), not a valid join.
+      // {exists:false} must never lead to a PATCH - "加入" only ever joins
+      // an existing sync; a fresh/nonexistent code is a bug report ("joining
+      // a non-existent sync works"), not a valid join.
       expect(options?.method).not.toBe('PATCH');
       return { ok: true, json: async () => ({ exists: false }) };
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    await sync.performSyncJoin('EMPTY123', false);
+    await sync.performSyncJoin('EMPTY123');
     expect(sync.isSyncConfigured()).toBe(false);
     expect(document.getElementById('sync-status').textContent).toMatch(/找不到這組配對代碼/);
-
-    await sync.performSyncJoin('EMPTY123', true);
-    expect(sync.isSyncConfigured()).toBe(false);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('performSyncJoin pairs as viewer or manager when the code actually has a published schedule', async () => {
+  it('performSyncJoin pairs as whichever role the server resolves the code to - never a client choice', async () => {
     const { encodeTransferData } = await import('../src/editor-backup.js');
     const payload = await encodeTransferData(state.applicationData);
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({
         ok: true,
-        json: async () => ({ exists: true, updateTime: 'now', payload })
+        json: async () => ({ exists: true, role: 'viewer', updateTime: 'now', payload })
       }))
     );
 
-    await sync.performSyncJoin('CODE1234', false);
+    await sync.performSyncJoin('VIEWER22');
     expect(sync.isSyncConfigured()).toBe(true);
     expect(sync.isSyncViewer()).toBe(true);
 
     sync.clearSyncPairing();
-    await sync.performSyncJoin('CODE1234', true);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ exists: true, role: 'manager', updateTime: 'now', payload })
+      }))
+    );
+    await sync.performSyncJoin('MANAGER1');
     expect(sync.isSyncConfigured()).toBe(true);
     expect(sync.isSyncViewer()).toBe(false);
   });
@@ -431,7 +487,7 @@ describe('a pre-join schedule backup can be recovered after unlinking or deletin
   // A key distinct from every other test in this file's fixture mutations -
   // see the warning comment near the 'Z' key above about shared singleton
   // state.applicationData across this whole file.
-  async function joinWithDifferentSchedule(code = 'CODE1234', asManager = false) {
+  async function joinWithDifferentSchedule(code = 'CODE1234', role = 'viewer') {
     const { encodeTransferData } = await import('../src/editor-backup.js');
     const incoming = {
       ...state.applicationData,
@@ -442,10 +498,10 @@ describe('a pre-join schedule backup can be recovered after unlinking or deletin
       'fetch',
       vi.fn(async () => ({
         ok: true,
-        json: async () => ({ exists: true, updateTime: 'now', payload })
+        json: async () => ({ exists: true, role, updateTime: 'now', payload })
       }))
     );
-    await sync.performSyncJoin(code, asManager);
+    await sync.performSyncJoin(code);
   }
 
   it('backs up the pre-join schedule only when the join actually replaces local data', async () => {
@@ -463,7 +519,7 @@ describe('a pre-join schedule backup can be recovered after unlinking or deletin
       'fetch',
       vi.fn(async () => ({ ok: true, json: async () => ({ exists: false }) }))
     );
-    await sync.performSyncJoin('NOBODY99', false);
+    await sync.performSyncJoin('NOBODY99');
     expect(sync.isSyncConfigured()).toBe(false);
     expect(sync.getScheduleBackup()).toBeNull();
   });
@@ -500,7 +556,7 @@ describe('a pre-join schedule backup can be recovered after unlinking or deletin
   });
 
   it('deleting for everyone also pops up the recovery prompt', async () => {
-    await joinWithDifferentSchedule('CODE1234', true); // manager, so the delete button is available
+    await joinWithDifferentSchedule('CODE1234', 'manager'); // manager, so the delete button is available
     sync.renderSyncPanel();
     vi.stubGlobal(
       'fetch',
@@ -595,11 +651,9 @@ describe('orbitSyncJoin checks the code exists before ever warning about overwri
     const confirmBtn = document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[1];
     confirmBtn.onclick();
     // performSyncJoin is async and fire-and-forget from the click handler -
-    // flush microtasks so its fetch/pairing has actually settled.
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(sync.isSyncConfigured()).toBe(true);
+    // wait for its own role-check fetch (a separate GET from orbitSyncJoin's
+    // pre-confirm check above) to actually settle before asserting.
+    await vi.waitFor(() => expect(sync.isSyncConfigured()).toBe(true));
     expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(false);
   });
 
@@ -691,7 +745,9 @@ describe('orbitSyncDeleteForEveryone', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(true);
     expect(document.getElementById('editor-confirm-title').textContent).toMatch(/整個刪除/);
-    expect(document.getElementById('editor-confirm-msg').textContent).toMatch(/CODE1234/);
+    expect(document.getElementById('editor-confirm-msg').textContent).toMatch(
+      /管理者代碼與接收者代碼/
+    );
     // Unlike orbitSyncUnlink's confirm sheet, this one offers no "複製代碼"
     // button - once this succeeds the code is dead for everyone, so copying
     // it would be pointless.
