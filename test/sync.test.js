@@ -126,6 +126,38 @@ describe('the sync panel lives in its own standalone transfer sheet, not the sch
   });
 });
 
+// A typed-but-never-submitted sync code, and especially a manager passcode,
+// shouldn't just sit around in an input the next time this sheet happens to
+// open - see clearSyncInputFields's own comment in src/sync.js.
+describe('closing the transfer sheet always clears sync code/passcode fields', () => {
+  it('wipes the join code, join passcode, and upgrade passcode fields and collapses their folds', async () => {
+    window.openTransferSheet();
+    document.getElementById('sync-join-code').value = 'SOMECODE';
+    document.getElementById('sync-join-manager-fold').open = true;
+    document.getElementById('sync-join-passcode').value = 'SOMEPASS';
+    document.getElementById('sync-upgrade-box').open = true;
+    document.getElementById('sync-upgrade-passcode').value = 'ANOTHERPASS';
+
+    await window.closeTransferSheet(true);
+
+    expect(document.getElementById('sync-join-code').value).toBe('');
+    expect(document.getElementById('sync-join-passcode').value).toBe('');
+    expect(document.getElementById('sync-upgrade-passcode').value).toBe('');
+    expect(document.getElementById('sync-join-manager-fold').open).toBe(false);
+    expect(document.getElementById('sync-upgrade-box').open).toBe(false);
+  });
+
+  it('also clears them when called while the sheet is already closed', async () => {
+    window.openTransferSheet();
+    document.getElementById('sync-join-code').value = 'SOMECODE';
+    await window.closeTransferSheet(true);
+    // Sheet is now closed - calling again exercises the early-return branch.
+    document.getElementById('sync-join-code').value = 'STILL-HERE-SOMEHOW';
+    await window.closeTransferSheet(true);
+    expect(document.getElementById('sync-join-code').value).toBe('');
+  });
+});
+
 describe('orbitSyncUnlink', () => {
   it('warns before unlinking and only clears pairing once confirmed', () => {
     sync.setSyncPairing('CODE1234');

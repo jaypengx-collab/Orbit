@@ -31,7 +31,7 @@ import {
 // elsewhere in this codebase - safe because every use here is inside a
 // function body (openEditor/toggleTestPanel-equivalent checks), never at
 // module-evaluation time.
-import { isSyncViewer } from './sync.js';
+import { clearSyncInputFields, isSyncViewer } from './sync.js';
 
 // ---- js/editor-core.js ----
 // Builds a short display label for a class from its subject/teacher text.
@@ -726,6 +726,7 @@ async function closeTransferSheet(force) {
   if (!sheet.classList.contains('show')) {
     hideEditorDiscardConfirm();
     setOverlayVisible('transfer-sheet-overlay', 'transfer-sheet', false, 'transfer-open');
+    clearSyncInputFields();
     return;
   }
 
@@ -741,6 +742,9 @@ async function closeTransferSheet(force) {
   // into the next time the transfer sheet opens.
   clearTransferField();
   resetOCRImporterUI();
+  // Same reasoning, for the sync code/passcode fields instead of the
+  // manual-backup text - see clearSyncInputFields's own comment.
+  clearSyncInputFields();
   state.pendingEditorImportData = null;
   closeTestPanel();
   if (hadUnconsumedImportData) notifyDiscardedImportData();

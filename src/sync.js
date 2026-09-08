@@ -864,6 +864,30 @@ function applyEditorRoleLock() {
 
 // ---- UI entry points, exposed on window for index.html's onclick="..." ----
 
+// Wipes every plain-text field this panel ever asks for a code or passcode
+// in, and re-collapses the folds they live in - called whenever the
+// transfer sheet closes (see editor-core.js's closeTransferSheet) so a
+// typed-but-never-submitted sync code or, more importantly, a manager
+// passcode never just sits around in an input on screen until the next
+// time this sheet happens to open. Purely a hygiene measure, same spirit as
+// clearTransferField()/resetOCRImporterUI() already doing the same for the
+// manual-backup textarea and AI-import state on the same close path -
+// nothing here is sensitive in the sense of needing server-side protection
+// (that's the Worker's job - see README's security section), it's just
+// unpleasant to leave lying around in the DOM longer than it has to be.
+function clearSyncInputFields() {
+  const codeInput = document.getElementById('sync-join-code');
+  const joinPasscodeInput = document.getElementById('sync-join-passcode');
+  const upgradePasscodeInput = document.getElementById('sync-upgrade-passcode');
+  const joinFold = document.getElementById('sync-join-manager-fold');
+  const upgradeFold = document.getElementById('sync-upgrade-box');
+  if (codeInput) codeInput.value = '';
+  if (joinPasscodeInput) joinPasscodeInput.value = '';
+  if (upgradePasscodeInput) upgradePasscodeInput.value = '';
+  if (joinFold) joinFold.open = false;
+  if (upgradeFold) upgradeFold.open = false;
+}
+
 // Greys the triggering button out for the duration of its own async work, so
 // a slow connection can't be double-clicked into firing the same
 // create/join request twice. Re-enables in `finally` regardless of which
@@ -878,7 +902,15 @@ async function withButtonDisabled(buttonId, fn) {
   }
 }
 
-async function orbitSyncCreate() {
+// Creating a sync spends a real, limited resource - the Worker's own create
+// rate limit is deliberately tight (see cloudflare-worker/orbit-worker.js's
+// SYNC_CREATE_RATE_LIMIT), and every create leaves behind a throwaway
+// Firestore document if the code/passcode it returns never actually get
+// used - so this confirms first instead of firing on click, same reasoning
+// as every other real-consequence sync action in this file (加入同步、解除
+// 同步、整個刪除同步) already warning before doing something that isn't
+// free to undo.
+function orbitSyncCreate() {
   if (!isSyncProxyConfigured()) {
     setSyncStatusUi('跨裝置同步功能尚未設定，請聯絡課表管理者。', true);
     return;
@@ -887,6 +919,21 @@ async function orbitSyncCreate() {
     setSyncStatusUi('目前沒有網路連線，無法建立同步。', true);
     return;
   }
+  setEditorConfirmContent(
+    '建立新同步？',
+    '這會在共用的同步伺服器上建立一份新的課表文件，並產生一組新的同步代碼與管理者密碼。如果只是想看看畫面，或其實已經有同步代碼可以直接「加入同步」，請按「取消」——建立同步的額度有限，不要浪費在不會真的用到的同步上。',
+    '',
+    '建立新同步',
+    () => {
+      hideEditorDiscardConfirm();
+      performSyncCreate();
+    },
+    '取消'
+  );
+  showEditorConfirmSheet();
+}
+
+async function performSyncCreate() {
   await withButtonDisabled('sync-create-btn', async () => {
     setSyncStatusUi('正在建立同步…');
     const payload = await encodeTransferData(state.applicationData);
@@ -1177,6 +1224,7 @@ window.toggleSyncManagerPasscodeReveal = toggleSyncManagerPasscodeReveal;
 export {
   acknowledgeSyncCreatedCodes,
   applyEditorRoleLock,
+  clearSyncInputFields,
   clearSyncPairing,
   copySyncCreatedCode,
   copySyncManagerPasscode,
@@ -1199,6 +1247,7 @@ export {
   orbitSyncSetKeepLocalStyle,
   orbitSyncUnlink,
   orbitSyncUpgradeToManager,
+  performSyncCreate,
   performSyncJoin,
   pullSyncSnapshot,
   pushSyncSnapshot,

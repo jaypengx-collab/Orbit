@@ -348,7 +348,14 @@ describe('orbitSyncCreate UI wiring', () => {
     }));
     vi.stubGlobal('fetch', fetchMock);
 
-    await sync.orbitSyncCreate();
+    // Creating spends a real, limited resource on the server, so it warns
+    // before doing anything - see orbitSyncCreate's own comment.
+    sync.orbitSyncCreate();
+    expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(true);
+    expect(document.getElementById('editor-confirm-title').textContent).toMatch(/建立新同步/);
+    expect(fetchMock).not.toHaveBeenCalled();
+    document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[1].onclick(); // 建立新同步
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
     expect(sync.isSyncConfigured()).toBe(true);
     expect(sync.getSyncCode()).toBe('CODE1234');
@@ -386,6 +393,18 @@ describe('orbitSyncCreate UI wiring', () => {
     expect(document.getElementById('sync-status').textContent).toMatch(/沒有網路連線/);
     Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
   });
+
+  it('cancelling the confirm makes no request and leaves the device unconfigured', () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    sync.orbitSyncCreate();
+    document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[0].onclick(); // 取消
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(sync.isSyncConfigured()).toBe(false);
+    expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(false);
+  });
 });
 
 describe('manager/viewer roles', () => {
@@ -397,7 +416,9 @@ describe('manager/viewer roles', () => {
         json: async () => ({ code: 'CODE1234', managerPasscode: 'PASSCODE1', updateTime: 'now' })
       }))
     );
-    await sync.orbitSyncCreate();
+    sync.orbitSyncCreate();
+    document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[1].onclick();
+    await vi.waitFor(() => expect(sync.isSyncConfigured()).toBe(true));
     expect(sync.getSyncRole()).toBe('manager');
     expect(sync.isSyncViewer()).toBe(false);
   });
