@@ -985,19 +985,30 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .transfer-sheet{
   width:min(calc(100vw - 24px),480px);max-width:480px;border-radius:28px;
   left:50%;right:auto;transform:translate(-50%,calc(100% + 24px));height:min(660px,calc(100dvh - 160px));overscroll-behavior:contain;
-  padding:14px 15px 15px;gap:11px;background:var(--glass-fill-strong);box-shadow:var(--glass-shadow);overflow-y:auto;
+  padding:14px 15px 0;gap:11px;background:var(--glass-fill-strong);box-shadow:var(--glass-shadow);overflow:hidden;
   backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
 }
 .transfer-sheet.show{transform:translate(-50%,0)}
+/* .editor-header sits directly in .transfer-sheet, outside this body, the
+   same way it sits outside .editor-sheet-body - so it's the body, not the
+   whole sheet, that scrolls, and the header (title + close button) stays
+   in place instead of scrolling away with the content beneath it, matching
+   the schedule editor and style tool. */
+.transfer-sheet-body{
+  flex:1 1 auto;min-width:0;min-height:0;overflow-y:auto;overflow-x:hidden;
+  -webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+  padding:0 0 15px;display:flex;flex-direction:column;gap:11px;
+}
 /* Same fix as .editor-sheet-body>* below: flex items shrink to fit a
-   constrained cross-container by default, and .transfer-sheet's own fixed
-   height is regularly shorter than its total content. Without this, that
-   shrank #legacy-transfer-fold/#test-mode-fold down toward nothing instead
-   of letting the sheet scroll - their own overflow:hidden makes their
-   automatic minimum size 0, so they were the first thing the shrink
-   algorithm reached for. flex-shrink:0 makes every child keep its natural
-   height so there is real overflow for the sheet's own scrolling to use. */
-.transfer-sheet>*{flex-shrink:0}
+   constrained cross-container by default, and .transfer-sheet-body's own
+   available height is regularly shorter than its total content. Without
+   this, that shrank #legacy-transfer-fold/#test-mode-fold down toward
+   nothing instead of letting the body scroll - their own overflow:hidden
+   makes their automatic minimum size 0, so they were the first thing the
+   shrink algorithm reached for. flex-shrink:0 makes every child keep its
+   natural height so there is real overflow for the body's own scrolling to
+   use. */
+.transfer-sheet-body>*{flex-shrink:0}
 
 /* .editor-sheet's own padding/overflow, finished here (after .test-panel) so
    they actually win the cascade tie - see the comment on .editor-sheet's
@@ -1036,6 +1047,22 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .style-panel select{width:100%;padding:9px 10px;border:1px solid var(--bd);border-radius:10px;background:#2c2c2e;color:var(--txt);font:inherit}
 .style-panel input[type="color"]{width:100%;height:42px;padding:3px;border:1px solid var(--bd);border-radius:10px;background:transparent;cursor:pointer}
 .style-panel .editor-fold-body{min-width:0}
+/* Unlike the schedule editor's folds, these two sections (自訂配色/樣式庫)
+   were always both open and never had any content that made collapsing one
+   actually useful - so the <details>/<summary> toggle just let a viewer
+   accidentally change how tall the panel was, which is what made this the
+   one sheet without a fixed height (see .transfer-sheet's own comment on
+   deliberately fixing its height instead of using max-height). Markup is
+   now plain, non-collapsible divs instead of <details>: nothing left to
+   toggle means the content is always fully shown, so #style-editor-content
+   settles at one consistent height instead of resizing under a
+   collapse/expand. The heading keeps the exact same look as a real fold
+   summary, just without the pointer cursor, tap feedback, or the
+   open/closed chevron that implied it could still be clicked. */
+.style-fold-heading{cursor:default}
+.style-fold-heading:active{opacity:1;background:none}
+.style-fold-heading::after{display:none}
+.style-fold-fixed .editor-fold-body{border-top:1px solid rgba(255,255,255,.09)}
 .style-panel .style-color-well{background:color-mix(in srgb,var(--orbit-panel-strong) 88%,#0b1418)}
 .style-panel .style-preset-chip{min-height:62px;background:#0b1418;color:#fff;border:1px solid rgba(255,255,255,.18);padding:8px 5px;gap:7px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 5px 12px rgba(0,0,0,.16)}
 .style-panel .style-preset-chip:hover{border-color:color-mix(in srgb,var(--pro-accent) 58%,var(--orbit-line));transform:translateY(-1px);box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 8px 16px rgba(0,0,0,.22)}

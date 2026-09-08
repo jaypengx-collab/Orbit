@@ -280,6 +280,7 @@
     <div class="editor-title">同步 / 匯入匯出</div>
     <button type="button" class="editor-close" onclick="closeTransferSheet()" aria-label="關閉">×</button>
   </div>
+  <div class="transfer-sheet-body" id="transfer-sheet-body">
   <div class="settings-transfer-box" id="sync-setup-box">
     <div class="editor-hint-body" id="sync-setup-hint">同步會把課表存到 Orbit AI 內建的同步伺服器，讓多台裝置自動保持一致，不需要自己申請任何帳號。建立同步後會拿到一組「同步代碼」跟一組「管理者密碼」：同步代碼可以自由分享，任何裝置拿到都能接收更新；管理者密碼才是編輯課表的唯一憑證，只給你想讓它也能編輯的裝置。</div>
     <div class="settings-transfer-actions">
@@ -426,6 +427,7 @@
       </div>
     </div>
   </details>
+  </div>
 </div>
 <template id="ocr-preview-template">
   <div class="ocr-import-preview-title">辨識結果與匯入預覽</div>
@@ -567,17 +569,17 @@
     <button type="button" class="editor-close" onclick="closeStylePanel()" aria-label="關閉">×</button>
   </div>
   <div id="style-editor-content">
-  <details class="editor-fold" id="style-fold-custom" open>
-    <summary class="editor-fold-summary">自訂配色</summary>
+  <div class="editor-fold style-fold-fixed" id="style-fold-custom">
+    <div class="editor-fold-summary style-fold-heading">自訂配色</div>
     <div class="editor-fold-body">
       <div class="style-color-pair">
         <label class="style-color-well"><span>主色</span><input type="color" id="style-primary-input" aria-label="選擇主色" oninput="previewStyleSettings()"></label>
         <label class="style-color-well"><span>次色</span><input type="color" id="style-secondary-input" aria-label="選擇次色" oninput="previewStyleSettings()"></label>
       </div>
     </div>
-  </details>
-  <details class="editor-fold" id="style-fold-library" open>
-    <summary class="editor-fold-summary">樣式庫</summary>
+  </div>
+  <div class="editor-fold style-fold-fixed" id="style-fold-library">
+    <div class="editor-fold-summary style-fold-heading">樣式庫</div>
     <div class="editor-fold-body">
       <div class="style-section-label">內建預設</div>
       <div class="style-preset-grid" id="style-preset-grid">
@@ -593,7 +595,7 @@
         <div class="editor-hint-body">點空位旁的「＋」儲存目前配色，之後可直接點選套用。</div>
       </div>
     </div>
-  </details>
+  </div>
   </div>
   <div id="style-preview-state" class="style-preview-state" hidden>
     <div class="style-preview-status"><span class="style-preview-status-dot"></span><span>預覽中，尚未儲存</span></div>
