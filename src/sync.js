@@ -471,7 +471,6 @@ function renderSyncPanel() {
   const roleLabel = document.getElementById('sync-role-label');
   const keepStyleCheckbox = document.getElementById('sync-keep-local-style');
   const styleBackupNotice = document.getElementById('sync-style-backup-notice');
-  const scheduleBackupNotice = document.getElementById('sync-schedule-backup-notice');
   const deleteAllBtn = document.getElementById('sync-delete-all-btn');
   if (!setupBox || !activeBox) return;
   const configured = isSyncConfigured();
@@ -498,12 +497,6 @@ function renderSyncPanel() {
   // could re-check "不同步樣式顏色" again before ever coming back to deal
   // with the backup from the last time they unchecked it.
   if (styleBackupNotice) styleBackupNotice.hidden = !getStyleBackup();
-  // Shown whenever a pre-join schedule backup is sitting around waiting on a
-  // decision - deliberately not scoped to !configured, since it's most
-  // relevant right after unlinking or deleting a sync (when this device is
-  // unpaired again), but nothing stops a device from joining a *different*
-  // sync before ever dealing with the backup from the last one.
-  if (scheduleBackupNotice) scheduleBackupNotice.hidden = !getScheduleBackup();
   applyEditorRoleLock();
 }
 // Warns before either direction of this toggle takes effect - a native
@@ -607,6 +600,36 @@ function orbitSyncRestoreScheduleBackup() {
 function orbitSyncDismissScheduleBackup() {
   clearScheduleBackup();
   renderSyncPanel();
+}
+// The actual moment "did you want your old schedule back, or is the one
+// you've been using fine" becomes a real question: right after unlinking or
+// deleting leaves this device on its own again - not a standing notice
+// tucked into the sync panel that's easy to never scroll back to. Chained
+// straight out of the unlink/delete confirm handlers below, right after
+// clearSyncPairing() actually takes effect; a no-op if there's nothing to
+// offer back (either this device never joined, or the join never replaced
+// anything - see backUpLocalSchedule's caller in performSyncJoin).
+function promptScheduleBackupRestore() {
+  const backup = getScheduleBackup();
+  if (!backup) return;
+  setEditorConfirmContent(
+    '找回加入同步前的課表？',
+    '這台裝置加入同步前的本機課表已經備份起來了。要換回加入前的課表，還是繼續使用剛剛同步下來的課表？',
+    '',
+    '換回加入前的課表',
+    () => {
+      hideEditorDiscardConfirm();
+      orbitSyncRestoreScheduleBackup();
+    },
+    '繼續使用目前課表',
+    {
+      cancelHandler: () => {
+        hideEditorDiscardConfirm();
+        orbitSyncDismissScheduleBackup();
+      }
+    }
+  );
+  showEditorConfirmSheet();
 }
 
 // Locks a viewer device out of the schedule editor entirely (its button,
@@ -828,6 +851,7 @@ function orbitSyncUnlink() {
       clearSyncPairing();
       renderSyncPanel();
       setSyncStatusUi('已解除同步（不影響本機課表）。');
+      promptScheduleBackupRestore();
     },
     '取消',
     {
@@ -885,6 +909,7 @@ function orbitSyncDeleteForEveryone() {
       clearSyncPairing();
       renderSyncPanel();
       setSyncStatusUi('已整個刪除同步，所有裝置都已斷開連結（本機課表不受影響）。');
+      promptScheduleBackupRestore();
     },
     '取消'
     // No copy-code option here (unlike orbitSyncUnlink) - once this
@@ -901,8 +926,6 @@ window.orbitSyncDeleteForEveryone = orbitSyncDeleteForEveryone;
 window.orbitSyncSetKeepLocalStyle = orbitSyncSetKeepLocalStyle;
 window.orbitSyncRestoreStyleBackup = orbitSyncRestoreStyleBackup;
 window.orbitSyncDismissStyleBackup = orbitSyncDismissStyleBackup;
-window.orbitSyncRestoreScheduleBackup = orbitSyncRestoreScheduleBackup;
-window.orbitSyncDismissScheduleBackup = orbitSyncDismissScheduleBackup;
 
 export {
   applyEditorRoleLock,

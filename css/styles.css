@@ -160,13 +160,7 @@ body::before{
 @media (max-width:360px){.dashboard{max-height:clamp(252px,38dvh,294px);padding-bottom:11px;height:clamp(252px,38dvh,294px);gap:6px}}
 
 .dashboard-boot-loader{display:none}
-/* .nav-bar is empty in the static HTML (schedule.js fills it in with day
-   buttons on first render) but already gets its dark glass background from
-   CSS, so a cold/standalone-PWA launch can paint the empty bar first and
-   pop the buttons in a beat later - seen as a dark flash on top of the
-   buttons. Hide it alongside .dashboard until boot finishes. */
-body.orbit-booting .dashboard,
-body.orbit-booting .nav-bar{visibility:hidden}
+body.orbit-booting .dashboard{visibility:hidden}
 body.orbit-booting .dashboard-boot-loader{visibility:visible;display:flex;position:absolute;inset:0;align-items:center;justify-content:center;background:linear-gradient(145deg,#2c2c2e,#1c1c1e);border-radius:var(--v31-radius-xl);z-index:5}
 .dashboard-boot-spinner{width:26px;height:26px;border-radius:50%;border:3px solid rgba(255,255,255,.18);border-top-color:rgba(255,255,255,.78);animation:orbit-boot-spin .8s linear infinite}
 
@@ -342,12 +336,20 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
 /* ============================================================================
    Day nav bar
    ========================================================================= */
+/* No background/blur on the bar itself (previously a glass pill, matching
+   .dashboard's look): that box painted immediately from CSS while the bar
+   was still empty (it only gets its day buttons once schedule.js's deferred
+   module runs), so on a slow/cold standalone-PWA launch it could sit
+   visible on its own for a beat before the buttons appeared on top of it -
+   reported as a dark flash. Two earlier attempts at hiding/timing around
+   that (dropping the .is-today/.is-tomorrow ring, resetting native button
+   appearance) didn't fix it, so this removes the box outright instead of
+   trying to time it: with nothing painted here before the buttons exist,
+   there's nothing left to flash regardless of how slowly they load. */
 .nav-bar{
   width:min(420px,100%);flex:0 0 auto;display:flex;gap:2px;padding:3px;margin-bottom:7px;
   transition:filter .35s ease,opacity .35s ease,transform .35s ease;
   border-radius:var(--orbit-radius-md);
-  background:var(--glass-fill-strong);
-  backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat));-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat));
 }
 .nav-item{
   /* Neither box-shadow rule above this ever removed was actually the whole

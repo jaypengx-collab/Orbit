@@ -468,36 +468,38 @@ describe('a pre-join schedule backup can be recovered after unlinking or deletin
     expect(sync.getScheduleBackup()).toBeNull();
   });
 
-  it('unlinking shows the recovery notice, and restoring brings back the pre-join schedule', async () => {
+  it('unlinking pops up the recovery prompt, and restoring brings back the pre-join schedule', async () => {
     await joinWithDifferentSchedule();
     sync.renderSyncPanel();
     sync.orbitSyncUnlink();
     document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[1].onclick(); // 解除同步
 
     expect(sync.isSyncConfigured()).toBe(false);
-    expect(document.getElementById('sync-schedule-backup-notice').hidden).toBe(false);
+    // The unlink confirm handler chains straight into the recovery prompt -
+    // same sheet, new content - rather than leaving a notice sitting in the
+    // panel for the user to notice later.
+    expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(true);
+    expect(document.getElementById('editor-confirm-title').textContent).toMatch(/找回/);
     expect(state.applicationData.teacherDB.W).toEqual(['地科', '林老師', '']); // still the joined-in data
 
-    sync.orbitSyncRestoreScheduleBackup();
+    document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[1].onclick(); // 換回加入前的課表
     expect(state.applicationData.teacherDB.W).toBeUndefined();
     expect(sync.getScheduleBackup()).toBeNull();
-    expect(document.getElementById('sync-schedule-backup-notice').hidden).toBe(true);
     expect(document.getElementById('sync-status').textContent).toMatch(/已還原/);
   });
 
-  it('dismissing the notice keeps the current (joined-in) schedule and clears the backup', async () => {
+  it('dismissing the prompt keeps the current (joined-in) schedule and clears the backup', async () => {
     await joinWithDifferentSchedule();
     sync.renderSyncPanel();
     sync.orbitSyncUnlink();
-    document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[1].onclick();
+    document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[1].onclick(); // 解除同步
 
-    sync.orbitSyncDismissScheduleBackup();
+    document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[0].onclick(); // 繼續使用目前課表
     expect(sync.getScheduleBackup()).toBeNull();
     expect(state.applicationData.teacherDB.W).toEqual(['地科', '林老師', '']);
-    expect(document.getElementById('sync-schedule-backup-notice').hidden).toBe(true);
   });
 
-  it('deleting for everyone also surfaces the recovery notice', async () => {
+  it('deleting for everyone also pops up the recovery prompt', async () => {
     await joinWithDifferentSchedule('CODE1234', true); // manager, so the delete button is available
     sync.renderSyncPanel();
     vi.stubGlobal(
@@ -508,7 +510,8 @@ describe('a pre-join schedule backup can be recovered after unlinking or deletin
     await document.querySelectorAll('#editor-confirm-sheet .editor-confirm-btn')[1].onclick(); // 整個刪除
 
     expect(sync.isSyncConfigured()).toBe(false);
-    expect(document.getElementById('sync-schedule-backup-notice').hidden).toBe(false);
+    expect(document.getElementById('editor-confirm-sheet').classList.contains('show')).toBe(true);
+    expect(document.getElementById('editor-confirm-title').textContent).toMatch(/找回/);
   });
 });
 
