@@ -744,7 +744,14 @@ body.orbit-suppress-list-animation .animate-list .row{animation:none}
 .row:active,.row.is-pressed{transform:scale(.965);border-color:color-mix(in srgb,var(--row-accent) 46%,transparent);box-shadow:var(--glass-edge-shadow),0 4px 12px rgba(0,8,16,.3);transition-duration:.08s}
 /* Wins over .animate-list .row's entry animation, which is why it's scoped
    to the list rather than left as a bare .row.is-tapped. */
-#schedule-list .row.is-tapped{animation:orbit-row-tap .32s var(--ease-glass)}
+/* .32s used to be roughly as long as the detail sheet's own .35s slide-in
+   (see .modal-sheet), so the tap felt like it was pacing the popup rather
+   than acknowledging the tap and getting out of the way - two animations
+   of comparable length reading as one sluggish one. Cut to .15s (still the
+   same dip-then-settle shape, just compressed) so it's clearly done before
+   the sheet has barely started moving, without slowing the sheet itself
+   down to match - it was never the sheet that was too slow. */
+#schedule-list .row.is-tapped{animation:orbit-row-tap .15s var(--ease-glass)}
 @media (prefers-reduced-motion:reduce){#schedule-list .row.is-tapped{animation:none}.row:active,.row.is-pressed{transform:none}}
 @media (hover:hover){.row:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--row-accent) 34%,transparent)}}
 /* The accent stripe lives on .content (spanning both the name and meta
