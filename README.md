@@ -108,6 +108,8 @@ npm run format       # Prettier 格式化（不含 index.html／css/styles.css�
 
 `npm test` 的自動化測試套件用同一組模擬旗標（`window.MANUALLY_TEST`／`TEST_DAY`／`TEST_TIME_SEC`）在 jsdom 裡跑過一輪邊界時間點；時間模擬面板負責互動式手動檢查，測試套件負責擋回歸。
 
+時間模擬面板版本號旁邊有兩顆小按鈕：「更新」強制重新抓取最新版本（清掉 Service Worker 快取），「重設」則是把這台裝置上的 Orbit AI 資料（課表、樣式、同步設定）整個清空、回到最初的開始畫面，按下去會先跳出確認提示，不會一按就直接清除，也不影響其他有加入同步的裝置。
+
 ---
 
 ## AI 辨識課表照片

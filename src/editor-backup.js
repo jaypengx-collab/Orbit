@@ -791,11 +791,6 @@ function describeSettingsDiff(current, next, { isImport = false } = {}) {
 async function previewImportEditorSettings() {
   const text = document.getElementById('settings-transfer-text');
   try {
-    if (text.value.trim().toLowerCase() === 'reset') {
-      localStorage.clear();
-      location.reload();
-      return;
-    }
     const next = normalizeSettingsData(await decodeTransferData(text.value), {
       requireMarker: true
     });
@@ -1099,6 +1094,26 @@ function applyPendingImportSettings() {
   resetOCRImporterUI();
   hideEditorDiscardConfirm();
 }
+// A full local factory reset: wipes every key this app ever wrote to
+// localStorage and reloads, landing back on the very first "開始使用"
+// screen. This used to be a hidden trick (typing the literal word "reset"
+// into the manual-import textarea, no confirmation at all) - now a real
+// button in the time-simulation panel, gated behind the same confirm sheet
+// every other irreversible action uses.
+function resetAllAppData() {
+  setEditorConfirmContent(
+    '重設所有資料？',
+    '這會清除這台裝置上所有 Orbit AI 資料（課表、樣式、同步設定等），並回到最初的開始畫面，此動作無法復原。如果這台裝置目前有加入同步，其他裝置的課表不受影響。',
+    '',
+    '重設',
+    () => {
+      localStorage.clear();
+      location.reload();
+    },
+    '取消'
+  );
+  showEditorConfirmSheet();
+}
 // Clears the AI photo-import box back to its empty state after a successful import/merge.
 function resetOCRImporterUI() {
   const input = document.getElementById('ocr-import-image');
@@ -1141,6 +1156,7 @@ function applyPendingSaveEditor() {
 // Exposed on window for inline HTML event handlers (onclick="..." in
 // index.html and in generated template strings).
 window.requestTransferAction = requestTransferAction;
+window.resetAllAppData = resetAllAppData;
 
 export {
   applyEditorSettingsData,
@@ -1157,6 +1173,7 @@ export {
   formatClassRef,
   isEditorDirty,
   normalizeSettingsData,
+  resetAllAppData,
   resetOCRImporterUI,
   setTransferStatus,
   settingsDataForExport

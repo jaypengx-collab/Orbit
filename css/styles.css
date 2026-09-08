@@ -862,6 +862,8 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 #test-refresh-btn{flex:0 0 auto;min-height:24px;width:auto;padding:3px 7px;border-radius:7px;background:color-mix(in srgb,var(--pro-accent) 15%,transparent);color:var(--pro-accent);border:1px solid color-mix(in srgb,var(--pro-accent) 42%,transparent);box-shadow:none;font-size:9px;font-weight:800;line-height:1;letter-spacing:0;cursor:pointer;touch-action:manipulation;transition:transform .12s,background .15s}
 #test-refresh-btn:active{transform:scale(.92);background:color-mix(in srgb,var(--pro-accent) 28%,transparent)}
 #test-refresh-btn:disabled{opacity:.6;cursor:default}
+#test-reset-btn{flex:0 0 auto;margin-left:auto;min-height:24px;width:auto;padding:3px 7px;border-radius:7px;background:rgba(255,69,58,.08);color:#ff453a;border:1px solid rgba(255,69,58,.35);box-shadow:none;font-size:9px;font-weight:800;line-height:1;letter-spacing:0;cursor:pointer;touch-action:manipulation;transition:transform .12s,background .15s}
+#test-reset-btn:active{transform:scale(.92);background:rgba(255,69,58,.16)}
 
 #test-time-slider{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:999px;background:var(--bd);margin:6px 0 2px;cursor:pointer}
 #test-time-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:20px;height:20px;border-radius:50%;background:#fff;border:3px solid var(--accent);box-shadow:0 2px 8px rgba(0,0,0,.35);cursor:pointer;margin-top:0}
@@ -904,10 +906,17 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 /* Transfer sheet ("同步 / 匯入匯出"): sync setup, manual export/import, AI
    photo import, and the tucked-away time-simulation disclosure. Built the
    same way as .style-panel above - a flat .test-panel variant with no
-   paged/layered accordion machinery, since none of its content needs one. */
+   paged/layered accordion machinery, since none of its content needs one.
+   Unlike .style-panel, height here is fixed (not max-height) - this sheet's
+   content is a stack of <details> folds a viewer opens and closes while
+   the sheet is open, and a height that tracked their expanded/collapsed
+   total would make the sheet itself grow and shrink under them. Fixing the
+   height and scrolling the overflow internally (same trick as
+   .editor-sheet.is-layered's fixed height) keeps the sheet's own size
+   stable regardless of what's expanded inside it. */
 .transfer-sheet{
   width:min(calc(100vw - 24px),480px);max-width:480px;border-radius:28px;
-  left:50%;right:auto;transform:translate(-50%,calc(100% + 24px));max-height:calc(100dvh - 20px - env(safe-area-inset-top));overscroll-behavior:contain;
+  left:50%;right:auto;transform:translate(-50%,calc(100% + 24px));height:calc(100dvh - 20px - env(safe-area-inset-top));overscroll-behavior:contain;
   padding:14px 15px 15px;gap:11px;background:var(--glass-fill-strong);box-shadow:var(--glass-shadow);overflow-y:auto;
   backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
 }
