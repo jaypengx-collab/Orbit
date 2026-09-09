@@ -265,7 +265,6 @@ function fitCountdownLabelText() {
 }
 function updateExamCountdown() {
   const el = document.getElementById('exam-countdown-value');
-  const unitEl = document.getElementById('exam-countdown-unit');
   const card = document.getElementById('exam-countdown');
   if (!el || !card) return;
 
@@ -309,26 +308,17 @@ function updateExamCountdown() {
   const diffEnd = Math.round((examEnd - today) / MS_PER_DAY);
   const isSingleDay = event.startDate === event.endDate;
 
-  // The circle holds one line only - a day count or a short status word,
-  // never both a number and its unit stacked inside it (that used to
-  // visually crowd the circle's own curve at this badge's size). "天"
-  // lives outside the circle instead, the same way the class timer's own
-  // ring keeps its digits inside and its 下課/上課 label outside.
   if (diffStart > 0) {
-    el.textContent = String(diffStart);
-    if (unitEl) unitEl.textContent = '天';
+    el.innerHTML = `${diffStart}<span class="exam-countdown-unit">天</span>`;
     card.setAttribute('aria-label', `${event.name}倒數 ${diffStart} 天`);
   } else if (isSingleDay && diffStart === 0) {
     el.textContent = '今天';
-    if (unitEl) unitEl.textContent = '';
     card.setAttribute('aria-label', `${event.name}今天開始`);
   } else if (diffEnd >= 0) {
     el.textContent = '進行中';
-    if (unitEl) unitEl.textContent = '';
     card.setAttribute('aria-label', `${event.name}進行中`);
   } else {
     el.textContent = '已結束';
-    if (unitEl) unitEl.textContent = '';
     card.setAttribute('aria-label', `${event.name}已結束`);
   }
 }
@@ -381,21 +371,10 @@ function getDashboardDom() {
   return dashboardDom;
 }
 
-// Circumference of the timer's progress ring (an SVG circle, r=44 - see
-// index.html's #progress-bar) - stroke-dasharray/stroke-dashoffset are
-// what actually draw an SVG stroke as a partial arc: dasharray is the
-// total length of one "on" dash (set to the full circle's circumference,
-// so it's one continuous arc rather than a dashed pattern), and dashoffset
-// slides that dash around the path, which is what makes a shorter offset
-// reveal more of the circle. Computed here instead of hardcoded in CSS so
-// there's exactly one source of truth for the ring's radius.
-const TIMER_RING_RADIUS = 44;
-const TIMER_RING_CIRCUMFERENCE = 2 * Math.PI * TIMER_RING_RADIUS;
-
 // Last-rendered values, so renderDashboard() below can skip a DOM write
 // when nothing actually changed since the previous tick. Everything here
 // changes only a handful of times a day (a name, a room, a status label) -
-// only the countdown digits and the progress ring's arc genuinely need a
+// only the countdown digits and the progress-bar width genuinely need a
 // write every second, and those are cheap style/text updates rather than
 // the ~20 unconditional writes (several of them class-list/style toggles
 // that force a style recalc) the unguarded version did every tick.
@@ -434,12 +413,8 @@ function renderDashboard(viewModel, week) {
   if (viewModel.progressVisible) {
     if (changed('progressIsClass', viewModel.progressIsClass))
       dom.progressBar.classList.toggle('is-class', viewModel.progressIsClass);
-    // The ring's arc is the other field expected to change every tick - see
-    // TIMER_RING_CIRCUMFERENCE above for how stroke-dasharray/dashoffset
-    // turn a percent into a partial circle.
-    dom.progressBar.style.strokeDasharray = TIMER_RING_CIRCUMFERENCE;
-    dom.progressBar.style.strokeDashoffset =
-      TIMER_RING_CIRCUMFERENCE * (1 - viewModel.progressPercent / 100);
+    // The progress-bar width is the other field expected to change every tick.
+    dom.progressBar.style.width = viewModel.progressPercent + '%';
   }
 
   if (changed('statusText', viewModel.statusText)) dom.nowName.innerText = viewModel.statusText;

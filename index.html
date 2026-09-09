@@ -33,10 +33,7 @@
         <span class="exam-countdown-label">116 學測</span>
         <span class="exam-countdown-date">01.22–01.24</span>
       </div>
-      <div class="exam-countdown-badge">
-        <div class="exam-countdown-value" id="exam-countdown-value">000</div>
-        <span class="exam-countdown-unit" id="exam-countdown-unit"></span>
-      </div>
+      <div class="exam-countdown-value" id="exam-countdown-value">D-000</div>
       <div class="exam-countdown-dots" id="exam-countdown-dots" aria-hidden="true" hidden></div>
     </div>
     <div class="top-actions" role="toolbar" aria-label="工具">
@@ -68,15 +65,12 @@
     </div>
   </div>
   <div class="time-card">
+    <div id="progress-wrap" class="break-progress-wrap">
+      <div id="progress-bar" class="break-progress-bar"></div>
+    </div>
     <div id="timer-group" class="timer-container">
-      <div class="timer-ring">
-        <svg id="progress-wrap" class="timer-ring-svg" viewBox="0 0 100 100" aria-hidden="true">
-          <circle class="timer-ring-track" cx="50" cy="50" r="44"></circle>
-          <circle id="progress-bar" class="timer-ring-arc" cx="50" cy="50" r="44"></circle>
-        </svg>
-        <div id="timer-val" class="timer-badge">
-          00:00
-        </div>
+      <div id="timer-val" class="timer-badge">
+        00:00
       </div>
       <span class="timer-label">
         下課
@@ -85,9 +79,6 @@
   </div>
   <div class="next-box">
     <div class="next-content">
-      <div class="next-badge" aria-hidden="true">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"></path><path d="m5 12 7-7 7 7"></path></svg>
-      </div>
       <span class="label">
         下一節
       </span>
