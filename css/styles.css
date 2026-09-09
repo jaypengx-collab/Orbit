@@ -688,7 +688,24 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
 .list-container::-webkit-scrollbar-track{background:transparent}
 .list-container::-webkit-scrollbar-thumb{border-radius:999px;background:rgba(255,255,255,.3)}
 
-.animate-list .row{animation:orbit-row-in .5s var(--ease-glass) both;animation-delay:calc(var(--row-i,0) * 45ms)}
+/* fill-mode is `backwards`, not `both`: this only needs to hold the FROM
+   keyframe during animation-delay (so a later-staggered row doesn't flash
+   into place before its turn) - it must NOT keep holding the TO keyframe
+   once the animation finishes. `both`/`forwards` used to do exactly that,
+   and it is the actual reason the press-feedback transform below (.row:active,
+   .row.is-pressed, .row:hover) never visibly did anything: a fill-forwards
+   animation's output lives in the CSS Animations cascade origin, which
+   outranks every normal author rule regardless of specificity or source
+   order - so `transform` stayed pinned to this animation's own final value
+   (translateY(0) scale(1), i.e. identity) forever, silently overriding
+   every later transform declared for :hover/:active/.is-pressed no matter
+   what they said. `backwards` reaches the exact same resting value through
+   the ordinary cascade instead (the base .row rule sets no transform of its
+   own, so the default is already identity) - same look once settled, but
+   the animation actually lets go instead of holding the property hostage
+   forever. This is why .nav-item's own :active-driven scale always worked
+   and .row's never did: .nav-item has no entrance animation to fight. */
+.animate-list .row{animation:orbit-row-in .5s var(--ease-glass) backwards;animation-delay:calc(var(--row-i,0) * 45ms)}
 body.orbit-suppress-list-animation .animate-list .row{animation:none}
 @media (prefers-reduced-motion:reduce){.animate-list .row{animation:none}#schedule-list.nav-slide{animation:none}}
 
@@ -738,9 +755,16 @@ body.orbit-suppress-list-animation .animate-list .row{animation:none}
    why :active alone isn't enough there. transition-duration:.08s snaps the
    grow in quickly; release uses the base .row transition above, same as
    .nav-item's release does. */
+/* Declared before .row:active/.is-pressed below on purpose: a mouse press
+   matches BOTH this rule and that one at once (the cursor is still over the
+   row while the button is down), and with equal specificity the LAST rule
+   in source order wins the `transform` property outright - not a blend of
+   the two. Hover-lift losing that tie-break to the press grow is exactly
+   what should happen (a press is the more specific, more immediate thing
+   the user is doing right now), so this has to come first. */
+@media (hover:hover){.row:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--row-accent) 34%,transparent)}}
 .row:active,.row.is-pressed{transform:scale(1.03);transition-duration:.08s}
 @media (prefers-reduced-motion:reduce){.row:active,.row.is-pressed{transform:none}}
-@media (hover:hover){.row:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--row-accent) 34%,transparent)}}
 /* The accent stripe lives on .content (spanning both the name and meta
    lines) rather than just .row-name, so the meta line's left edge lines up
    with the name's instead of sitting flush left of it. */
