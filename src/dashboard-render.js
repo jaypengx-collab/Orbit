@@ -244,16 +244,17 @@ function fitNowTitleText(force = false) {
   const isStatus = stack.classList.contains('is-status');
   const hasLatin = /[A-Za-z]/.test(raw);
   const vw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
-  // This is the real starting size for the current-class name - CSS's own
-  // .title-now font-size is dead weight the moment this function runs
-  // (every render: shrinkFontToFit() below always sets an inline
+  // Floor for the current-class name's size, not the actual value used -
+  // see the height-driven default computed inside the rAF callback below.
+  // CSS's own .title-now font-size is dead weight the moment this function
+  // runs (every render: shrinkFontToFit() below always sets an inline
   // font-size, overriding whatever the stylesheet said). The current
   // class is the one thing everything else on the dashboard is secondary
   // to, so this has to stay clearly above every other card's own largest
   // text - specifically .timer-badge's 30px ceiling and .title-next's
   // 22px ceiling (see styles.css) - or a short name here reads as smaller
   // than the "remaining time" and "next class" it's supposed to outrank.
-  const defaultSize = vw <= 430 ? (isStatus ? 52 : 52) : isStatus ? 50 : 50;
+  const minDefaultSize = vw <= 430 ? 52 : 50;
   const minSize = hasLatin ? 18 : 22;
   const stackWidth = Math.round(stack.getBoundingClientRect().width);
   const metaText = meta ? (meta.textContent || '').trim() : '';
@@ -273,13 +274,33 @@ function fitNowTitleText(force = false) {
   titleFitState.raf = requestAnimationFrame(() => {
     const styles = getComputedStyle(stack);
     const paddingX = (parseFloat(styles.paddingLeft) || 0) + (parseFloat(styles.paddingRight) || 0);
-    const gap = parseFloat(styles.columnGap || styles.gap) || 0;
+    const paddingY = (parseFloat(styles.paddingTop) || 0) + (parseFloat(styles.paddingBottom) || 0);
+    const gap = parseFloat(styles.rowGap || styles.gap) || 0;
     const metaVisible = meta && getComputedStyle(meta).display !== 'none';
     const metaWidth = metaVisible ? Math.ceil(meta.getBoundingClientRect().width) : 0;
+    const metaHeight = metaVisible ? Math.ceil(meta.getBoundingClientRect().height) : 0;
     const available = Math.max(
       72,
       Math.floor(stack.clientWidth - paddingX - (metaWidth ? metaWidth + gap : 0))
     );
+    // The starting size used to be a flat constant, which left a title sized
+    // for a short/cramped box surrounded by dead air once .now-stack had
+    // more room than that guess assumed (a tall dashboard share, a short
+    // name, no meta row) - .now-stack is a flex:1 absorber specifically so
+    // extra height goes here, so the title needs to actually grow into it
+    // instead of stopping at a number picked for the smallest case. Sized
+    // off the box's real available height (minus meta row + gap) rather
+    // than guessed, .92 leaves a touch of breathing room above/below
+    // instead of the glyph touching the box edges, and the minDefaultSize
+    // floor (see above) still guarantees it, keeps outranking timer-badge/
+    // title-next even in a short box. Capped well below anything that could
+    // crowd the label-row/time-card above/below it.
+    const availableHeight = Math.max(
+      0,
+      stack.clientHeight - paddingY - (metaVisible ? metaHeight + gap : 0)
+    );
+    const heightDefaultSize = Math.floor(availableHeight * 0.92);
+    const defaultSize = Math.max(minDefaultSize, Math.min(heightDefaultSize, 96));
 
     title.style.whiteSpace = 'nowrap';
     title.style.wordBreak = 'keep-all';
