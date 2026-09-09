@@ -290,17 +290,19 @@ function fitNowTitleText(force = false) {
     // extra height goes here, so the title needs to actually grow into it
     // instead of stopping at a number picked for the smallest case. Sized
     // off the box's real available height (minus meta row + gap) rather
-    // than guessed, .92 leaves a touch of breathing room above/below
-    // instead of the glyph touching the box edges, and the minDefaultSize
-    // floor (see above) still guarantees it, keeps outranking timer-badge/
-    // title-next even in a short box. Capped well below anything that could
-    // crowd the label-row/time-card above/below it.
+    // than guessed. .6 and the 68px cap are deliberately conservative -
+    // an earlier pass here filled the box far more aggressively (.92, no
+    // real cap) and it read as oversized/blocky rather than "filling the
+    // space", so this leaves clear breathing room above/below instead of
+    // the glyph crowding the box edges. minDefaultSize (see above) is
+    // still the floor, so it never drops below timer-badge/title-next's
+    // own ceilings even in a short box.
     const availableHeight = Math.max(
       0,
       stack.clientHeight - paddingY - (metaVisible ? metaHeight + gap : 0)
     );
-    const heightDefaultSize = Math.floor(availableHeight * 0.92);
-    const defaultSize = Math.max(minDefaultSize, Math.min(heightDefaultSize, 96));
+    const heightDefaultSize = Math.floor(availableHeight * 0.6);
+    const defaultSize = Math.max(minDefaultSize, Math.min(heightDefaultSize, 68));
 
     title.style.whiteSpace = 'nowrap';
     title.style.wordBreak = 'keep-all';
