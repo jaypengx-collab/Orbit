@@ -753,9 +753,17 @@ body.orbit-suppress-list-animation .animate-list .row{animation:none}
 .row-meta .meta-time{font-family:ui-monospace,SFMono-Regular,monospace;background:transparent;border:0;box-shadow:none;padding:0}
 .row-meta .meta-location{color:var(--row-accent);font-weight:700;border-color:color-mix(in srgb,var(--row-accent) 30%,transparent);background:color-mix(in srgb,var(--row-accent) 16%,var(--orbit-panel))}
 .period-badge{background:color-mix(in srgb,var(--row-accent) 22%,rgba(255,255,255,.07));display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--row-accent);flex-shrink:0;margin-top:1px;width:26px;height:26px;border-radius:9px;border:1px solid color-mix(in srgb,var(--row-accent) 34%,rgba(255,255,255,.10));box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
-.status-tag{font-size:9px;font-weight:800;padding:1px 5px;border-radius:4px;white-space:nowrap;margin-left:2px}
-.is-now .status-tag{background:var(--status-tag-now-bg,var(--pro-secondary));color:var(--status-tag-now-fg,#fff)}
+.status-tag{font-size:9px;font-weight:800;padding:1px 5px 1px 4px;border-radius:4px;white-space:nowrap;margin-left:2px;display:inline-flex;align-items:center;gap:3px}
+/* A dot (is-now) vs a chevron (is-next) so the two states read apart by
+   shape, not just by which accent color happens to be picked - a user free
+   to set proAccent/proSecondary to two close hues would otherwise lose the
+   only cue telling "happening now" apart from "coming up next". */
+.status-tag::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor;flex:0 0 auto}
+.is-now .status-tag{background:var(--status-tag-now-bg,var(--pro-secondary));color:var(--status-tag-now-fg,#fff);animation:statusTagLivePulse 1.8s ease-in-out infinite}
 .is-next .status-tag{background:var(--status-tag-next-bg,var(--pro-accent));color:var(--status-tag-next-fg,#fff)}
+.is-next .status-tag::before{border-radius:1px;width:5px;height:5px;clip-path:polygon(0 0,60% 50%,0 100%);background:currentColor}
+@keyframes statusTagLivePulse{0%,100%{opacity:1}50%{opacity:.55}}
+@media (prefers-reduced-motion:reduce){.is-now .status-tag{animation:none}}
 .week-label{display:inline-flex;align-items:center;min-height:26px;padding:4px 8px;border-bottom:none;border-radius:9px;font-size:15px;line-height:1;font-weight:900;white-space:nowrap}
 .label-odd{background:var(--odd-bg);color:var(--odd-txt)}
 .label-even{background:var(--even-bg);color:var(--even-txt)}
@@ -767,22 +775,34 @@ body.orbit-suppress-list-animation .animate-list .row{animation:none}
    need it to actually switch to the secondary. .content's own inline
    stripe is hidden so it doesn't double up on the card's own left-edge
    accent border right next to it. */
+/* is-next stays calm and outlined - low fill, thin border - so its weight
+   reads as "upcoming" at a glance, independent of which hue is-now happens
+   to use. is-now is the loud one: heavier fill, a solid glow ring around
+   the whole card (not just the soft ambient .glass-shadow-soft every card
+   already has), plus the pulsing status-tag above - a header would say
+   "purple = current, pink = next" but the shape/weight difference here
+   still reads correctly even for two similar accent colors. */
 .row.is-next{
   --row-accent:var(--pro-accent);
   border-radius:var(--orbit-radius-md);
-  background:linear-gradient(135deg,color-mix(in srgb,var(--pro-accent) 34%,transparent),color-mix(in srgb,var(--orbit-panel-strong) 46%,transparent) 74%);
-  border:1.5px solid color-mix(in srgb,var(--pro-accent) 55%,transparent);
+  background:linear-gradient(135deg,color-mix(in srgb,var(--pro-accent) 16%,transparent),color-mix(in srgb,var(--orbit-panel-strong) 40%,transparent) 74%);
+  border:1.5px dashed color-mix(in srgb,var(--pro-accent) 48%,transparent);
   box-shadow:var(--glass-shadow-soft);
   border-left:4px solid var(--pro-accent);padding-left:10px;
+}
+@keyframes rowLiveGlow{
+  0%,100%{box-shadow:var(--glass-shadow-soft),0 0 0 1px color-mix(in srgb,var(--pro-secondary) 45%,transparent),0 0 18px color-mix(in srgb,var(--pro-secondary) 28%,transparent)}
+  50%{box-shadow:var(--glass-shadow-soft),0 0 0 1px color-mix(in srgb,var(--pro-secondary) 65%,transparent),0 0 26px color-mix(in srgb,var(--pro-secondary) 42%,transparent)}
 }
 .row.is-now{
   --row-accent:var(--pro-secondary);
   border-radius:var(--orbit-radius-md);
-  background:linear-gradient(135deg,color-mix(in srgb,var(--pro-secondary) 36%,transparent),color-mix(in srgb,var(--orbit-panel-strong) 46%,transparent) 74%);
-  border:1.5px solid color-mix(in srgb,var(--pro-secondary) 58%,transparent);
-  box-shadow:var(--glass-shadow-soft);
+  background:linear-gradient(135deg,color-mix(in srgb,var(--pro-secondary) 46%,transparent),color-mix(in srgb,var(--orbit-panel-strong) 42%,transparent) 74%);
+  border:1.5px solid color-mix(in srgb,var(--pro-secondary) 70%,transparent);
+  animation:rowLiveGlow 2.2s ease-in-out infinite;
   border-left:4px solid var(--pro-secondary);padding-left:10px;
 }
+@media (prefers-reduced-motion:reduce){.row.is-now{animation:none;box-shadow:var(--glass-shadow-soft),0 0 0 1px color-mix(in srgb,var(--pro-secondary) 55%,transparent),0 0 20px color-mix(in srgb,var(--pro-secondary) 34%,transparent)}}
 @supports not (backdrop-filter:blur(1px)){
   .row.is-next{background:linear-gradient(135deg,color-mix(in srgb,var(--pro-accent) 26%,var(--orbit-panel-strong)),color-mix(in srgb,var(--pro-accent) 8%,var(--orbit-panel-strong)))}
   .row.is-now{background:linear-gradient(135deg,color-mix(in srgb,var(--pro-secondary) 28%,var(--orbit-panel-strong)),color-mix(in srgb,var(--pro-secondary) 9%,var(--orbit-panel-strong)))}
@@ -1190,6 +1210,17 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 #ocr-import-detect{width:100%}
 #ocr-import-detect:disabled{opacity:.45;filter:grayscale(.4);cursor:not-allowed}
 #ocr-import-image-label.is-disabled{opacity:.45;filter:grayscale(.4);cursor:not-allowed;pointer-events:none}
+/* #ocr-import-status ("正在請求 AI 模型…", "AI 已回應…" etc.) and #ocr-import-eta
+   (the wait estimate + elapsed clock) used to be two stacked block-level
+   lines. They describe the same in-flight request from two angles - what's
+   happening right now vs. how long it's expected to take - so this row
+   keeps them on one visual line instead, wrapping onto a second only if a
+   narrow viewport genuinely can't fit both. Both children stay independent
+   elements (not concatenated into one string) since they update on
+   different cadences: the status line changes a handful of times per
+   import, the elapsed clock every second. */
+.ocr-import-status-row{display:flex;align-items:baseline;flex-wrap:wrap;column-gap:10px;row-gap:2px}
+.ocr-import-status-row #ocr-import-status{flex:1 1 auto;min-width:0}
 /* The estimate itself is a single static line (see startEtaTimer), not a
    per-second countdown - see that function's comment for why. But a static
    line alone gives no live signal that anything is happening, which matters
@@ -1201,7 +1232,7 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
    version used) so it reserves no height until an import actually starts;
    .ocr-import-eta[hidden] below wins over the flex display this element
    needs to lay its two spans out side by side. */
-.ocr-import-eta{display:flex;align-items:baseline;gap:8px;font-size:10.5px;line-height:1.3;color:var(--sub)}
+.ocr-import-eta{display:flex;align-items:baseline;gap:8px;font-size:10.5px;line-height:1.3;color:var(--sub);flex:0 0 auto}
 .ocr-import-eta[hidden]{display:none}
 #ocr-import-eta-estimate{flex:1 1 auto;min-width:0}
 /* aria-hidden in the markup keeps this out of the role="status" region's

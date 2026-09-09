@@ -3,6 +3,8 @@ import { loadApp } from './helpers/loadApp.js';
 import { seedLocalStorage } from './helpers/fixtureData.js';
 
 let AIVisionProcessor;
+let DataValidator;
+let ImportPreview;
 let isGeminiProxyConfigured;
 let estimateRecognitionSeconds;
 let startEtaTimer;
@@ -10,8 +12,14 @@ let startEtaTimer;
 beforeAll(async () => {
   seedLocalStorage();
   await loadApp();
-  ({ AIVisionProcessor, estimateRecognitionSeconds, isGeminiProxyConfigured, startEtaTimer } =
-    await import('../src/gemini-ocr.js'));
+  ({
+    AIVisionProcessor,
+    DataValidator,
+    ImportPreview,
+    estimateRecognitionSeconds,
+    isGeminiProxyConfigured,
+    startEtaTimer
+  } = await import('../src/gemini-ocr.js'));
 });
 
 function fakeFiles() {
@@ -118,6 +126,61 @@ describe('AIVisionProcessor.parseResponse turns the AI JSON into the app-interna
       })
     );
     expect(Object.keys(candidate.teacherDB)).toHaveLength(0);
+  });
+});
+
+// Regression coverage for a preview bug: the countdown-events fold is the
+// only one of the import preview's <details> sections that starts with
+// `hidden` in its template (index.html) - every other fold starts open and
+// is only ever *removed* when its data is empty. That means, uniquely among
+// them, it also has to be explicitly un-hidden on the populated path -
+// otherwise a photo the AI correctly read a countdown event out of still
+// showed no trace of it in the preview. Declared before the ETA-timer
+// describe below: that block's own afterEach wipes document.body, and this
+// test relies on the real <template>s loadApp() put there.
+describe('ImportPreview reveals the countdown-events fold when the AI actually found one', () => {
+  function buildPreviewRoot() {
+    const root = document.getElementById('ocr-import-result');
+    root.hidden = true;
+    return root;
+  }
+  function baseCandidate(overrides) {
+    return {
+      teacherDB: {},
+      bellTimes: [],
+      breakTimes: [],
+      weeklySchedule: { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] },
+      recognizedBlocks: [],
+      countdownEvents: [],
+      ...overrides
+    };
+  }
+
+  it('unhides and expands the countdown fold when a countdown event was recognized', () => {
+    const root = buildPreviewRoot();
+    const preview = new ImportPreview(root, () => {});
+    const candidate = baseCandidate({
+      countdownEvents: [{ name: '期末考', startDate: '2026-01-12', endDate: '2026-01-16' }]
+    });
+    preview.render(candidate, new DataValidator().validate(candidate));
+
+    const fold = root.querySelector('[data-ocr-countdown-fold]');
+    expect(fold).not.toBeNull();
+    expect(fold.hidden).toBe(false);
+    expect(fold.open).toBe(true);
+    expect(root.querySelectorAll('[data-ocr-countdown-list] .ocr-countdown-name')).toHaveLength(1);
+    expect(root.querySelector('.ocr-countdown-name').value).toBe('期末考');
+  });
+
+  it('removes the countdown fold entirely when nothing was recognized', () => {
+    const root = buildPreviewRoot();
+    const preview = new ImportPreview(root, () => {});
+    const candidate = baseCandidate({
+      teacherDB: { oc1: ['國文', '陳老師', ''] }
+    });
+    preview.render(candidate, new DataValidator().validate(candidate));
+
+    expect(root.querySelector('[data-ocr-countdown-fold]')).toBeNull();
   });
 });
 

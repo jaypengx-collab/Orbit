@@ -398,10 +398,12 @@
     </div>
     <input id="ocr-import-image" class="ocr-import-file-input" type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf,.heic,.heif,.pdf">
     <button type="button" id="ocr-import-detect" class="settings-transfer-btn primary" disabled>匯入</button>
-    <div id="ocr-import-status" class="settings-transfer-status" role="status"></div>
-    <div id="ocr-import-eta" class="ocr-import-eta" role="status" hidden>
-      <span id="ocr-import-eta-estimate"></span>
-      <span id="ocr-import-eta-elapsed" class="ocr-import-eta-elapsed" aria-hidden="true"></span>
+    <div class="ocr-import-status-row">
+      <div id="ocr-import-status" class="settings-transfer-status" role="status"></div>
+      <div id="ocr-import-eta" class="ocr-import-eta" role="status" hidden>
+        <span id="ocr-import-eta-estimate"></span>
+        <span id="ocr-import-eta-elapsed" class="ocr-import-eta-elapsed" aria-hidden="true"></span>
+      </div>
     </div>
     <div id="ocr-import-result" class="ocr-import-result" hidden></div>
   </div>

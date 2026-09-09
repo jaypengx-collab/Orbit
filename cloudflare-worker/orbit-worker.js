@@ -73,14 +73,67 @@ function json(data, status, headers) {
 const RATE_WINDOW_MS = 60 * 60 * 1000;
 const RATE_WINDOW_SECONDS = RATE_WINDOW_MS / 1000;
 
-async function isRateLimitedKV(kv, bucketKey, limit) {
-  const windowBucket = Math.floor(Date.now() / RATE_WINDOW_MS);
-  const key = `rl:${bucketKey}:${windowBucket}`;
-  const count = Number((await kv.get(key)) || '0');
-  if (count >= limit) return true;
+// Workers KV's free-tier daily caps are wildly asymmetric - 100,000
+// reads/day but only 1,000 writes/day, per account, shared by every
+// namespace. The original version of this function called kv.put() on
+// every single request that wasn't already over its limit - one write just
+// to increment the same counter by one - so a single feature under
+// ordinary traffic (SYNC_READ_RATE_LIMIT alone allows 6000 requests/hour
+// per IP) could burn through the *entire account's* daily write budget in
+// minutes, at which point every kv.put() anywhere in this Worker starts
+// throwing and every feature silently falls back to isRateLimitedInMemory
+// (see the catch in isRateLimited below) - a noisy neighbor on one path
+// degrading rate-limit accuracy on all the others.
+//
+// The fix batches increments per isolate instead of persisting each one to
+// KV individually: the authoritative count is read from KV once per window
+// (a read, not a write), and further increments in this isolate accumulate
+// in memory (pendingCounters) and are flushed as a single write no more
+// than once every KV_FLUSH_INTERVAL_MS. The limit check below still runs
+// against base+delta on every request, so enforcement stays effectively
+// real-time for whichever isolate is actually handling that traffic; only
+// *persisting* the count for other isolates to see is throttled, and it is
+// still flushed at least once when a window rolls over so a burst's tail
+// is never silently lost.
+const KV_FLUSH_INTERVAL_MS = 60 * 1000;
+const pendingCounters = new Map();
+
+async function flushPendingCounter(kv, key, pending) {
+  const total = pending.base + pending.delta;
+  pending.base = total;
+  pending.delta = 0;
+  pending.lastFlushAt = Date.now();
   // expirationTtl a little past the window so a key never outlives its own
   // bucket by much, instead of accumulating in the namespace forever.
-  await kv.put(key, String(count + 1), { expirationTtl: RATE_WINDOW_SECONDS + 60 });
+  await kv.put(key, String(total), { expirationTtl: RATE_WINDOW_SECONDS + 60 });
+}
+
+async function isRateLimitedKV(kv, bucketKey, limit) {
+  const windowBucket = Math.floor(Date.now() / RATE_WINDOW_MS);
+  let pending = pendingCounters.get(bucketKey);
+  if (pending && pending.windowBucket !== windowBucket) {
+    // The previous window just ended - flush its final tally so other
+    // isolates aren't left permanently blind to this isolate's last few
+    // increments (best-effort: a failure here just means that window's
+    // very last increments are invisible elsewhere, no worse than what the
+    // old per-request behavior already tolerated between accounts).
+    if (pending.delta > 0) {
+      await flushPendingCounter(kv, `rl:${bucketKey}:${pending.windowBucket}`, pending).catch(
+        () => {}
+      );
+    }
+    pending = null;
+  }
+  if (!pending) {
+    const stored = Number((await kv.get(`rl:${bucketKey}:${windowBucket}`)) || '0');
+    pending = { windowBucket, base: stored, delta: 0, lastFlushAt: Date.now() };
+    pendingCounters.set(bucketKey, pending);
+  }
+  if (pending.base + pending.delta >= limit) return true;
+  pending.delta += 1;
+  if (Date.now() - pending.lastFlushAt >= KV_FLUSH_INTERVAL_MS) {
+    await flushPendingCounter(kv, `rl:${bucketKey}:${windowBucket}`, pending);
+  }
   return false;
 }
 
@@ -124,7 +177,7 @@ async function isRateLimited(env, ip, feature, limit) {
 // point of moving it server-side is that the client no longer sends it.
 const GEMINI_PROMPT = `Extract the class timetable from the attached file(s) and return it as a single JSON object. Focus on the timetable only — ignore background, margins, decorations, and unrelated content; it may only occupy part of the frame.
 
-When more than one file is attached, they describe ONE timetable together, not several: read all of them first, then answer once. They are given in the order the user chose them, and a later file is normally there to fill in or correct what an earlier one left vague — for example a timetable photo with placeholder or generic slot names followed by a screenshot of the student's own enrolled classes, where the second file supplies the real subject and teacher names for the first file's slots. Prefer the more specific, more legible source for any given detail, and prefer a later file when two disagree about the same slot. Never emit a slot twice because two files showed it.
+When more than one file is attached, they describe ONE timetable together, not several: read all of them first, then answer once. They are given in the order the user chose them, and a later file is normally there to fill in or correct what an earlier one left vague — for example a timetable photo with placeholder or generic slot names followed by a screenshot of the student's own enrolled classes, where the second file supplies the real subject and teacher names for the first file's slots. Prefer the more specific, more legible source for any given detail, and prefer a later file when two disagree about the same slot. Never emit a slot twice because two files showed it. Examine EVERY attached file on its own for countdownEvents — an exam banner, calendar, or notice can appear in any one of them regardless of which file has the timetable grid, so do not stop looking once the first file has been read.
 
 Return valid JSON only, matching this exact schema:
 {
@@ -140,11 +193,12 @@ Interpret the timetable visually and use your best judgment to reconstruct its s
 - Read class period times from the image when available. Use 24-hour "HH:MM" strings, one entry per period in order, exactly as shown (either ["08:10","09:00"] or {"start":"08:10","end":"09:00"} is acceptable). Preserve the actual times; never invent, guess, or fall back to standard/default school times. If no class times are visible anywhere, return an empty bellTimes array.
 - Identify visible subjects, teachers, classrooms, breaks, and other timetable information.
 - classes: one entry per distinct subject actually visible in the photo — do not invent subjects that aren't shown. "key" is your own short identifier for that entry (e.g. "c1", "c2") — it is never shown to anyone, it only links weeklySchedule slots back to this entry, so make each one unique. "subject" is the full Chinese subject name. Use "" for teacher/location when that information is not readable.
+- Every entry in classes MUST be placed at least once in weeklySchedule, at the exact day/period position where it visually appears in the grid. A subject you cannot place at a specific day and period is not a recognized class — leave it out of classes entirely rather than adding it unassigned. Do not stop at recognizing a subject's name; always also locate the cell(s) it occupies.
 - weeklySchedule: keys "1" through "5" (Monday–Friday) are REQUIRED and must all be present, even as an empty array — never omit or truncate "5" (Friday) even if it is partially cut off in the photo. Add "6" (Saturday) and/or "0" (Sunday) ONLY if the photo actually shows a column for that day; otherwise omit them entirely. Keep each day's array aligned with the detected periods (one entry per bellTimes index). Use null when a slot is genuinely empty or cannot be identified; every non-null entry must be a "key" that exists in classes.
 - If odd/even weeks contain alternatives in the same slot, combine them with "/" (e.g. "國文/公民") in both subject and teacher, using one shared classes entry for that slot.
 - Set reverseWeek to true only when the photo clearly indicates a reversed odd/even week orientation; otherwise false.
 - Add breakTimes only for explicitly shown non-class periods such as lunch or cleaning — not empty/free periods.
-- Add countdownEvents only for clearly visible events/exams with a readable calendar date, formatted as "YYYY-MM-DD". Set startDate and endDate to the same date for a single-day event; use the visible first and last dates for a multi-day event/exam period. Only include dates you can actually read; otherwise return an empty array.
+- Add countdownEvents only for clearly visible events/exams with a readable calendar date, formatted as "YYYY-MM-DD". Set startDate and endDate to the same date for a single-day event; use the visible first and last dates for a multi-day event/exam period. Only include dates you can actually read; otherwise return an empty array. This applies per file, not just to whichever file has the main timetable grid — a countdown/exam notice can be the ONLY thing a given file shows, with no timetable content at all, and must still be reported.
 - Do not invent information. When uncertain, prefer an empty value or null. Combining two files is not inventing; guessing at something neither of them shows is.
 - Every field in the response schema you are given must be present, even when empty.
 - Keep all fields internally consistent.

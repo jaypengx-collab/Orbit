@@ -642,6 +642,15 @@ class ImportPreview {
       : [];
     const countdownFold = this.root.querySelector('[data-ocr-countdown-fold]');
     if (countdownEvents.length) {
+      // Unlike the other folds above, this one starts with `hidden` in the
+      // template (see index.html) since a timetable photo usually has no
+      // countdown event at all - the default has to be "absent", not
+      // "present but collapsed" like the others get from just being left
+      // alone. That means, uniquely among these folds, it has to be
+      // un-hidden here on the populated path instead of only ever removed
+      // on the empty one.
+      countdownFold.hidden = false;
+      countdownFold.open = true;
       const countdownList = this.root.querySelector('[data-ocr-countdown-list]');
       countdownEvents.forEach(item => {
         const row = document.getElementById('ocr-countdown-row-template').content.cloneNode(true);
@@ -1063,7 +1072,9 @@ ocrImageInput?.addEventListener('change', async event => {
 
 export {
   AIVisionProcessor,
+  DataValidator,
   estimateRecognitionSeconds,
+  ImportPreview,
   isGeminiProxyConfigured,
   startEtaTimer,
   warmUpGeminiProxy
