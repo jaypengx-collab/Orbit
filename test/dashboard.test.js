@@ -118,9 +118,16 @@ describe('dashboard update() against the real app', () => {
       return document.querySelector('#schedule-list .row');
     };
 
-    it('holds .is-pressed for the duration of the press and drops it on release', () => {
+    it('does not apply .is-pressed immediately - a touch that becomes a scroll starts with the same pointerdown a tap does', () => {
       const row = firstRow();
-      row.dispatchEvent(new window.PointerEvent('pointerdown', { bubbles: true }));
+      row.dispatchEvent(new window.PointerEvent('pointerdown', { bubbles: true, pointerId: 1 }));
+      expect(row.classList.contains('is-pressed')).toBe(false);
+    });
+
+    it('holds .is-pressed once the press-start delay has actually elapsed, and drops it on release', () => {
+      const row = firstRow();
+      row.dispatchEvent(new window.PointerEvent('pointerdown', { bubbles: true, pointerId: 1 }));
+      vi.advanceTimersByTime(80);
       expect(row.classList.contains('is-pressed')).toBe(true);
       window.dispatchEvent(new window.PointerEvent('pointerup', { bubbles: true }));
       expect(row.classList.contains('is-pressed')).toBe(false);
@@ -128,9 +135,62 @@ describe('dashboard update() against the real app', () => {
 
     it('drops .is-pressed when the touch turns into a scroll instead of a tap', () => {
       const row = firstRow();
-      row.dispatchEvent(new window.PointerEvent('pointerdown', { bubbles: true }));
+      row.dispatchEvent(new window.PointerEvent('pointerdown', { bubbles: true, pointerId: 1 }));
       window.dispatchEvent(new window.PointerEvent('pointercancel', { bubbles: true }));
+      vi.advanceTimersByTime(80);
       expect(row.classList.contains('is-pressed')).toBe(false);
+    });
+
+    // The actual bug this delay/threshold pair exists to fix: a real scroll
+    // gesture moves the pointer well past a stationary tap's own wobble
+    // before the browser ever gets around to firing 'scroll' - previously
+    // that gap was enough for the card to visibly grow for a gesture that
+    // was never a tap. Movement past the threshold has to cancel the press
+    // on its own, without waiting for a 'scroll' event that may arrive
+    // later or not at all.
+    it('cancels a pending press on movement past the threshold, even before any scroll event fires', () => {
+      const row = firstRow();
+      row.dispatchEvent(
+        new window.PointerEvent('pointerdown', {
+          bubbles: true,
+          pointerId: 1,
+          clientX: 0,
+          clientY: 0
+        })
+      );
+      row.dispatchEvent(
+        new window.PointerEvent('pointermove', {
+          bubbles: true,
+          pointerId: 1,
+          clientX: 0,
+          clientY: 20
+        })
+      );
+      vi.advanceTimersByTime(80);
+      expect(row.classList.contains('is-pressed')).toBe(false);
+    });
+
+    it('does not cancel the press for movement within the threshold (ordinary finger wobble during a tap)', () => {
+      const row = firstRow();
+      row.dispatchEvent(
+        new window.PointerEvent('pointerdown', {
+          bubbles: true,
+          pointerId: 1,
+          clientX: 0,
+          clientY: 0
+        })
+      );
+      row.dispatchEvent(
+        new window.PointerEvent('pointermove', {
+          bubbles: true,
+          pointerId: 1,
+          clientX: 1,
+          clientY: 1
+        })
+      );
+      vi.advanceTimersByTime(80);
+      expect(row.classList.contains('is-pressed')).toBe(true);
+      window.dispatchEvent(new window.PointerEvent('pointerup', { bubbles: true }));
     });
   });
 });

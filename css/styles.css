@@ -360,12 +360,24 @@ body::before{
 /* ============================================================================
    Dashboard card
    ========================================================================= */
+/* Body's three stacked sections (.dashboard, .nav-bar, #schedule-list) are
+   locked to a fixed 40/10/50 vertical split of the viewport now, not a
+   clamp() guessing at a reasonable px range - flex-basis in percent
+   resolves against body's own content-box height (100dvh minus its own
+   padding), so this is an exact proportion of whatever's actually
+   available on the device, not an approximation of one. flex:0 0 keeps
+   it locked - #schedule-list is the only one of the three allowed to
+   grow/shrink (see its own flex value), so any rounding from margins
+   below lands there instead of quietly eating into this 40%. The calc()
+   subtracts this element's own margin (6px top + 8px bottom) so the
+   MARGIN BOX - not just the content - ends up at 40%, matching what a
+   person actually sees as "the dashboard's share of the screen". */
 .dashboard{
   isolation:isolate;contain:layout paint;overflow:hidden;position:relative;
-  width:min(420px,100%);flex:0 0 auto;margin:6px auto 8px 2px;box-sizing:border-box;
-  min-height:0;height:clamp(282px,44dvh,328px);max-height:clamp(282px,44dvh,328px);
+  width:min(420px,100%);flex:0 0 calc(40% - 14px);margin:6px auto 8px 2px;box-sizing:border-box;
+  min-height:0;height:auto;max-height:none;
   padding:10px 10px 12px;gap:6px;
-  display:flex;flex-direction:column;justify-content:flex-start;
+  display:flex;flex-direction:column;justify-content:center;
   border-radius:var(--orbit-radius-lg);
   background:var(--glass-fill);
   backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
@@ -373,11 +385,11 @@ body::before{
   box-shadow:var(--glass-shadow);
   transition:filter .35s ease,opacity .35s ease,transform .35s ease;
 }
-.dashboard > *{position:relative;margin-top:0}
+.dashboard > *{position:relative;margin-top:0;flex:0 0 auto}
+.dashboard > .now-stack{flex:1 1 0}
 @supports not (backdrop-filter:blur(1px)){.dashboard{background:#15232B}}
-@media (max-width:430px){.dashboard{margin-top:3px;padding:12px;gap:9px;height:clamp(288px,45dvh,334px);min-height:286px;border-radius:20px}}
-@media (max-height:700px){.dashboard{padding:9px 10px 11px;height:clamp(266px,42dvh,306px);gap:5px}}
-@media (max-width:360px){.dashboard{max-height:clamp(264px,40dvh,300px);padding-bottom:11px;height:clamp(264px,40dvh,300px);gap:6px}}
+@media (max-width:430px){.dashboard{margin-top:3px;padding:12px;gap:9px;flex-basis:calc(40% - 11px);border-radius:20px}}
+@media (max-height:700px){.dashboard{padding:9px 10px 11px;gap:5px}}
 
 .dashboard-boot-loader{display:none}
 body.orbit-booting .dashboard{visibility:hidden}
@@ -648,8 +660,11 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
    appearance) didn't fix it, so this removes the box outright instead of
    trying to time it: with nothing painted here before the buttons exist,
    there's nothing left to flash regardless of how slowly they load. */
+/* 10% of the viewport, same fixed-share model as .dashboard above (see
+   its own comment) - calc() subtracts this element's own margin-bottom
+   so its margin box, not just its content box, lands at 10%. */
 .nav-bar{
-  width:min(420px,100%);flex:0 0 auto;display:flex;gap:2px;padding:3px;margin-bottom:7px;
+  width:min(420px,100%);flex:0 0 calc(10% - 7px);display:flex;align-items:stretch;gap:2px;padding:3px;margin-bottom:7px;
   transition:filter .35s ease,opacity .35s ease,transform .35s ease;
   border-radius:var(--orbit-radius-md);
 }
@@ -675,7 +690,7 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
   -webkit-transform:translateZ(0);transform:translateZ(0);
   -webkit-backface-visibility:hidden;backface-visibility:hidden;
   will-change:transform;
-  flex:1;min-width:0;min-height:46px;height:46px;background:transparent;
+  flex:1;min-width:0;min-height:46px;background:transparent;
   /* A real, always-visible border - without it an unselected day is just
      text sitting on the bare background with nothing marking its tap
      target, which read as broken rather than intentionally minimal. The
@@ -729,14 +744,19 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
 .nav-item.active{background:linear-gradient(135deg,color-mix(in srgb,var(--pro-accent) 58%,#ffffff),color-mix(in srgb,var(--pro-accent) 28%,#ffffff));color:#10171A}
 .nav-item.active.is-today{border-color:color-mix(in srgb,var(--pro-accent) 34%,transparent)}
 .nav-item.active.is-tomorrow{border-color:color-mix(in srgb,var(--pro-secondary) 72%,#ffffff 28%)}
-@media (max-width:480px){.nav-bar{gap:6px;padding:4px}.nav-item{font-size:14px;padding:0 10px;min-height:44px;height:44px}}
-@media (max-width:430px){.nav-bar{margin-bottom:10px}}
+@media (max-width:480px){.nav-bar{gap:6px;padding:4px}.nav-item{font-size:14px;padding:0 10px;min-height:44px}}
+@media (max-width:430px){.nav-bar{margin-bottom:10px;flex-basis:calc(10% - 10px)}}
 
 /* ============================================================================
    Schedule list & rows
    ========================================================================= */
+/* The remaining ~50%: unlike .dashboard/.nav-bar above, this one keeps
+   flex-grow/shrink (1 1, not 0 0) rather than a hard lock, so it's the
+   one that actually absorbs whatever the other two's own margins take
+   that their calc()s didn't - it reads as "the rest of the screen",
+   which is what 50% means once the other two are fixed shares. */
 .list-container{
-  width:min(420px,100%);flex:1 1 auto;min-height:0;position:relative;overflow-y:auto;overscroll-behavior:contain;
+  width:min(420px,100%);flex:1 1 50%;min-height:0;position:relative;overflow-y:auto;overscroll-behavior:contain;
   -webkit-overflow-scrolling:touch;padding-top:3px;
   padding-bottom:16px;
   scrollbar-color:rgba(255,255,255,.3) transparent;scrollbar-width:thin;

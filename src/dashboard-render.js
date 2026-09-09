@@ -102,21 +102,37 @@ function syncTestPlayPauseUi() {
 })();
 
 // Press feedback for the class cards: a live, held-state size change, not a
-// canned one-shot animation - grows the instant the finger touches down
-// (.is-pressed), eases back the instant it lifts, tracking the actual press
-// in real time exactly the way the day-nav buttons' own :active does (see
-// .nav-item in styles.css). A separate fixed-length "replay the tap"
-// animation was tried here first (triggered on the 'click' event, i.e.
-// necessarily after the finger had already lifted) and it was never going
-// to feel immediate no matter how short it ran, because it always started
-// after the physical gesture was already over rather than during it - a
-// structural lag a shorter duration can't fix.
+// canned one-shot animation - grows the finger's card (.is-pressed), eases
+// back the instant it lifts, tracking the actual press in real time
+// exactly the way the day-nav buttons' own :active does (see .nav-item in
+// styles.css). A separate fixed-length "replay the tap" animation was
+// tried here first (triggered on the 'click' event, i.e. necessarily after
+// the finger had already lifted) and it was never going to feel immediate
+// no matter how short it ran, because it always started after the physical
+// gesture was already over rather than during it - a structural lag a
+// shorter duration can't fix.
 //
 // Still JS-driven rather than a bare CSS :active rule: on iOS Safari
 // specifically, :active on an element with a backdrop-filter has a history
 // of failing to composite in time for a tap this quick (see .nav-item's own
 // comment on the same issue) - .is-pressed, held for exactly as long as the
 // finger is actually down, is the reliable version of the same state.
+//
+// Applying .is-pressed is NOT immediate on pointerdown, on purpose: a
+// touch that's about to become a scroll starts with exactly the same
+// pointerdown a tap does, and the 'scroll' event that used to be this
+// code's only defense against that doesn't fire until the browser has
+// already recognized real movement - a real, visible gap in which the
+// card had already popped larger for a gesture that was never a tap at
+// all (reported as "cards grow just from scrolling, not clicking").
+// PRESS_DELAY_MS holds off actually applying the class until a touch has
+// had a moment to prove it isn't the start of a scroll; MOVE_THRESHOLD_PX
+// cancels it outright the instant the pointer moves enough to look like a
+// drag rather than a stationary press, whether that happens before or
+// after the delay elapses. A tap doesn't feel late from this: the delay is
+// far under normal press duration, and a real scroll gesture (which moves
+// well past the threshold within single-digit milliseconds) never shows
+// the grow at all, exactly as intended.
 //
 // One delegated listener rather than per-row ones: renderList() rebuilds
 // every card from scratch on each update, so anything bound to a row would
@@ -126,11 +142,33 @@ function syncTestPlayPauseUi() {
 
   if (!list) return;
 
+  const PRESS_DELAY_MS = 80;
+  const MOVE_THRESHOLD_PX = 8;
+
   let pressedRow = null;
+  let pendingRow = null;
+  let pendingTimer = 0;
+  let activePointerId = null;
+  let startX = 0;
+  let startY = 0;
+
   const release = () => {
+    if (pendingTimer) {
+      clearTimeout(pendingTimer);
+      pendingTimer = 0;
+    }
+    pendingRow = null;
+    activePointerId = null;
     if (!pressedRow) return;
     pressedRow.classList.remove('is-pressed');
     pressedRow = null;
+  };
+  const commitPress = () => {
+    pendingTimer = 0;
+    if (!pendingRow) return;
+    pressedRow = pendingRow;
+    pendingRow = null;
+    pressedRow.classList.add('is-pressed');
   };
 
   list.addEventListener(
@@ -139,8 +177,25 @@ function syncTestPlayPauseUi() {
       const row = event.target instanceof Element ? event.target.closest('.row') : null;
       if (!row) return;
       release();
-      pressedRow = row;
-      row.classList.add('is-pressed');
+      pendingRow = row;
+      activePointerId = event.pointerId;
+      startX = event.clientX;
+      startY = event.clientY;
+      pendingTimer = setTimeout(commitPress, PRESS_DELAY_MS);
+    },
+    { passive: true }
+  );
+  // Cancels a still-pending press before its delay even elapses, or backs
+  // an already-applied one back out - either way, movement past the
+  // threshold means this was never a stationary tap.
+  list.addEventListener(
+    'pointermove',
+    event => {
+      if (!pendingRow && !pressedRow) return;
+      if (event.pointerId !== activePointerId) return;
+      const dx = event.clientX - startX;
+      const dy = event.clientY - startY;
+      if (dx * dx + dy * dy > MOVE_THRESHOLD_PX * MOVE_THRESHOLD_PX) release();
     },
     { passive: true }
   );
