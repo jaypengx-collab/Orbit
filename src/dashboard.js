@@ -265,6 +265,7 @@ function fitCountdownLabelText() {
 }
 function updateExamCountdown() {
   const el = document.getElementById('exam-countdown-value');
+  const unitEl = document.getElementById('exam-countdown-unit');
   const card = document.getElementById('exam-countdown');
   if (!el || !card) return;
 
@@ -308,17 +309,26 @@ function updateExamCountdown() {
   const diffEnd = Math.round((examEnd - today) / MS_PER_DAY);
   const isSingleDay = event.startDate === event.endDate;
 
+  // The circle holds one line only - a day count or a short status word,
+  // never both a number and its unit stacked inside it (that used to
+  // visually crowd the circle's own curve at this badge's size). "天"
+  // lives outside the circle instead, the same way the class timer's own
+  // ring keeps its digits inside and its 下課/上課 label outside.
   if (diffStart > 0) {
-    el.innerHTML = `${diffStart}<span class="exam-countdown-unit">天</span>`;
+    el.textContent = String(diffStart);
+    if (unitEl) unitEl.textContent = '天';
     card.setAttribute('aria-label', `${event.name}倒數 ${diffStart} 天`);
   } else if (isSingleDay && diffStart === 0) {
     el.textContent = '今天';
+    if (unitEl) unitEl.textContent = '';
     card.setAttribute('aria-label', `${event.name}今天開始`);
   } else if (diffEnd >= 0) {
     el.textContent = '進行中';
+    if (unitEl) unitEl.textContent = '';
     card.setAttribute('aria-label', `${event.name}進行中`);
   } else {
     el.textContent = '已結束';
+    if (unitEl) unitEl.textContent = '';
     card.setAttribute('aria-label', `${event.name}已結束`);
   }
 }
