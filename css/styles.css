@@ -549,10 +549,7 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
    ceilings - kept in sync here only so the unstyled-flash size before
    JS's first pass isn't wildly off from what JS then sets it to. */
 .title-now{font-weight:800;margin:0;word-break:keep-all;overflow-wrap:normal;min-width:0;width:100%;text-align:center;display:block;align-self:center;justify-self:center;white-space:nowrap;overflow:visible;text-overflow:clip;max-width:100%;line-height:1.02;letter-spacing:-.04em;font-size:46px;text-shadow:none;color:var(--current-class-color,var(--accent))}
-.now-stack.is-status .title-now{white-space:nowrap;overflow:visible;text-overflow:clip;word-break:keep-all;overflow-wrap:normal;align-self:center;justify-self:center;text-align:center;width:100%;max-width:100%;font-size:clamp(46px,14vw,64px) !important;line-height:.98 !important}
-.dashboard.v3-15-day-finished #now-name.is-status,
-.dashboard.v3-16-outside-class-range #now-name.is-status,
-.dashboard.orbit-no-school-day #now-name.is-status{transform:scale(1.08);transform-origin:center}
+.now-stack.is-status .title-now{white-space:nowrap;overflow:visible;text-overflow:clip;word-break:keep-all;overflow-wrap:normal;align-self:center;justify-self:center;text-align:center;width:100%;max-width:100%;font-size:clamp(56px,18vw,80px) !important;line-height:.98 !important}
 .now-meta-row{display:flex;flex-direction:row;flex-wrap:wrap;min-height:20px;justify-content:center;min-width:0;gap:5px 6px;align-items:center;max-width:100%;align-self:center}
 #now-teacher{display:none;width:max-content;background:color-mix(in srgb,var(--pro-secondary) 14%,transparent);backdrop-filter:blur(10px) saturate(var(--glass-sat));-webkit-backdrop-filter:blur(10px) saturate(var(--glass-sat));color:var(--pro-secondary-readable);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;transition:opacity .2s;line-height:1.15;max-width:46vw;min-height:20px;padding:3px 8px;border-radius:10px;font-size:11.5px}
 #now-teacher.show{display:block}
@@ -562,7 +559,7 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
 .dashboard-class-label.show{display:block}
 @media (max-width:360px){#now-teacher,#now-place,.dashboard-class-label{padding-inline:6px}}
 @media (max-width:430px){.now-meta-row,#now-teacher,#now-place,.dashboard-class-label{max-width:48vw}#now-teacher,#now-place,.dashboard-class-label{font-size:11.5px}}
-@media (max-height:700px){.title-now{font-size:37px}.now-stack.is-status .title-now{font-size:clamp(40px,13vw,56px) !important}.now-stack{gap:4px}}
+@media (max-height:700px){.title-now{font-size:37px}.now-stack.is-status .title-now{font-size:clamp(48px,15vw,68px) !important}.now-stack{gap:4px}}
 @media (max-width:430px){.now-stack.is-status{gap:7px}.title-now{line-height:1.02}}
 
 /* Time card: progress bar + timer, merges the "next class" module in */
