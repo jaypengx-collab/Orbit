@@ -538,8 +538,24 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
    (secondary) gradient even while a class was active. */
 .break-progress-bar.is-class{background:linear-gradient(90deg,color-mix(in srgb,var(--pro-accent) 55%,#fff 15%),var(--pro-accent))}
 .timer-container{display:flex;align-items:baseline;gap:7px;margin-top:0}
-.timer-badge{display:flex;align-items:center;justify-content:center;text-align:center;padding:4px 10px;border-radius:10px;font-weight:700;font-family:ui-monospace,SFMono-Regular,monospace;background:color-mix(in srgb,var(--pro-accent) 16%,rgba(0,0,0,.22));border:0;color:var(--pro-accent-readable);box-shadow:inset 0 1px 3px rgba(0,0,0,.3);font-size:clamp(28px,7.8vw,36px)}
-.timer-label{font-size:10px;color:var(--orbit-muted);font-weight:600;opacity:.8}
+/* Same accent/secondary split the progress bar right above it already
+   draws (.break-progress-bar.is-class): counting down to 下課 (still in
+   class) reads accent/purple, counting down to 上課 (on a break) reads
+   secondary/pink - previously this badge was accent-tinted unconditionally
+   regardless of which one it was actually counting down to, so the number
+   and the bar beside it could disagree about what color the current state
+   even was. :has() reaches up from the shared .time-card ancestor to read
+   the bar's own state rather than needing a second class from JS. */
+.timer-badge{display:flex;align-items:center;justify-content:center;text-align:center;padding:4px 10px;border-radius:10px;font-weight:700;font-family:ui-monospace,SFMono-Regular,monospace;font-variant-numeric:tabular-nums;background:color-mix(in srgb,var(--pro-secondary) 16%,rgba(0,0,0,.22));border:0;color:var(--pro-secondary-readable);box-shadow:inset 0 1px 3px rgba(0,0,0,.3);font-size:clamp(28px,7.8vw,36px)}
+.time-card:has(#progress-bar.is-class) .timer-badge{background:color-mix(in srgb,var(--pro-accent) 16%,rgba(0,0,0,.22));color:var(--pro-accent-readable)}
+/* A small live dot ahead of the label, same pulse the is-now status tag
+   uses (see .status-tag in the schedule list) - ties this into the same
+   "this is actively counting, not a static figure" motif instead of a
+   bare caption underneath the number. */
+.timer-label{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--orbit-muted);font-weight:600;opacity:.8}
+.timer-label::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--pro-secondary);flex:0 0 auto;animation:statusTagLivePulse 1.8s ease-in-out infinite}
+.time-card:has(#progress-bar.is-class) .timer-label::before{background:var(--pro-accent)}
+@media (prefers-reduced-motion:reduce){.timer-label::before{animation:none}}
 
 /* Merged next-class module (JS moves .next-box inside .time-card at boot) */
 .time-card.v3-11-next-module{
@@ -551,8 +567,18 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
 }
 .time-card.v3-11-next-module .break-progress-wrap{grid-area:progress;border-radius:999px;height:9px;margin-bottom:1px;border:1px solid color-mix(in srgb,var(--orbit-line) 80%,#fff 4%)}
 .time-card.v3-11-next-module .timer-container{grid-area:timer;align-self:stretch;flex-direction:column;justify-content:center;min-width:88px;padding:8px;gap:4px;align-items:center;background:transparent;border:0}
-.time-card.v3-11-next-module #timer-val.timer-badge{min-height:52px;height:52px;min-width:100px;padding:0;border:1px solid color-mix(in srgb,var(--pro-accent) 30%,transparent);line-height:1.05;box-sizing:border-box;font-size:clamp(26px,7.8vw,34px);font-weight:900;letter-spacing:-.01em;color:var(--pro-accent-readable);background:color-mix(in srgb,var(--pro-accent) 16%,rgba(0,0,0,.24));box-shadow:inset 0 1px 3px rgba(0,0,0,.35),0 4px 14px color-mix(in srgb,var(--pro-accent) 20%,transparent)}
+/* Real glass instead of the flat color-mix fill every other badge/button
+   in the app moved off of already - a translucent gradient with its own
+   blur/saturate pass instead of a plain tinted rectangle, sitting on top
+   of the well .time-card is - plus the same accent/secondary state split
+   as the base .timer-badge rule above (still counting down to 下課 = accent,
+   to 上課 = secondary), which this more specific selector needs to repeat
+   since it overrides background/color outright rather than layering on
+   top of the base rule's. */
+.time-card.v3-11-next-module #timer-val.timer-badge{min-height:52px;height:52px;min-width:100px;padding:0;border:1px solid color-mix(in srgb,var(--pro-secondary) 34%,transparent);line-height:1.05;box-sizing:border-box;font-size:clamp(26px,7.8vw,34px);font-weight:900;letter-spacing:-.01em;color:var(--pro-secondary-readable);background:linear-gradient(160deg,color-mix(in srgb,var(--pro-secondary) 26%,transparent),var(--glass-fill-card) 76%);backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat)) brightness(var(--glass-bright));-webkit-backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat)) brightness(var(--glass-bright));box-shadow:inset 0 1px 0 rgba(255,255,255,.12),inset 0 -1px 3px rgba(0,0,0,.3),0 4px 14px color-mix(in srgb,var(--pro-secondary) 20%,transparent)}
+.time-card.v3-11-next-module:has(#progress-bar.is-class) #timer-val.timer-badge{border-color:color-mix(in srgb,var(--pro-accent) 34%,transparent);color:var(--pro-accent-readable);background:linear-gradient(160deg,color-mix(in srgb,var(--pro-accent) 26%,transparent),var(--glass-fill-card) 76%);box-shadow:inset 0 1px 0 rgba(255,255,255,.12),inset 0 -1px 3px rgba(0,0,0,.3),0 4px 14px color-mix(in srgb,var(--pro-accent) 20%,transparent)}
 .time-card.v3-11-next-module .timer-label{white-space:nowrap;letter-spacing:.3px;text-align:center;font-size:13px;font-weight:900;color:var(--pro-secondary)}
+.time-card.v3-11-next-module:has(#progress-bar.is-class) .timer-label{color:var(--pro-accent)}
 .time-card.v3-11-next-module .next-box{grid-area:next;overflow:hidden;align-self:stretch;flex-direction:column;width:auto;min-width:0;min-height:0;gap:8px;justify-content:center;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;margin:0;box-shadow:none;border-radius:0;background:transparent;padding:0;padding-right:10px;border:0;border-right:1px solid var(--orbit-line)}
 .time-card.v3-11-next-module .next-content{min-width:0;width:100%;text-align:center}
 .time-card.v3-11-next-module .next-content > .label{display:block;text-align:center;opacity:.78;margin-bottom:5px;letter-spacing:.35px;font-size:10.5px}
