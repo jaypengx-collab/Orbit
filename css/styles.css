@@ -78,12 +78,20 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   --sub:#92A8B9;
 
   /* ---- Liquid Glass material ----
-     Two distinct materials, per Apple's own guidance not to stack glass on
-     glass: a translucent, refractive "glass" used only for floating controls
-     (the dashboard shell, toolbars, nav bar, buttons, sheets), and a plain
-     recessed "well" for ordinary content sitting inside/under that glass
-     (the now/timer trays, list rows, form fields) — no blur, no shine,
-     just a quiet inset surface so the glass above it reads as glass. */
+     Every interactive surface in the app is glass now - buttons, toggles,
+     the schedule editor's own sections, chips, wells, not just the outer
+     shell/sheet each of them happens to sit inside. Apple's own "don't
+     stack glass on glass" guidance argued for skipping it on content
+     nested inside an already-glass panel, but in practice that read as
+     "some controls are glass and some aren't" rather than as a deliberate
+     material choice - so every one of them gets its own
+     blur/saturate/brightness pass now, same tokens, layered on top of
+     whatever glass panel it happens to sit inside. Plain text/time inputs
+     are the one deliberate holdout: a blurred input field reads worse, not
+     better, for something the eye needs to focus straight through to read
+     what's typed - a recessed "well" surface (no blur, no shine) stays
+     right for those specifically, not as a blanket "content doesn't get
+     glass" rule anymore. */
   --glass-blur:20px;
   --glass-sat:130%;
   --glass-bright:104%;
@@ -952,10 +960,16 @@ body.editor-open .dashboard,body.transfer-open .dashboard{pointer-events:none}
 .editor-header{display:flex;align-items:center;justify-content:space-between;min-height:32px;margin-bottom:12px;padding-top:0}
 .editor-sheet .editor-title{font-size:21px;font-weight:800;letter-spacing:-.4px}
 .editor-title{color:var(--pro-accent);font-weight:800;letter-spacing:-.04em}
-.editor-close{font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;width:32px;height:32px;background:rgba(255,255,255,.06);color:var(--orbit-white);border:1px solid color-mix(in srgb,var(--pro-accent) 18%,transparent);border-radius:12px;transition:transform .15s,background .15s}
-.editor-close:active{transform:scale(.9);background:rgba(255,255,255,.12)}
+.editor-close{font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;width:32px;height:32px;background:rgba(255,255,255,.1);color:var(--orbit-white);border:1px solid color-mix(in srgb,var(--pro-accent) 18%,transparent);border-radius:12px;transition:transform .15s,background .15s;backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat));-webkit-backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat))}
+.editor-close:active{transform:scale(.9);background:rgba(255,255,255,.16)}
 
-.editor-fold{margin-bottom:10px;overflow:hidden;border-radius:16px;border:1px solid color-mix(in srgb,var(--pro-accent) 18%,transparent);background:#172f39}
+/* Every section inside the schedule editor (選項/倒數活動/科目與教師/課表/節次時間/特殊時段
+   etc.) is its own small glass card now, not a flat-color box sitting inside
+   the sheet's own glass - each one gets its own blur/saturate/brightness
+   pass, same tokens .row already uses for repeated content, so a screenful
+   of open sections still reads as the same material as everything else
+   instead of "floating chrome is glass, the content inside it isn't". */
+.editor-fold{margin-bottom:10px;overflow:hidden;border-radius:16px;border:1px solid color-mix(in srgb,var(--pro-accent) 18%,transparent);background:linear-gradient(135deg,color-mix(in srgb,var(--pro-accent) 10%,transparent),var(--glass-fill-card) 78%);backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat)) brightness(var(--glass-bright));-webkit-backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat)) brightness(var(--glass-bright))}
 .editor-sheet .editor-fold{margin-bottom:14px;border-radius:14px}
 .editor-fold-summary{list-style:none;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:space-between;gap:8px;user-select:none;font-weight:700;color:rgba(236,245,255,.92);-webkit-tap-highlight-color:transparent;padding:13px 14px;transition:opacity .12s,background .15s}
 .editor-fold-summary:active{opacity:.7;background:rgba(255,255,255,.04)}
@@ -971,10 +985,10 @@ body.editor-open .dashboard,body.transfer-open .dashboard{pointer-events:none}
 .row-enter{animation:rowEnter .28s var(--ease-glass)}
 
 .editor-drill-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-bottom:9px}
-.editor-drill-btn{min-height:34px;border-radius:11px;border:1px solid color-mix(in srgb,var(--pro-accent) 38%,rgba(255,255,255,.14));background:color-mix(in srgb,var(--pro-accent) 15%,rgba(255,255,255,.05));color:var(--pro-accent-readable);font-size:12px;font-weight:800;cursor:pointer;transition:transform .12s,background .15s}
+.editor-drill-btn{min-height:34px;border-radius:11px;border:1px solid color-mix(in srgb,var(--pro-accent) 38%,rgba(255,255,255,.14));background:color-mix(in srgb,var(--pro-accent) 15%,rgba(255,255,255,.05));color:var(--pro-accent-readable);font-size:12px;font-weight:800;cursor:pointer;transition:transform .12s,background .15s;backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat));-webkit-backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat))}
 .editor-drill-btn:active{transform:scale(.96);background:color-mix(in srgb,var(--pro-accent) 28%,rgba(255,255,255,.05))}
 .editor-back-row{display:flex;justify-content:flex-start;margin-bottom:8px}
-.editor-back-btn{min-height:32px;border-radius:11px;border:1px solid color-mix(in srgb,var(--pro-accent) 38%,rgba(255,255,255,.14));background:color-mix(in srgb,var(--pro-accent) 15%,rgba(255,255,255,.05));color:var(--pro-accent-readable);font-size:12px;font-weight:800;cursor:pointer;padding:7px 10px;transition:transform .12s,background .15s}
+.editor-back-btn{min-height:32px;border-radius:11px;border:1px solid color-mix(in srgb,var(--pro-accent) 38%,rgba(255,255,255,.14));background:color-mix(in srgb,var(--pro-accent) 15%,rgba(255,255,255,.05));color:var(--pro-accent-readable);font-size:12px;font-weight:800;cursor:pointer;padding:7px 10px;transition:transform .12s,background .15s;backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat));-webkit-backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat))}
 .editor-back-btn:active{transform:scale(.96);background:color-mix(in srgb,var(--pro-accent) 28%,rgba(255,255,255,.05))}
 .editor-import-diff{margin-top:10px;padding:10px 11px;border-radius:12px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.10);color:var(--sub);font-size:12px;line-height:1.45;text-align:left;max-height:220px;overflow:auto;white-space:pre-line}
 
@@ -991,8 +1005,8 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .editor-confirm-actions{display:flex;flex-direction:column;gap:12px}
 .editor-confirm-btn{width:100%;min-height:var(--action-btn-h);padding:13px 18px;border-radius:var(--action-btn-radius);border:none;font-size:var(--action-btn-font);font-weight:700;cursor:pointer;transition:transform .15s,opacity .15s,box-shadow .15s;touch-action:manipulation;font-family:inherit;white-space:normal;line-height:1.2}
 .editor-confirm-btn:active{transform:scale(.96);opacity:.88}
-.editor-confirm-btn.primary{background:var(--accent);color:var(--pro-accent-text);box-shadow:0 4px 16px color-mix(in srgb,var(--pro-accent) 35%,transparent)}
-.editor-confirm-btn.danger{background:transparent;color:#ff453a;border:1px solid rgba(255,69,58,.35);font-weight:700}
+.editor-confirm-btn.primary{background:color-mix(in srgb,var(--accent) 82%,transparent);color:var(--pro-accent-text);box-shadow:0 4px 16px color-mix(in srgb,var(--pro-accent) 35%,transparent);backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%)}
+.editor-confirm-btn.danger{background:rgba(255,69,58,.1);color:#ff453a;border:1px solid rgba(255,69,58,.35);font-weight:700;backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat));-webkit-backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat))}
 .editor-primary-btn{background:linear-gradient(135deg,var(--pro-action-bg),var(--pro-action-bg-2));color:var(--pro-action-text);box-shadow:0 8px 22px color-mix(in srgb,var(--pro-accent) 20%,transparent);backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%)}
 @media (min-width:390px){.editor-confirm-actions{flex-direction:row}.editor-confirm-btn{flex:1 1 0}}
 /* A 3rd (extra) button - e.g. unlink's "複製代碼" - makes a side-by-side row too
@@ -1000,12 +1014,19 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
    squished); stack those back into a full-width column regardless of viewport. */
 .editor-confirm-actions:has(#editor-confirm-extra-btn){flex-direction:column}
 
-.toggle-row{background:rgba(0,0,0,.16);border-radius:16px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;border:1px solid transparent;margin-bottom:0}
+/* The odd/even-week toggle row and its switch (單雙週對調) are glass too now,
+   same as every other control in this sheet - the track picks up
+   --glass-blur-card so it reads as a small pane of the same material
+   rather than a plain flat pill; the white thumb inside it stays solid on
+   purpose (a physical "knob" sliding on a glass track, not glass itself -
+   blurring a small solid circle wouldn't read as anything different and
+   it needs to stay unambiguously visible against either track state). */
+.toggle-row{background:linear-gradient(135deg,color-mix(in srgb,var(--pro-accent) 12%,transparent),var(--glass-fill-card) 78%);border-radius:16px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;border:1px solid color-mix(in srgb,var(--pro-accent) 16%,transparent);margin-bottom:0;backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat)) brightness(var(--glass-bright));-webkit-backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat)) brightness(var(--glass-bright))}
 .editor-inline-options .toggle-row{margin-bottom:0}
 .toggle-label{font-size:14px;font-weight:600}
-.toggle-switch{width:44px;height:26px;border-radius:13px;border:none;background:#3a3a3c;cursor:pointer;position:relative;transition:background .2s;flex-shrink:0}
-.toggle-switch::after{content:"";position:absolute;width:20px;height:20px;top:3px;left:3px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 4px rgba(0,0,0,.3)}
-.toggle-switch.on{background:var(--accent)}
+.toggle-switch{width:44px;height:26px;border-radius:13px;border:1px solid rgba(255,255,255,.14);background:color-mix(in srgb,#3a3a3c 72%,transparent);cursor:pointer;position:relative;transition:background .2s;flex-shrink:0;backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat));-webkit-backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat))}
+.toggle-switch::after{content:"";position:absolute;width:20px;height:20px;top:2px;left:2px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.toggle-switch.on{background:color-mix(in srgb,var(--accent) 78%,transparent);border-color:color-mix(in srgb,var(--accent) 55%,transparent)}
 .toggle-switch.on::after{transform:translateX(18px)}
 
 /* Grouped list style (teacher/bell/break/countdown/schedule rows): one
@@ -1048,10 +1069,10 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .editor-sheet input,.editor-sheet select,.editor-sheet textarea{text-align:left;text-align-last:left}
 .editor-sheet .editor-input{padding:9px 11px;border-radius:11px;font-size:14.5px;min-height:44px}
 
-.add-btn{width:100%;padding:11px 12px;border-radius:13px;border:none;background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent);font-size:14px;font-weight:700;cursor:pointer;transition:transform .12s,opacity .15s,background .15s;display:flex;align-items:center;justify-content:center;gap:6px;margin-top:8px}
+.add-btn{width:100%;padding:11px 12px;border-radius:13px;border:1px solid color-mix(in srgb,var(--accent) 24%,transparent);background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent);font-size:14px;font-weight:700;cursor:pointer;transition:transform .12s,opacity .15s,background .15s;display:flex;align-items:center;justify-content:center;gap:6px;margin-top:8px;backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat));-webkit-backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat))}
 .add-btn:active{transform:scale(.97);opacity:.85;background:color-mix(in srgb,var(--accent) 24%,transparent)}
 .editor-sheet .add-btn{min-height:48px;padding:11px 12px;margin-top:8px;font-size:14px;border-radius:14px}
-.delete-btn{width:28px;height:28px;border-radius:8px;border:1px solid rgba(255,69,58,.42);background:rgba(255,69,58,.18);color:#ff6a5c;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:transform .12s,background .15s}
+.delete-btn{width:28px;height:28px;border-radius:8px;border:1px solid rgba(255,69,58,.42);background:rgba(255,69,58,.18);color:#ff6a5c;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:transform .12s,background .15s;backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat));-webkit-backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat))}
 .delete-btn:active{background:rgba(255,69,58,.36);transform:scale(.9)}
 .editor-sheet .delete-btn{width:26px;height:26px;font-size:13px;border-radius:7px;flex-shrink:0}
 
@@ -1133,7 +1154,7 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
    matches - without this the one remaining visible button would sit in a
    single grid column instead of taking the full row like it visually should. */
 .settings-transfer-actions:has(>[hidden])>:not([hidden]){grid-column:1/-1}
-.settings-transfer-btn{min-height:var(--action-btn-h);font-size:var(--action-btn-font);border-radius:var(--action-btn-radius);padding:11px 12px;background:color-mix(in srgb,var(--pro-accent) 10%,rgba(255,255,255,.09));color:#F8FAFC;border:1px solid color-mix(in srgb,var(--pro-accent) 18%,rgba(255,255,255,.12));font-weight:800;cursor:pointer;transition:transform .12s,background .15s}
+.settings-transfer-btn{min-height:var(--action-btn-h);font-size:var(--action-btn-font);border-radius:var(--action-btn-radius);padding:11px 12px;background:color-mix(in srgb,var(--pro-accent) 10%,rgba(255,255,255,.09));color:#F8FAFC;border:1px solid color-mix(in srgb,var(--pro-accent) 18%,rgba(255,255,255,.12));font-weight:800;cursor:pointer;transition:transform .12s,background .15s;backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat));-webkit-backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat))}
 .settings-transfer-btn:active{transform:scale(.97);background:color-mix(in srgb,var(--pro-accent) 18%,rgba(255,255,255,.16))}
 .settings-transfer-btn:disabled{opacity:.5;cursor:default;pointer-events:none}
 .settings-transfer-btn.primary{box-shadow:none;background:linear-gradient(135deg,var(--pro-action-bg),var(--pro-action-bg-2));color:var(--pro-action-text);backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%)}
@@ -1310,7 +1331,7 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .assign-header{display:flex;align-items:center;justify-content:space-between}
 .assign-header .editor-close{margin:0}
 .assign-day-tabs{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;margin:12px 0 8px}
-.assign-day-tab{min-height:48px;padding:0 3px;border:1px solid color-mix(in srgb,var(--pro-accent) 24%,var(--bd));border-radius:10px;background:color-mix(in srgb,var(--pro-accent) 6%,rgba(255,255,255,.055));color:var(--sub);font:800 14px/1 inherit;cursor:pointer;transition:transform .12s,background .15s}
+.assign-day-tab{min-height:48px;padding:0 3px;border:1px solid color-mix(in srgb,var(--pro-accent) 24%,var(--bd));border-radius:10px;background:color-mix(in srgb,var(--pro-accent) 6%,rgba(255,255,255,.055));color:var(--sub);font:800 14px/1 inherit;cursor:pointer;transition:transform .12s,background .15s;backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat));-webkit-backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat))}
 .assign-day-tab:active{transform:scale(.95)}
 .assign-day-tab.active{background:var(--accent);border-color:var(--accent);color:var(--pro-accent-text);box-shadow:0 5px 14px color-mix(in srgb,var(--accent) 28%,transparent)}
 .assign-day-row{display:grid;grid-template-columns:42px minmax(0,1fr);gap:8px;align-items:center}
@@ -1334,7 +1355,7 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .order-position::-webkit-inner-spin-button,.order-position::-webkit-outer-spin-button{opacity:.7;margin:0}
 @media (max-width:480px){.order-position-label{padding:5px 7px 5px 9px}.order-position{width:36px;min-width:36px;height:30px}.order-position-label{min-height:40px}}
 
-.editor-hint{margin-top:8px;padding:8px 11px;background:color-mix(in srgb,var(--pro-accent) 8%,transparent);border:1px solid color-mix(in srgb,var(--pro-accent) 18%,transparent);color:var(--orbit-muted);border-radius:11px}
+.editor-hint{margin-top:8px;padding:8px 11px;background:color-mix(in srgb,var(--pro-accent) 8%,transparent);border:1px solid color-mix(in srgb,var(--pro-accent) 18%,transparent);color:var(--orbit-muted);border-radius:11px;backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat));-webkit-backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat))}
 .editor-sheet .editor-hint{border-radius:11px;margin-top:8px;padding:8px 11px}
 .editor-hint-title{font-size:10px;color:var(--accent);font-weight:700;margin-bottom:3px;letter-spacing:.35px}
 .editor-hint-body{font-size:11px;color:var(--sub);line-height:1.4}
@@ -1365,7 +1386,7 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .test-panel .editor-header{position:static;background:none;backdrop-filter:none;border-bottom:none;margin:0 0 9px;padding:0;min-height:32px}
 .test-panel .editor-title{display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:var(--pro-accent);font-size:17px;font-weight:800;letter-spacing:-.04em}
 .test-panel .editor-close{flex-shrink:0;font-size:13px;width:32px;height:32px}
-.test-panel .editor-fold{margin-bottom:8px;border-radius:16px;background:rgba(14,25,31,.88);border:1px solid color-mix(in srgb,var(--pro-accent) 18%,transparent)}
+.test-panel .editor-fold{margin-bottom:8px;border-radius:16px;background:linear-gradient(135deg,color-mix(in srgb,var(--pro-accent) 9%,transparent),var(--glass-fill-card) 80%);border:1px solid color-mix(in srgb,var(--pro-accent) 18%,transparent)}
 .test-panel .editor-fold-body{display:flex;flex-direction:column;gap:9px;padding:9px 10px 10px}
 .test-panel .editor-fold-summary{padding:11px 12px;font-size:13px}
 .test-panel .editor-hint{margin-top:0;margin-bottom:8px;border-radius:12px;background:color-mix(in srgb,var(--pro-accent) 8%,transparent);border:1px solid color-mix(in srgb,var(--pro-accent) 18%,transparent);color:var(--orbit-muted)}
@@ -1515,12 +1536,12 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .style-fold-heading:active{opacity:1;background:none}
 .style-fold-heading::after{display:none}
 .style-fold-fixed .editor-fold-body{border-top:1px solid rgba(255,255,255,.09)}
-.style-panel .style-color-well{background:color-mix(in srgb,var(--orbit-panel-strong) 88%,#0b1418)}
-.style-panel .style-preset-chip{min-height:62px;background:#0b1418;color:#fff;border:1px solid rgba(255,255,255,.18);padding:8px 5px;gap:7px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 5px 12px rgba(0,0,0,.16)}
+.style-panel .style-color-well{background:color-mix(in srgb,var(--orbit-panel-strong) 55%,transparent)}
+.style-panel .style-preset-chip{min-height:62px;background:color-mix(in srgb,#0b1418 62%,transparent);color:#fff;border:1px solid rgba(255,255,255,.18);padding:8px 5px;gap:7px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 5px 12px rgba(0,0,0,.16)}
 .style-panel .style-preset-chip:hover{border-color:color-mix(in srgb,var(--pro-accent) 58%,var(--orbit-line));transform:translateY(-1px);box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 8px 16px rgba(0,0,0,.22)}
 .style-panel .style-preset-chip:active{transform:scale(.97)}
 .style-panel .style-preset-swatch{width:100%;height:20px;border-radius:7px;box-shadow:inset 0 1px 0 rgba(255,255,255,.28),0 3px 8px rgba(0,0,0,.2)}
-.style-panel .style-slot{background:color-mix(in srgb,var(--orbit-panel-strong) 88%,#0b1418);border-color:var(--orbit-line)}
+.style-panel .style-slot{background:color-mix(in srgb,var(--orbit-panel-strong) 60%,transparent);border-color:var(--orbit-line)}
 .style-panel .style-slot:hover{border-color:color-mix(in srgb,var(--pro-accent) 58%,var(--orbit-line))}
 .style-panel .style-color-well{border-color:var(--orbit-line)}
 .style-panel .style-cancel-btn{background:transparent;border-color:var(--orbit-line);color:var(--orbit-muted)}
@@ -1543,18 +1564,18 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .style-library-label{margin-top:14px}
 .style-section-label{color:var(--sub);font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
 .style-preset-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:0}
-.style-preset-chip{border:1px solid var(--bd);cursor:pointer;display:grid;justify-items:center;gap:5px;min-height:54px;padding:7px 3px;border-radius:11px;color:var(--txt);font:800 10px inherit;background:#172f39;transition:transform .12s,border-color .15s}
+.style-preset-chip{border:1px solid var(--bd);cursor:pointer;display:grid;justify-items:center;gap:5px;min-height:54px;padding:7px 3px;border-radius:11px;color:var(--txt);font:800 10px inherit;background:var(--glass-fill-card);transition:transform .12s,border-color .15s;backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat));-webkit-backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat))}
 .style-preset-chip:hover{border-color:var(--accent)}
 .style-preset-chip:active{transform:scale(.97)}
 .style-preset-swatch{width:24px;height:14px;border-radius:5px;background:#747E88}
 .style-color-pair{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.style-color-well{display:grid;gap:6px;padding:9px;border:1px solid rgba(255,255,255,.1);border-radius:12px;color:var(--sub);font-size:10px;font-weight:800;background:#172f39}
+.style-color-well{display:grid;gap:6px;padding:9px;border:1px solid rgba(255,255,255,.1);border-radius:12px;color:var(--sub);font-size:10px;font-weight:800;background:var(--glass-fill-card);backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat));-webkit-backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat))}
 .style-color-well input{width:100%;height:34px;padding:2px;border:0;border-radius:8px;background:transparent;cursor:pointer}
 .style-slot-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;width:100%}
 .style-slot-row{display:grid;grid-template-columns:minmax(0,1fr) 28px;gap:4px;min-width:0}
-.style-slot{min-width:0;min-height:38px;padding:5px 3px;border:1px solid rgba(255,255,255,.1);border-radius:9px;color:var(--sub);font:800 9px inherit;cursor:pointer;background:#172f39;transition:transform .12s}
+.style-slot{min-width:0;min-height:38px;padding:5px 3px;border:1px solid rgba(255,255,255,.1);border-radius:9px;color:var(--sub);font:800 9px inherit;cursor:pointer;background:var(--glass-fill-card);transition:transform .12s;backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat));-webkit-backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat))}
 .style-slot-swatch{display:block;width:24px;height:14px;margin:auto;border-radius:5px;background:linear-gradient(135deg,var(--slot-primary,#747E88),var(--slot-secondary,#4B5560))}
-.style-slot.has-style{color:var(--txt);border-color:color-mix(in srgb,var(--slot-primary) 45%,transparent);background:linear-gradient(135deg,color-mix(in srgb,var(--slot-primary) 22%,#20252D),#20252D)}
+.style-slot.has-style{color:var(--txt);border-color:color-mix(in srgb,var(--slot-primary) 45%,transparent);background:linear-gradient(135deg,color-mix(in srgb,var(--slot-primary) 30%,transparent),color-mix(in srgb,#20252D 62%,transparent))}
 .style-slot.has-style .style-slot-swatch{background:linear-gradient(135deg,var(--slot-primary),var(--slot-secondary))}
 .style-slot:not(.has-style){position:relative}
 .style-slot:not(.has-style)::after{content:"";position:absolute;left:18%;right:18%;top:50%;height:1px;transform:rotate(-28deg);opacity:.8;background:var(--sub)}
