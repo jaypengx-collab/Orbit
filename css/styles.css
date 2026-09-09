@@ -525,7 +525,14 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
   overflow-x:hidden;
 }
 .now-stack.is-status .now-meta-row{width:100%;display:none}
-.title-now{font-weight:800;margin:0;word-break:keep-all;overflow-wrap:normal;min-width:0;width:100%;text-align:center;display:block;align-self:center;justify-self:center;white-space:nowrap;overflow:visible;text-overflow:clip;max-width:100%;line-height:1.02;letter-spacing:-.04em;font-size:37px;text-shadow:none;color:var(--current-class-color,var(--accent))}
+/* font-size here is a fallback only - dashboard-render.js's
+   fitNowTitleText() sets an inline font-size on every render (it has to,
+   to shrink long names to fit), which always wins over whatever this
+   says. See that function's own comment for the actual controlling
+   value and why it has to stay above .timer-badge/.title-next's
+   ceilings - kept in sync here only so the unstyled-flash size before
+   JS's first pass isn't wildly off from what JS then sets it to. */
+.title-now{font-weight:800;margin:0;word-break:keep-all;overflow-wrap:normal;min-width:0;width:100%;text-align:center;display:block;align-self:center;justify-self:center;white-space:nowrap;overflow:visible;text-overflow:clip;max-width:100%;line-height:1.02;letter-spacing:-.04em;font-size:46px;text-shadow:none;color:var(--current-class-color,var(--accent))}
 .now-stack.is-status .title-now{white-space:nowrap;overflow:visible;text-overflow:clip;word-break:keep-all;overflow-wrap:normal;align-self:center;justify-self:center;text-align:center;width:100%;max-width:100%;font-size:clamp(46px,14vw,64px) !important;line-height:.98 !important}
 .dashboard.v3-15-day-finished #now-name.is-status,
 .dashboard.v3-16-outside-class-range #now-name.is-status,
@@ -539,7 +546,7 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
 .dashboard-class-label.show{display:block}
 @media (max-width:360px){#now-teacher,#now-place,.dashboard-class-label{padding-inline:6px}}
 @media (max-width:430px){.now-meta-row,#now-teacher,#now-place,.dashboard-class-label{max-width:48vw}#now-teacher,#now-place,.dashboard-class-label{font-size:11.5px}}
-@media (max-height:700px){.title-now{font-size:31px}.now-stack.is-status .title-now{font-size:clamp(40px,13vw,56px) !important}.now-stack{gap:4px}}
+@media (max-height:700px){.title-now{font-size:37px}.now-stack.is-status .title-now{font-size:clamp(40px,13vw,56px) !important}.now-stack{gap:4px}}
 @media (max-width:430px){.now-stack.is-status{gap:7px}.title-now{line-height:1.02}}
 
 /* Time card: progress bar + timer, merges the "next class" module in */
@@ -563,7 +570,10 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
    class, reads accent/purple; counting down to 上課, on a break, reads
    secondary/pink), read straight off #progress-bar's own .is-class state. */
 .timer-container{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;margin-top:0}
-.timer-badge{font-weight:900;font-family:ui-monospace,SFMono-Regular,monospace;font-variant-numeric:tabular-nums;color:var(--pro-secondary-readable);font-size:clamp(34px,9.5vw,46px);letter-spacing:-.02em;line-height:1}
+/* Capped well under .title-now's fixed 44px/37px (see its own comment) -
+   remaining time matters, but it's still describing the current class,
+   not competing with it for "the biggest thing on the card". */
+.timer-badge{font-weight:900;font-family:ui-monospace,SFMono-Regular,monospace;font-variant-numeric:tabular-nums;color:var(--pro-secondary-readable);font-size:clamp(26px,6.8vw,30px);letter-spacing:-.02em;line-height:1}
 .time-card:has(#progress-bar.is-class) .timer-badge{color:var(--pro-accent-readable)}
 /* A small live dot ahead of the label, same pulse the is-now status tag
    uses (see .status-tag in the schedule list) - "this is actively
@@ -586,13 +596,13 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
 .time-card.v3-11-next-module .next-box{grid-area:next;overflow:hidden;align-self:stretch;flex-direction:column;width:auto;min-width:0;min-height:0;gap:8px;justify-content:center;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;margin:0;box-shadow:none;border-radius:0;background:transparent;padding:0;padding-right:10px;border:0;border-right:1px solid var(--orbit-line)}
 .time-card.v3-11-next-module .next-content{min-width:0;width:100%;text-align:center}
 .time-card.v3-11-next-module .next-content > .label{display:block;text-align:center;opacity:.78;margin-bottom:5px;letter-spacing:.35px;font-size:10.5px}
-.time-card.v3-11-next-module .title-next{font-weight:850;line-height:1.08;letter-spacing:0;text-overflow:clip;white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;text-wrap:balance;overflow-wrap:normal;word-break:normal;font-size:clamp(21px,6.1vw,29px);color:var(--pro-accent)}
+.time-card.v3-11-next-module .title-next{font-weight:850;line-height:1.08;letter-spacing:0;text-overflow:clip;white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;text-wrap:balance;overflow-wrap:normal;word-break:normal;font-size:clamp(18px,5vw,22px);color:var(--pro-accent)}
 .time-card.v3-11-next-module .next-box .next-meta{width:100%;max-width:100%;flex:0 0 auto;display:flex;flex-direction:row;flex-wrap:wrap;justify-content:center;align-items:baseline;gap:2px 8px;overflow:visible}
 .time-card.v3-11-next-module .next-meta > div{max-width:100%;min-width:0;overflow:visible;text-overflow:clip;white-space:nowrap;overflow-wrap:normal;word-break:keep-all;text-align:center;line-height:1.2}
 .time-card.v3-11-next-module .next-box .next-meta #next-meta-text{font:500 clamp(14px,3.9vw,16px)/1.2 inherit;text-align:center;display:block;width:100%;color:var(--sub)}
 .time-card.v3-11-next-module .next-box .next-meta #next-meta-text.wrap-2l{white-space:normal;text-wrap:balance}
-@media (max-width:360px){.time-card.v3-11-next-module{grid-template-columns:minmax(0,1fr) 108px;column-gap:9px}.timer-badge{font-size:clamp(27px,8vw,32px)}.time-card.v3-11-next-module .title-next{font-size:clamp(20px,6vw,27px)}}
-@media (max-height:700px){.time-card{padding-block:7px}.time-card.v3-11-next-module .title-next{font-size:clamp(19px,5.7vw,25px)}.timer-badge{font-size:clamp(28px,8.2vw,34px)}}
+@media (max-width:360px){.time-card.v3-11-next-module{grid-template-columns:minmax(0,1fr) 108px;column-gap:9px}.timer-badge{font-size:clamp(23px,7.2vw,26px)}.time-card.v3-11-next-module .title-next{font-size:clamp(17px,4.8vw,20px)}}
+@media (max-height:700px){.time-card{padding-block:7px}.time-card.v3-11-next-module .title-next{font-size:clamp(16px,4.6vw,19px)}.timer-badge{font-size:clamp(22px,6.6vw,25px)}}
 
 .next-box{margin-top:0;display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:49px;padding:8px 10px;border:1px solid var(--orbit-line);border-radius:var(--orbit-radius-md);background:color-mix(in srgb,var(--pro-accent) 8%,var(--orbit-panel));box-shadow:inset 0 1px 0 rgba(255,255,255,.055)}
 .next-box>div:first-child{min-width:0;flex:1}
@@ -622,7 +632,7 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
 .dashboard.orbit-no-upcoming-class .time-card.v3-11-next-module .next-box{display:none}
 .dashboard.orbit-no-upcoming-class .time-card.v3-11-next-module{grid-template-areas:"progress" "timer";grid-template-columns:minmax(0,1fr)}
 .dashboard.orbit-no-upcoming-class .time-card.v3-11-next-module .timer-container{width:100%;min-width:0;padding:4px 0}
-.dashboard.orbit-no-upcoming-class .timer-badge{font-size:clamp(48px,13vw,62px)}
+.dashboard.orbit-no-upcoming-class .timer-badge{font-size:clamp(30px,8vw,34px)}
 .dashboard.orbit-no-upcoming-class .timer-label{font-size:15px}
 
 /* ============================================================================

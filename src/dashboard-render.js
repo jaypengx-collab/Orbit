@@ -189,7 +189,16 @@ function fitNowTitleText(force = false) {
   const isStatus = stack.classList.contains('is-status');
   const hasLatin = /[A-Za-z]/.test(raw);
   const vw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
-  const defaultSize = vw <= 430 ? (isStatus ? 48 : 48) : isStatus ? 46 : 46;
+  // This is the real starting size for the current-class name - CSS's own
+  // .title-now font-size is dead weight the moment this function runs
+  // (every render: shrinkFontToFit() below always sets an inline
+  // font-size, overriding whatever the stylesheet said). The current
+  // class is the one thing everything else on the dashboard is secondary
+  // to, so this has to stay clearly above every other card's own largest
+  // text - specifically .timer-badge's 30px ceiling and .title-next's
+  // 22px ceiling (see styles.css) - or a short name here reads as smaller
+  // than the "remaining time" and "next class" it's supposed to outrank.
+  const defaultSize = vw <= 430 ? (isStatus ? 52 : 52) : isStatus ? 50 : 50;
   const minSize = hasLatin ? 18 : 22;
   const stackWidth = Math.round(stack.getBoundingClientRect().width);
   const metaText = meta ? (meta.textContent || '').trim() : '';
