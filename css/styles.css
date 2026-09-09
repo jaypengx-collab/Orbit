@@ -361,20 +361,20 @@ body::before{
    Dashboard card
    ========================================================================= */
 /* Body's three stacked sections (.dashboard, .nav-bar, #schedule-list) are
-   locked to a fixed 40/10/50 vertical split of the viewport now, not a
+   locked to a fixed 45/5/50 vertical split of the viewport now, not a
    clamp() guessing at a reasonable px range - flex-basis in percent
    resolves against body's own content-box height (100dvh minus its own
    padding), so this is an exact proportion of whatever's actually
    available on the device, not an approximation of one. flex:0 0 keeps
    it locked - #schedule-list is the only one of the three allowed to
    grow/shrink (see its own flex value), so any rounding from margins
-   below lands there instead of quietly eating into this 40%. The calc()
+   below lands there instead of quietly eating into this 45%. The calc()
    subtracts this element's own margin (6px top + 8px bottom) so the
-   MARGIN BOX - not just the content - ends up at 40%, matching what a
+   MARGIN BOX - not just the content - ends up at 45%, matching what a
    person actually sees as "the dashboard's share of the screen". */
 .dashboard{
   isolation:isolate;contain:layout paint;overflow:hidden;position:relative;
-  width:min(420px,100%);flex:0 0 calc(40% - 14px);margin:6px auto 8px 2px;box-sizing:border-box;
+  width:min(420px,100%);flex:0 0 calc(45% - 14px);margin:6px auto 8px 2px;box-sizing:border-box;
   min-height:0;height:auto;max-height:none;
   padding:10px 10px 12px;gap:6px;
   display:flex;flex-direction:column;justify-content:center;
@@ -388,7 +388,7 @@ body::before{
 .dashboard > *{position:relative;margin-top:0;flex:0 0 auto}
 .dashboard > .now-stack{flex:1 1 0}
 @supports not (backdrop-filter:blur(1px)){.dashboard{background:#15232B}}
-@media (max-width:430px){.dashboard{margin-top:3px;padding:12px;gap:9px;flex-basis:calc(40% - 11px);border-radius:20px}}
+@media (max-width:430px){.dashboard{margin-top:3px;padding:12px;gap:9px;flex-basis:calc(45% - 11px);border-radius:20px}}
 @media (max-height:700px){.dashboard{padding:9px 10px 11px;gap:5px}}
 
 .dashboard-boot-loader{display:none}
@@ -399,7 +399,7 @@ body.orbit-booting .dashboard-boot-loader{visibility:visible;display:flex;positi
 /* Label row: week badge, exam countdown, tool menu */
 .dashboard > .label-row{position:relative;display:grid;grid-template-columns:auto minmax(0,1fr) 38px;gap:8px;align-items:center;min-height:40px;padding:0}
 .label{font-weight:700;text-transform:uppercase;color:var(--sub);display:flex;align-items:center;gap:6px;font-size:10px;letter-spacing:.45px}
-.dashboard > .label-row > .label{min-width:0;height:28px;padding:0 8px;border:1px solid color-mix(in srgb,var(--orbit-line) 82%,#fff 5%);border-radius:8px;background:color-mix(in srgb,var(--orbit-panel) 82%,#fff 3%)}
+.dashboard > .label-row > .label{min-width:0;height:28px;padding:0 8px;border:1px solid color-mix(in srgb,var(--orbit-line) 82%,#fff 5%);border-radius:8px;background:var(--glass-fill-card);backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat)) brightness(var(--glass-bright));-webkit-backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat)) brightness(var(--glass-bright))}
 .dashboard > .label-row > .label #week-display-main{display:block;max-width:58px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;font-weight:900;letter-spacing:.04em}
 .dashboard > .label-row > .label .label-odd{position:relative;background:transparent;border:0;border-bottom:2px solid var(--pro-accent);border-radius:0;padding:0 0 2px;color:var(--pro-accent-readable)}
 .dashboard > .label-row > .label .label-even{position:relative;background:transparent;border:0;border-bottom:2px solid var(--pro-secondary);border-radius:0;padding:0 0 2px;color:var(--pro-secondary-readable)}
@@ -533,9 +533,13 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
   grid-template-columns:minmax(0,1fr);
   text-align:center;
   border-radius:calc(var(--orbit-radius-lg) - 10px);
-  background:var(--well-fill);box-shadow:var(--well-shadow);
+  background:var(--well-fill);
+  backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  -webkit-backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  box-shadow:var(--well-shadow);
   overflow-x:hidden;
 }
+@supports not (backdrop-filter:blur(1px)){.now-stack{background:#0F1A20}}
 .now-stack.is-status .now-meta-row{width:100%;display:none}
 /* font-size here is a fallback only - dashboard-render.js's
    fitNowTitleText() sets an inline font-size on every render (it has to,
@@ -550,9 +554,9 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
 .dashboard.v3-16-outside-class-range #now-name.is-status,
 .dashboard.orbit-no-school-day #now-name.is-status{transform:scale(1.08);transform-origin:center}
 .now-meta-row{display:flex;flex-direction:row;flex-wrap:wrap;min-height:20px;justify-content:center;min-width:0;gap:5px 6px;align-items:center;max-width:100%;align-self:center}
-#now-teacher{display:none;width:max-content;background:color-mix(in srgb,var(--pro-secondary) 14%,transparent);color:var(--pro-secondary-readable);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;transition:opacity .2s;line-height:1.15;max-width:46vw;min-height:20px;padding:3px 8px;border-radius:10px;font-size:11.5px}
+#now-teacher{display:none;width:max-content;background:color-mix(in srgb,var(--pro-secondary) 14%,transparent);backdrop-filter:blur(10px) saturate(var(--glass-sat));-webkit-backdrop-filter:blur(10px) saturate(var(--glass-sat));color:var(--pro-secondary-readable);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;transition:opacity .2s;line-height:1.15;max-width:46vw;min-height:20px;padding:3px 8px;border-radius:10px;font-size:11.5px}
 #now-teacher.show{display:block}
-#now-place{display:none;width:max-content;background:color-mix(in srgb,var(--current-class-color,var(--accent)) 14%,transparent);color:var(--current-class-color,var(--accent));font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;line-height:1.15;max-width:46vw;min-height:20px;padding:3px 8px;border-radius:10px;font-size:11.5px}
+#now-place{display:none;width:max-content;background:color-mix(in srgb,var(--current-class-color,var(--accent)) 14%,transparent);backdrop-filter:blur(10px) saturate(var(--glass-sat));-webkit-backdrop-filter:blur(10px) saturate(var(--glass-sat));color:var(--current-class-color,var(--accent));font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;line-height:1.15;max-width:46vw;min-height:20px;padding:3px 8px;border-radius:10px;font-size:11.5px}
 #now-place.show{display:block}
 .dashboard-class-label{min-height:20px;max-width:100%;padding:2px 7px;font-size:11px;text-align:center;line-height:1.2;display:none;width:max-content;border-radius:999px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--current-class-color,var(--accent));background:transparent;border:0}
 .dashboard-class-label.show{display:block}
@@ -565,9 +569,13 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
 .time-card{
   flex:0 1 auto;display:flex;flex-direction:column;padding:7px 10px;gap:5px;
   border-radius:calc(var(--orbit-radius-lg) - 10px);
-  background:var(--well-fill);box-shadow:var(--well-shadow);
+  background:var(--well-fill);
+  backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  -webkit-backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+  box-shadow:var(--well-shadow);
 }
-.break-progress-wrap{margin:0;background:rgba(255,255,255,.08);border-radius:999px;overflow:hidden;display:none;height:9px;margin-bottom:1px;box-shadow:inset 0 1px 2px rgba(0,0,0,.35)}
+@supports not (backdrop-filter:blur(1px)){.time-card{background:#0F1A20}}
+.break-progress-wrap{margin:0;background:rgba(255,255,255,.08);backdrop-filter:blur(8px) saturate(var(--glass-sat));-webkit-backdrop-filter:blur(8px) saturate(var(--glass-sat));border-radius:999px;overflow:hidden;display:none;height:9px;margin-bottom:1px;box-shadow:inset 0 1px 2px rgba(0,0,0,.35)}
 /* One hue per state, not a two-hue accent/secondary blend that read as a
    decorative rainbow strip regardless of what the bar was actually tracking
    - break time tints toward --pro-secondary, class time toward --pro-accent,
@@ -587,13 +595,8 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
    not competing with it for "the biggest thing on the card". */
 .timer-badge{font-weight:900;font-family:ui-monospace,SFMono-Regular,monospace;font-variant-numeric:tabular-nums;color:var(--pro-secondary-readable);font-size:clamp(26px,6.8vw,30px);letter-spacing:-.02em;line-height:1}
 .time-card:has(#progress-bar.is-class) .timer-badge{color:var(--pro-accent-readable)}
-/* A small live dot ahead of the label, same pulse the is-now status tag
-   uses (see .status-tag in the schedule list) - "this is actively
-   counting, not a static figure". */
-.timer-label{display:flex;align-items:center;gap:4px;font-size:12px;font-weight:800;letter-spacing:.2px;color:var(--pro-secondary)}
-.timer-label::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor;flex:0 0 auto;animation:statusTagLivePulse 1.8s ease-in-out infinite}
+.timer-label{font-size:12px;font-weight:800;letter-spacing:.2px;color:var(--pro-secondary)}
 .time-card:has(#progress-bar.is-class) .timer-label{color:var(--pro-accent)}
-@media (prefers-reduced-motion:reduce){.timer-label::before{animation:none}}
 
 /* Merged next-class module (JS moves .next-box inside .time-card at boot) */
 .time-card.v3-11-next-module{
@@ -660,11 +663,11 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
    appearance) didn't fix it, so this removes the box outright instead of
    trying to time it: with nothing painted here before the buttons exist,
    there's nothing left to flash regardless of how slowly they load. */
-/* 10% of the viewport, same fixed-share model as .dashboard above (see
+/* 5% of the viewport, same fixed-share model as .dashboard above (see
    its own comment) - calc() subtracts this element's own margin-bottom
-   so its margin box, not just its content box, lands at 10%. */
+   so its margin box, not just its content box, lands at 5%. */
 .nav-bar{
-  width:min(420px,100%);flex:0 0 calc(10% - 7px);display:flex;align-items:stretch;gap:2px;padding:3px;margin-bottom:7px;
+  width:min(420px,100%);flex:0 0 calc(5% - 7px);display:flex;align-items:stretch;gap:2px;padding:3px;margin-bottom:7px;
   transition:filter .35s ease,opacity .35s ease,transform .35s ease;
   border-radius:var(--orbit-radius-md);
 }
@@ -745,7 +748,7 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
 .nav-item.active.is-today{border-color:color-mix(in srgb,var(--pro-accent) 34%,transparent)}
 .nav-item.active.is-tomorrow{border-color:color-mix(in srgb,var(--pro-secondary) 72%,#ffffff 28%)}
 @media (max-width:480px){.nav-bar{gap:6px;padding:4px}.nav-item{font-size:14px;padding:0 10px;min-height:44px}}
-@media (max-width:430px){.nav-bar{margin-bottom:10px;flex-basis:calc(10% - 10px)}}
+@media (max-width:430px){.nav-bar{margin-bottom:10px;flex-basis:calc(5% - 10px)}}
 
 /* ============================================================================
    Schedule list & rows
@@ -889,7 +892,7 @@ body.orbit-suppress-list-animation .animate-list .row{animation:none}
   --row-accent:var(--pro-accent);
   border-radius:var(--orbit-radius-md);
   background:linear-gradient(135deg,color-mix(in srgb,var(--pro-accent) 16%,transparent),color-mix(in srgb,var(--orbit-panel-strong) 40%,transparent) 74%);
-  border:1.5px dashed color-mix(in srgb,var(--pro-accent) 48%,transparent);
+  border:1.5px solid color-mix(in srgb,var(--pro-accent) 48%,transparent);
   box-shadow:var(--glass-shadow-soft);
   border-left:4px solid var(--pro-accent);padding-left:10px;
 }
