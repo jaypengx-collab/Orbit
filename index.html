@@ -65,13 +65,15 @@
     </div>
   </div>
   <div class="time-card">
-    <div class="break-progress-wrap" id="progress-wrap">
-      <div class="break-progress-bar" id="progress-bar">
-      </div>
-    </div>
     <div id="timer-group" class="timer-container">
-      <div id="timer-val" class="timer-badge">
-        00:00
+      <div class="timer-ring">
+        <svg id="progress-wrap" class="timer-ring-svg" viewBox="0 0 100 100" aria-hidden="true">
+          <circle class="timer-ring-track" cx="50" cy="50" r="44"></circle>
+          <circle id="progress-bar" class="timer-ring-arc" cx="50" cy="50" r="44"></circle>
+        </svg>
+        <div id="timer-val" class="timer-badge">
+          00:00
+        </div>
       </div>
       <span class="timer-label">
         下課

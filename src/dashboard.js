@@ -371,10 +371,21 @@ function getDashboardDom() {
   return dashboardDom;
 }
 
+// Circumference of the timer's progress ring (an SVG circle, r=44 - see
+// index.html's #progress-bar) - stroke-dasharray/stroke-dashoffset are
+// what actually draw an SVG stroke as a partial arc: dasharray is the
+// total length of one "on" dash (set to the full circle's circumference,
+// so it's one continuous arc rather than a dashed pattern), and dashoffset
+// slides that dash around the path, which is what makes a shorter offset
+// reveal more of the circle. Computed here instead of hardcoded in CSS so
+// there's exactly one source of truth for the ring's radius.
+const TIMER_RING_RADIUS = 44;
+const TIMER_RING_CIRCUMFERENCE = 2 * Math.PI * TIMER_RING_RADIUS;
+
 // Last-rendered values, so renderDashboard() below can skip a DOM write
 // when nothing actually changed since the previous tick. Everything here
 // changes only a handful of times a day (a name, a room, a status label) -
-// only the countdown digits and the progress-bar width genuinely need a
+// only the countdown digits and the progress ring's arc genuinely need a
 // write every second, and those are cheap style/text updates rather than
 // the ~20 unconditional writes (several of them class-list/style toggles
 // that force a style recalc) the unguarded version did every tick.
@@ -413,8 +424,12 @@ function renderDashboard(viewModel, week) {
   if (viewModel.progressVisible) {
     if (changed('progressIsClass', viewModel.progressIsClass))
       dom.progressBar.classList.toggle('is-class', viewModel.progressIsClass);
-    // The progress-bar width is the other field expected to change every tick.
-    dom.progressBar.style.width = viewModel.progressPercent + '%';
+    // The ring's arc is the other field expected to change every tick - see
+    // TIMER_RING_CIRCUMFERENCE above for how stroke-dasharray/dashoffset
+    // turn a percent into a partial circle.
+    dom.progressBar.style.strokeDasharray = TIMER_RING_CIRCUMFERENCE;
+    dom.progressBar.style.strokeDashoffset =
+      TIMER_RING_CIRCUMFERENCE * (1 - viewModel.progressPercent / 100);
   }
 
   if (changed('statusText', viewModel.statusText)) dom.nowName.innerText = viewModel.statusText;
