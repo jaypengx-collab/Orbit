@@ -624,9 +624,7 @@ const SYNC_VERIFY_RATE_LIMIT = 300;
 
 // Same cap as the Firestore rule guarding this collection (see README) -
 // Orbit's own schedule payload is already a compressed transfer string, so
-// this stays small; VOCAB_MAX_PAYLOAD_LENGTH below is far larger because a
-// vocabulary progress snapshot (thousands of words' worth of history) is a
-// fundamentally bigger document, even compressed.
+// this stays small.
 const ORBIT_MAX_PAYLOAD_LENGTH = MAX_PAYLOAD_LENGTH;
 
 // ---- /vocab-sync's own rate-limit buckets ----------------------------
@@ -648,13 +646,20 @@ const VOCAB_SYNC_VERIFY_RATE_LIMIT = 6000;
 const VOCAB_SYNC_WRITE_RATE_LIMIT = 300;
 const VOCAB_SYNC_DELETE_RATE_LIMIT = 20;
 const VOCAB_SYNC_CREATE_RATE_LIMIT = 20;
-// Firestore's own per-document cap is ~1 MiB; this stays well under that
-// even after the JSON request body's other fields and the PATCH body's
-// `passcode` field, while comfortably covering a gzip-compressed snapshot
-// of thousands of words' worth of progress history (see that app's
-// sync.js encodeSyncPayload - orders of magnitude smaller than the
-// uncompressed JSON would be).
-const VOCAB_MAX_PAYLOAD_LENGTH = 900000;
+// Firestore's own per-document cap is ~1 MiB, but this is set far below
+// that on purpose: English Vocabulary Tool's sync.js writes progress as
+// gzip-compressed, delta-timestamped, positional tuples rather than plain
+// keyed JSON (see that file's "Compact wire format" comment) specifically
+// to keep this small - every field that isn't read back anywhere is
+// dropped before it's ever compressed, not just compressed harder. Even a
+// worst case of every one of Orbit AI's 3,060 vocab words fully attempted,
+// each with a maxed-out recent-mistakes history, comes in well under
+// 250,000 bytes once compressed and base64-encoded; this cap stays a
+// comfortable multiple above that real worst case while still refusing a
+// payload that's clearly not this format at all (a client bug, or a
+// request that skipped sync.js's own encoding entirely) long before it
+// costs a Firestore write.
+const VOCAB_MAX_PAYLOAD_LENGTH = 262144;
 
 function base64UrlFromBytes(bytes) {
   let binary = '';
