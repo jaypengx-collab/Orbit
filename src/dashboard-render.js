@@ -444,6 +444,44 @@ function fitNextMetaText(force = false) {
     }
   });
 }
+// Same fallback as fitNextMetaText just above - shrink the chip's own text
+// first, and only fall back to letting it wrap onto a second line once even
+// the smallest legible size still doesn't fit - so a long teacher/room name
+// here behaves the same way a long one in the next-class line does, instead
+// of the plain ellipsis clip these chips used to do at a fixed size.
+const nowMetaFitState = { key: '', raf: 0 };
+function fitNowMetaChips(force = false) {
+  const chips = ['now-teacher', 'now-place']
+    .map(id => document.getElementById(id))
+    .filter(el => el && el.classList.contains('show'));
+  if (!chips.length) return;
+  const key = chips
+    .map(el => el.textContent + '|' + Math.round(el.getBoundingClientRect().width))
+    .join('~');
+  if (!force && nowMetaFitState.key === key) return;
+  nowMetaFitState.key = key;
+  if (nowMetaFitState.raf) cancelAnimationFrame(nowMetaFitState.raf);
+
+  nowMetaFitState.raf = requestAnimationFrame(() => {
+    chips.forEach(el => {
+      el.classList.remove('wrap-2l');
+      el.style.fontSize = '';
+      const defaultSize = parseFloat(getComputedStyle(el).fontSize) || 11.5;
+      const minSize = Math.max(9, Math.round(defaultSize * 0.62));
+      // clientWidth, not the content box alone - scrollWidth (what this is
+      // compared against, in shrinkFontToFit and below) is measured on that
+      // same padding-included basis, so the two have to match or a short
+      // name that fits perfectly reads as overflowing by exactly paddingX.
+      const available = Math.floor(el.clientWidth);
+      if (!available) return;
+      shrinkFontToFit(el, available, defaultSize, minSize);
+      if (el.scrollWidth > available + 1) {
+        el.style.fontSize = defaultSize + 'px';
+        el.classList.add('wrap-2l');
+      }
+    });
+  });
+}
 function createMetaChip(text, cls = '') {
   const span = document.createElement('span');
   span.className = 'meta-chip ' + cls;
@@ -539,16 +577,19 @@ function renderList(week, curIdx, nxtIdx, curDay, isDayFinished) {
 }
 window.addEventListener('resize', () => {
   fitNowTitleText(true);
+  fitNowMetaChips(true);
   fitNextMetaText(true);
 });
 window.addEventListener('orientationchange', () =>
   setTimeout(() => {
     fitNowTitleText(true);
+    fitNowMetaChips(true);
     fitNextMetaText(true);
   }, 120)
 );
 window.addEventListener('load', () => {
   fitNowTitleText(true);
+  fitNowMetaChips(true);
   fitNextMetaText(true);
 });
 
@@ -564,6 +605,7 @@ function mainClockTick() {
 
 export {
   fitNextMetaText,
+  fitNowMetaChips,
   fitNowTitleText,
   getClassColor,
   mainClockTick,

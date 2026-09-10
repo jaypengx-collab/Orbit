@@ -7,6 +7,7 @@ import { state } from './state.js';
 import { closeStylePanel } from './appearance.js';
 import {
   fitNextMetaText,
+  fitNowMetaChips,
   fitNowTitleText,
   getClassColor,
   renderList,
@@ -426,6 +427,8 @@ function renderDashboard(viewModel, week) {
     dom.nowName.classList.toggle('is-status', viewModel.compactStatus);
     if (dom.nowStack) dom.nowStack.classList.toggle('is-status', viewModel.compactStatus);
   }
+  const metaChipsTextChanged =
+    changed('teacherText', viewModel.teacherText) || changed('placeText', viewModel.placeText);
   if (changed('teacherText', viewModel.teacherText)) {
     dom.nowTeacher.innerText = viewModel.teacherText || '';
     dom.nowTeacher.classList.toggle('show', !!viewModel.teacherText);
@@ -444,6 +447,11 @@ function renderDashboard(viewModel, week) {
     changed('metaRowVisible', viewModel.metaRowVisible);
   if (dom.metaRow && changed('metaRowVisible', viewModel.metaRowVisible))
     dom.metaRow.style.display = viewModel.metaRowVisible ? 'flex' : 'none';
+  // Same reasoning as fitNowTitleText() below - only worth re-measuring the
+  // teacher/room chips when the text (or their row's own visibility) that
+  // could change how they fit actually did.
+  if (metaChipsTextChanged || changed('metaRowVisible', viewModel.metaRowVisible))
+    fitNowMetaChips();
   // fitNowTitleText() measures layout (getBoundingClientRect) every call it
   // makes regardless of its own internal memoization, so it's only worth
   // calling again when something that could change the fit actually did.
