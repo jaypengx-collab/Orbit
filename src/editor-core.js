@@ -387,37 +387,58 @@ function autoScrollEditorWhileDragging(handle, clientY) {
 // events): drags `row` by the handle matching `handleSelector`, reordering it among
 // its siblings matching `siblingsSelector`, auto-scrolling the editor sheet near its
 // edges, and calling `onMove` (if given) after every reorder and once dragging ends.
+//
+// A press on the handle doesn't start reordering the instant the pointer moves at
+// all - MOVE_THRESHOLD_PX has to be cleared first, the same anti-accidental-gesture
+// threshold initSchedulePressFeedback in dashboard-render.js uses for its own
+// tap-vs-scroll problem. Without it, the tiniest finger wobble while pressing the
+// handle (never mind actually intending to drag) could nudge the row past a
+// neighbor's midpoint and silently reorder the list.
 function bindEditorDragReorder(row, handleSelector, siblingsSelector, onMove) {
   const handle = row.querySelector(handleSelector);
   if (!handle || handle.dataset.bound) return;
   handle.dataset.bound = '1';
   handle.style.touchAction = 'none';
-  let dragging = false;
+  const MOVE_THRESHOLD_PX = 8;
+  let tracking = false;
+  let engaged = false;
+  let startX = 0;
+  let startY = 0;
   let lastY = 0;
   let scrollFrame = 0;
-  const move = event => {
-    if (!dragging) return;
-    lastY = event.clientY;
-    autoScrollEditorWhileDragging(handle, event.clientY);
+  const reorderTo = clientY => {
+    lastY = clientY;
+    autoScrollEditorWhileDragging(handle, clientY);
     const siblings = [...document.querySelectorAll(siblingsSelector)].filter(item => item !== row);
-    const target = siblings.find(
-      item => event.clientY < item.getBoundingClientRect().top + item.offsetHeight / 2
-    );
+    const target = siblings.find(item => clientY < item.getBoundingClientRect().top + item.offsetHeight / 2);
     if (target) target.parentElement.insertBefore(row, target);
     else if (siblings.length) siblings[siblings.length - 1].parentElement.appendChild(row);
     onMove?.();
   };
+  const move = event => {
+    if (!tracking) return;
+    if (!engaged) {
+      const dx = event.clientX - startX;
+      const dy = event.clientY - startY;
+      if (dx * dx + dy * dy < MOVE_THRESHOLD_PX * MOVE_THRESHOLD_PX) return;
+      engaged = true;
+      row.classList.add('is-dragging');
+      scrollFrame = requestAnimationFrame(autoScroll);
+    }
+    reorderTo(event.clientY);
+  };
   const autoScroll = () => {
-    if (!dragging) return;
+    if (!engaged) return;
     const scroller = getEditorScrollContainer(handle);
     const before = scroller?.scrollTop || 0;
     autoScrollEditorWhileDragging(handle, lastY);
-    if (scroller && scroller.scrollTop !== before) move({ clientY: lastY });
+    if (scroller && scroller.scrollTop !== before) reorderTo(lastY);
     scrollFrame = requestAnimationFrame(autoScroll);
   };
   const finish = event => {
-    if (!dragging) return;
-    dragging = false;
+    if (!tracking) return;
+    tracking = false;
+    engaged = false;
     row.classList.remove('is-dragging');
     window.removeEventListener('pointermove', move);
     window.removeEventListener('pointerup', finish);
@@ -432,15 +453,16 @@ function bindEditorDragReorder(row, handleSelector, siblingsSelector, onMove) {
   handle.addEventListener('pointerdown', event => {
     if (event.button !== undefined && event.button !== 0) return;
     event.preventDefault();
-    dragging = true;
+    tracking = true;
+    engaged = false;
+    startX = event.clientX;
+    startY = event.clientY;
     lastY = event.clientY;
-    row.classList.add('is-dragging');
     handle.setPointerCapture?.(event.pointerId);
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', finish);
     window.addEventListener('pointercancel', finish);
     window.addEventListener('blur', finish);
-    scrollFrame = requestAnimationFrame(autoScroll);
   });
   handle.addEventListener('pointerup', finish);
   handle.addEventListener('pointercancel', finish);

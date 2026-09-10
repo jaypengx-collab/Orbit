@@ -1151,7 +1151,8 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .teacher-card .tc-subject{flex:1 1 calc(50% - 4.5px);min-width:min(96px,40%)}
 .teacher-card .tc-teacher{flex:1 1 calc(50% - 4.5px);min-width:min(96px,40%)}
 .teacher-card .tc-location{flex:1 1 100%}
-.teacher-card-body-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
+.teacher-card-body-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%}
+.teacher-card-buttons{display:flex;align-items:center;gap:8px}
 .teacher-card .delete-btn{flex:0 0 auto}
 .teacher-order-actions{display:flex;gap:4px;flex:0 0 auto}
 .teacher-drag-handle,.countdown-drag-handle{min-width:40px;border-radius:12px;line-height:1;background:rgba(255,255,255,.06);display:inline-flex;align-items:center;justify-content:center;width:28px;height:32px;color:var(--sub);font-size:18px;user-select:none;touch-action:none;cursor:grab;transition:background .15s}
@@ -1467,7 +1468,7 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .editor-hint-title{font-size:10px;color:var(--accent);font-weight:700;margin-bottom:3px;letter-spacing:.35px}
 .editor-hint-body{font-size:11px;color:var(--sub);line-height:1.4}
 
-@media (max-width:480px){.editor-fold-summary{padding:11px 12px}.schedule-day-row{padding:13px 13px 13px 11px;border-radius:16px;display:block;overflow:hidden}.schedule-day-label{display:block}.schedule-periods{width:100%;overflow-x:auto;overflow-y:hidden;padding:2px 2px 7px;scroll-snap-type:x proximity;display:flex;flex-wrap:nowrap}.schedule-periods .period-select{width:126px;flex:0 0 126px;min-height:46px;font-size:14px;box-sizing:border-box;scroll-snap-align:start}.teacher-card-summary{padding:12px 11px;gap:8px}.teacher-summary-text{font-size:13.5px}.teacher-card-body{padding:0 11px 13px;gap:9px}.teacher-card .teacher-fields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:9px;width:100%}.teacher-card .tc-subject{grid-column:1 / -1}.teacher-card .teacher-fields .editor-input{display:block;width:100%;max-width:100%;box-sizing:border-box;min-height:44px}.teacher-card-body-actions{width:100%;justify-content:flex-end}.countdown-event-row{margin-bottom:9px;padding:12px 12px 12px 14px}.countdown-event-header{margin-bottom:10px}.countdown-event-fields{gap:9px}}
+@media (max-width:480px){.editor-fold-summary{padding:11px 12px}.schedule-day-row{padding:13px 13px 13px 11px;border-radius:16px;display:block;overflow:hidden}.schedule-day-label{display:block}.schedule-periods{width:100%;overflow-x:auto;overflow-y:hidden;padding:2px 2px 7px;scroll-snap-type:x proximity;display:flex;flex-wrap:nowrap}.schedule-periods .period-select{width:126px;flex:0 0 126px;min-height:46px;font-size:14px;box-sizing:border-box;scroll-snap-align:start}.teacher-card-summary{padding:12px 11px;gap:8px}.teacher-summary-text{font-size:13.5px}.teacher-card-body{padding:0 11px 13px;gap:9px}.teacher-card .teacher-fields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:9px;width:100%}.teacher-card .tc-subject{grid-column:1 / -1}.teacher-card .teacher-fields .editor-input{display:block;width:100%;max-width:100%;box-sizing:border-box;min-height:44px}.countdown-event-row{margin-bottom:9px;padding:12px 12px 12px 14px}.countdown-event-header{margin-bottom:10px}.countdown-event-fields{gap:9px}}
 /* 節次時間/特殊時段 (.bell-row) at phone width: every other element sharing
    the row with the two time inputs (the period-number badge, the row's own
    side padding, the delete button) gets trimmed down here specifically to
