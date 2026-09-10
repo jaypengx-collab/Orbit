@@ -1,38 +1,58 @@
 // ---- cloudflare-worker/orbit-worker.js ----
-// A single Cloudflare Worker serving both of Orbit AI's optional
-// server-side features, routed by path:
+// A single Cloudflare Worker serving Orbit AI's optional server-side
+// features, plus one more app's sync feature, routed by path:
 //
-//   POST      /gemini  - AI schedule-photo import (see src/gemini-ocr.js).
-//                         Holds the real Gemini API key server-side so end
-//                         users never need one of their own.
-//   GET/PATCH/DELETE /sync - cross-device sync (see src/sync.js). Holds a
-//                         Firebase service-account key server-side and
-//                         proxies Firestore, so the pairing code isn't the
-//                         only thing standing between the internet and
-//                         that Firestore project. DELETE wipes the shared
-//                         document outright (see orbitSyncDeleteForEveryone).
+//   POST      /gemini     - AI schedule-photo import (see src/gemini-ocr.js).
+//                            Holds the real Gemini API key server-side so
+//                            end users never need one of their own.
+//   GET/PATCH/DELETE /sync - Orbit's own cross-device schedule sync (see
+//                            src/sync.js).
+//   GET/PATCH/DELETE /vocab-sync - English Vocabulary Tool's cross-device
+//                            progress sync (see that repo's sync.js). Not
+//                            Orbit's own feature - this Worker is simply
+//                            reused as shared infrastructure for a sibling
+//                            static site, so its owner doesn't have to
+//                            stand up and pay attention to a second Worker,
+//                            a second Firebase project, or a second set of
+//                            rate-limit tuning just to give that app the
+//                            same kind of sync. See "==== /vocab-sync"
+//                            below for how it differs from /sync.
+//
+// /sync and /vocab-sync both hold a Firebase service-account key
+// server-side and proxy Firestore, so the pairing code isn't the only thing
+// standing between the internet and that Firestore project. DELETE wipes
+// the shared document outright on either path (see orbitSyncDeleteForEveryone
+// and its vocab-sync equivalent).
 //
 // Combined into one file/one deployment purely for setup convenience - one
 // Worker, one KV binding, one set of secrets to manage - not for any
 // technical reason: Cloudflare's Workers Free plan daily request cap
 // (100,000/day) is per-account, not per-Worker, so splitting these into
-// two Workers never bought any extra headroom in the first place.
+// separate Workers never bought any extra headroom in the first place. The
+// same reasoning is why /vocab-sync reuses the *same* Firebase project and
+// service-account credentials as /sync rather than needing its own - it
+// only needs its own Firestore collection (see VOCAB_SYNC_APP below) and
+// its own rate-limit counters, both cheap to add to an already-deployed
+// Worker.
 //
-// The two features still have very different trust boundaries - /gemini
-// only ever runs a fixed prompt against a submitted image, while /sync
-// holds credentials with full read/write access to the shared Firestore
-// project - so each validates and rate-limits its own requests
-// independently (see isRateLimited: every call passes its own `feature`
-// key, so a burst against one path can never eat into the other's quota)
-// and neither path touches the other's secrets or code.
+// All three routes have very different trust boundaries - /gemini only
+// ever runs a fixed prompt against a submitted image, /sync holds
+// credentials with full read/write access to Orbit's own shared documents,
+// /vocab-sync the same but for a different app's documents - so each
+// validates and rate-limits its own requests independently (see
+// isRateLimited: every call passes its own `feature` key, so a burst
+// against one path can never eat into another's quota) and no path touches
+// another's secrets or code.
 //
-// Both features are entirely optional. Not configuring GEMINI_API_KEY (see
-// handleGeminiRequest) or the FIREBASE_* secrets (see handleSyncRequest)
-// just makes that one path return a "not configured" error - the other
-// still works normally. See README for the one-time setup each needs
-// (paste this file into a new Worker in the Cloudflare dashboard, set
-// whichever secrets apply, point the matching VITE_ORBIT_..._PROXY_URL env
-// var at this Worker's *.workers.dev URL with /gemini or /sync appended).
+// Every feature is entirely optional. Not configuring GEMINI_API_KEY (see
+// handleGeminiRequest) or the FIREBASE_* secrets (see handleSyncRequest,
+// shared by /sync and /vocab-sync) just makes that path (or both sync
+// paths at once, since they share the same Firebase secrets) return a "not
+// configured" error - the other features still work normally. See README
+// for the one-time setup each needs (paste this file into a new Worker in
+// the Cloudflare dashboard, set whichever secrets apply, point the
+// matching proxy-URL env var at this Worker's *.workers.dev URL with
+// /gemini, /sync, or /vocab-sync appended).
 
 const ALLOWED_ORIGINS = ['https://jaypengx-collab.github.io'];
 
@@ -602,6 +622,40 @@ const SYNC_CREATE_RATE_LIMIT = 20;
 // just not the bucket meant for high-frequency legitimate traffic.)
 const SYNC_VERIFY_RATE_LIMIT = 300;
 
+// Same cap as the Firestore rule guarding this collection (see README) -
+// Orbit's own schedule payload is already a compressed transfer string, so
+// this stays small; VOCAB_MAX_PAYLOAD_LENGTH below is far larger because a
+// vocabulary progress snapshot (thousands of words' worth of history) is a
+// fundamentally bigger document, even compressed.
+const ORBIT_MAX_PAYLOAD_LENGTH = MAX_PAYLOAD_LENGTH;
+
+// ---- /vocab-sync's own rate-limit buckets ----------------------------
+//
+// A separate set of counters from /sync's above (see isRateLimited's
+// `feature` keying) - vocab-sync's traffic shape is different enough to
+// tune independently: English Vocabulary Tool has no manager/viewer split
+// (see VOCAB_SYNC_APP's readRequiresPasscode below), so every read is
+// already a credential check and lands in the 'verify' bucket, not 'read' -
+// VOCAB_SYNC_READ_RATE_LIMIT is kept only so the generic handler below
+// always has a number to pass, even though no legitimate request should
+// ever actually consume it.
+const VOCAB_SYNC_READ_RATE_LIMIT = 6000;
+// Generous, since this is the bucket ordinary polling actually lands in
+// here (see above) - same order of magnitude as Orbit's own read limit,
+// since the underlying "how often does an open tab poll" shape is the same
+// activity-driven, throttled-per-touch pattern (see that app's sync.js).
+const VOCAB_SYNC_VERIFY_RATE_LIMIT = 6000;
+const VOCAB_SYNC_WRITE_RATE_LIMIT = 300;
+const VOCAB_SYNC_DELETE_RATE_LIMIT = 20;
+const VOCAB_SYNC_CREATE_RATE_LIMIT = 20;
+// Firestore's own per-document cap is ~1 MiB; this stays well under that
+// even after the JSON request body's other fields and the PATCH body's
+// `passcode` field, while comfortably covering a gzip-compressed snapshot
+// of thousands of words' worth of progress history (see that app's
+// sync.js encodeSyncPayload - orders of magnitude smaller than the
+// uncompressed JSON would be).
+const VOCAB_MAX_PAYLOAD_LENGTH = 900000;
+
 function base64UrlFromBytes(bytes) {
   let binary = '';
   for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
@@ -679,17 +733,21 @@ async function getFirebaseAccessToken(env) {
   return cachedFirebaseToken.token;
 }
 
-function firestoreDocUrl(env, code) {
-  return `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(env.FIREBASE_PROJECT_ID)}/databases/(default)/documents/orbit-schedules/${encodeURIComponent(code)}`;
+// `collection` lets the same helpers below serve both /sync
+// (orbit-schedules) and /vocab-sync (vocab-progress-sync) - see
+// ORBIT_SYNC_APP/VOCAB_SYNC_APP - without duplicating any of this file's
+// actual Firestore/JWT plumbing.
+function firestoreDocUrl(env, collection, code) {
+  return `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(env.FIREBASE_PROJECT_ID)}/databases/(default)/documents/${encodeURIComponent(collection)}/${encodeURIComponent(code)}`;
 }
 async function firestoreErrorMessage(response) {
   const errorJson = await response.json().catch(() => ({}));
   return errorJson.error?.message || response.statusText || `HTTP ${response.status}`;
 }
 
-async function firestoreGet(env, code) {
+async function firestoreGet(env, collection, code) {
   const token = await getFirebaseAccessToken(env);
-  const response = await fetch(firestoreDocUrl(env, code), {
+  const response = await fetch(firestoreDocUrl(env, collection, code), {
     headers: { Authorization: `Bearer ${token}` }
   });
   if (response.status === 404) {
@@ -712,10 +770,10 @@ async function firestoreGet(env, code) {
 // instead of a same-shaped update: without it there'd be nothing here
 // distinguishing "first write" from "later write", and no way to seed
 // managerPasscodeHash at all through the single-field write path.
-async function firestoreCreate(env, code, managerPasscodeHash, payload) {
+async function firestoreCreate(env, collection, code, managerPasscodeHash, payload) {
   const token = await getFirebaseAccessToken(env);
   const response = await fetch(
-    `${firestoreDocUrl(env, code)}?updateMask.fieldPaths=payload&updateMask.fieldPaths=managerPasscodeHash`,
+    `${firestoreDocUrl(env, collection, code)}?updateMask.fieldPaths=payload&updateMask.fieldPaths=managerPasscodeHash`,
     {
       method: 'PATCH',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -735,29 +793,33 @@ async function firestoreCreate(env, code, managerPasscodeHash, payload) {
 // An ordinary write - the single-field mask means this can never touch
 // managerPasscodeHash, however it's called, so a write is never able to
 // change the passcode a document was created with.
-async function firestorePatch(env, code, payload) {
+async function firestorePatch(env, collection, code, payload) {
   const token = await getFirebaseAccessToken(env);
-  const response = await fetch(`${firestoreDocUrl(env, code)}?updateMask.fieldPaths=payload`, {
-    method: 'PATCH',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fields: { payload: { stringValue: payload } } })
-  });
+  const response = await fetch(
+    `${firestoreDocUrl(env, collection, code)}?updateMask.fieldPaths=payload`,
+    {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: { payload: { stringValue: payload } } })
+    }
+  );
   if (!response.ok) throw new Error(await firestoreErrorMessage(response));
   const doc = await response.json();
   return { updateTime: doc.updateTime || '' };
 }
 
 // Wipes the shared document entirely - see src/sync.js's
-// orbitSyncDeleteForEveryone. Unlike unlinking (a purely client-side, one
-// device forgetting its own pairing code), this is the one operation that
-// actually reaches into Firestore and removes the document every paired
-// device reads from, so every device sharing this code loses its sync
-// target at once. A 404 (already gone, e.g. a retry after a dropped
-// response) is treated the same as success - deleting something that's
-// already deleted isn't an error from the caller's point of view.
-async function firestoreDelete(env, code) {
+// orbitSyncDeleteForEveryone (and its vocab-sync client-side equivalent).
+// Unlike unlinking (a purely client-side, one device forgetting its own
+// pairing code), this is the one operation that actually reaches into
+// Firestore and removes the document every paired device reads from, so
+// every device sharing this code loses its sync target at once. A 404
+// (already gone, e.g. a retry after a dropped response) is treated the
+// same as success - deleting something that's already deleted isn't an
+// error from the caller's point of view.
+async function firestoreDelete(env, collection, code) {
   const token = await getFirebaseAccessToken(env);
-  const response = await fetch(firestoreDocUrl(env, code), {
+  const response = await fetch(firestoreDocUrl(env, collection, code), {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${token}` }
   });
@@ -766,8 +828,22 @@ async function firestoreDelete(env, code) {
   }
 }
 
-async function handleSyncCreate(request, env, headers, ip) {
-  const rateLimit = await isRateLimited(env, ip, 'sync:create', SYNC_CREATE_RATE_LIMIT);
+// `appConfig` (see ORBIT_SYNC_APP/VOCAB_SYNC_APP below) is what lets this
+// one pair of functions serve both /sync and /vocab-sync: which Firestore
+// collection, which rate-limit counters/limits, how big a payload is
+// allowed, and whether GET itself requires the passcode (see
+// readRequiresPasscode's own comment on VOCAB_SYNC_APP for why that one
+// differs between the two apps). Every error message, status code, and
+// field name stays byte-for-byte identical to before this was generalized
+// for /sync's own traffic - only the collection/limits/payload cap actually
+// vary per app.
+async function handleSyncCreate(request, env, headers, ip, appConfig) {
+  const rateLimit = await isRateLimited(
+    env,
+    ip,
+    `${appConfig.featurePrefix}:create`,
+    appConfig.createLimit
+  );
   headers['X-RateLimit-Backend'] = rateLimit.backend;
   if (rateLimit.limited) {
     return json({ error: { message: '請求過於頻繁，請稍後再試。' } }, 429, headers);
@@ -780,7 +856,7 @@ async function handleSyncCreate(request, env, headers, ip) {
     return json({ error: { message: 'Invalid JSON body' } }, 400, headers);
   }
   const payload = body?.payload;
-  if (typeof payload !== 'string' || !payload || payload.length > MAX_PAYLOAD_LENGTH) {
+  if (typeof payload !== 'string' || !payload || payload.length > appConfig.maxPayloadLength) {
     return json({ error: { message: 'Missing or invalid payload' } }, 400, headers);
   }
 
@@ -788,14 +864,20 @@ async function handleSyncCreate(request, env, headers, ip) {
     const code = generateSyncCode();
     const managerPasscode = generateSyncCode();
     const managerPasscodeHash = await sha256Hex(managerPasscode);
-    const created = await firestoreCreate(env, code, managerPasscodeHash, payload);
+    const created = await firestoreCreate(
+      env,
+      appConfig.collection,
+      code,
+      managerPasscodeHash,
+      payload
+    );
     return json({ code, managerPasscode, updateTime: created.updateTime }, 200, headers);
   } catch (error) {
     return json({ error: { message: error.message || 'Upstream request failed' } }, 502, headers);
   }
 }
 
-async function handleSyncRequest(request, env, headers, ip) {
+async function handleSyncRequest(request, env, headers, ip, appConfig) {
   if (
     request.method !== 'GET' &&
     request.method !== 'POST' &&
@@ -812,7 +894,7 @@ async function handleSyncRequest(request, env, headers, ip) {
   // Creating a new pairing needs no code at all yet - it mints one - so it
   // branches off before the code-in-query-string handling every other
   // method needs.
-  if (request.method === 'POST') return handleSyncCreate(request, env, headers, ip);
+  if (request.method === 'POST') return handleSyncCreate(request, env, headers, ip, appConfig);
 
   const url = new URL(request.url);
   const code = (url.searchParams.get('code') || '').trim().toUpperCase();
@@ -827,16 +909,46 @@ async function handleSyncRequest(request, env, headers, ip) {
     // SYNC_VERIFY_RATE_LIMIT comment above for why that gets its own
     // bucket instead of sharing ordinary polling's.
     const suppliedPasscode = (url.searchParams.get('passcode') || '').trim();
+    // Orbit's /sync deliberately leaves reads open to anyone holding the
+    // plain sync code (a teacher broadcasting one schedule to many
+    // read-only student devices). An app with no such broadcast/viewer
+    // concept (see appConfig.readRequiresPasscode) has no legitimate
+    // passcode-less GET at all, so refuse it outright rather than ever
+    // handing back that app's payload to a bare code holder.
+    if (appConfig.readRequiresPasscode && !suppliedPasscode) {
+      const rateLimit = await isRateLimited(
+        env,
+        ip,
+        `${appConfig.featurePrefix}:verify`,
+        appConfig.verifyLimit
+      );
+      headers['X-RateLimit-Backend'] = rateLimit.backend;
+      if (rateLimit.limited) {
+        return json({ error: { message: '請求過於頻繁，請稍後再試。' } }, 429, headers);
+      }
+      return json({ error: { message: '需要密碼才能讀取。' } }, 403, headers);
+    }
     const kind = suppliedPasscode ? 'verify' : 'read';
-    const limit = suppliedPasscode ? SYNC_VERIFY_RATE_LIMIT : SYNC_READ_RATE_LIMIT;
-    const rateLimit = await isRateLimited(env, ip, `sync:${kind}`, limit);
+    const limit = suppliedPasscode ? appConfig.verifyLimit : appConfig.readLimit;
+    const rateLimit = await isRateLimited(env, ip, `${appConfig.featurePrefix}:${kind}`, limit);
     headers['X-RateLimit-Backend'] = rateLimit.backend;
     if (rateLimit.limited) {
       return json({ error: { message: '請求過於頻繁，請稍後再試。' } }, 429, headers);
     }
     try {
-      const doc = await firestoreGet(env, code);
+      const doc = await firestoreGet(env, appConfig.collection, code);
       if (!doc.exists) return json({ exists: false, updateTime: '', payload: '' }, 200, headers);
+      if (appConfig.readRequiresPasscode) {
+        const suppliedHash = await sha256Hex(suppliedPasscode);
+        if (suppliedHash !== doc.managerPasscodeHash) {
+          return json({ error: { message: '密碼不正確。' } }, 403, headers);
+        }
+        return json(
+          { exists: true, updateTime: doc.updateTime, payload: doc.payload, role: 'manager' },
+          200,
+          headers
+        );
+      }
       const result = { exists: true, updateTime: doc.updateTime, payload: doc.payload };
       if (suppliedPasscode) {
         const suppliedHash = await sha256Hex(suppliedPasscode);
@@ -849,7 +961,12 @@ async function handleSyncRequest(request, env, headers, ip) {
   }
 
   if (request.method === 'PATCH') {
-    const rateLimit = await isRateLimited(env, ip, 'sync:write', SYNC_WRITE_RATE_LIMIT);
+    const rateLimit = await isRateLimited(
+      env,
+      ip,
+      `${appConfig.featurePrefix}:write`,
+      appConfig.writeLimit
+    );
     headers['X-RateLimit-Backend'] = rateLimit.backend;
     if (rateLimit.limited) {
       return json({ error: { message: '請求過於頻繁，請稍後再試。' } }, 429, headers);
@@ -862,17 +979,17 @@ async function handleSyncRequest(request, env, headers, ip) {
     }
     const payload = body?.payload;
     const passcode = typeof body?.passcode === 'string' ? body.passcode.trim() : '';
-    if (typeof payload !== 'string' || !payload || payload.length > MAX_PAYLOAD_LENGTH) {
+    if (typeof payload !== 'string' || !payload || payload.length > appConfig.maxPayloadLength) {
       return json({ error: { message: 'Missing or invalid payload' } }, 400, headers);
     }
     try {
-      const doc = await firestoreGet(env, code);
+      const doc = await firestoreGet(env, appConfig.collection, code);
       if (!doc.exists) return json({ error: { message: '找不到這組配對代碼。' } }, 404, headers);
       const passcodeHash = passcode ? await sha256Hex(passcode) : '';
       if (!passcode || passcodeHash !== doc.managerPasscodeHash) {
-        return json({ error: { message: '需要正確的管理者密碼才能寫入課表。' } }, 403, headers);
+        return json({ error: { message: '需要正確的密碼才能寫入。' } }, 403, headers);
       }
-      const result = await firestorePatch(env, code, payload);
+      const result = await firestorePatch(env, appConfig.collection, code, payload);
       return json(result, 200, headers);
     } catch (error) {
       return json({ error: { message: error.message || 'Upstream request failed' } }, 502, headers);
@@ -880,31 +997,73 @@ async function handleSyncRequest(request, env, headers, ip) {
   }
 
   // DELETE - same passcode requirement as PATCH above. Takes the passcode
-  // from the query string rather than a body: this app never sends one with
-  // its DELETE requests (see src/sync.js's deleteSyncDoc), matching how
-  // `code` itself is already passed the same way.
-  const rateLimit = await isRateLimited(env, ip, 'sync:delete', SYNC_DELETE_RATE_LIMIT);
+  // from the query string rather than a body: neither app ever sends one
+  // with its DELETE requests, matching how `code` itself is already passed
+  // the same way.
+  const rateLimit = await isRateLimited(
+    env,
+    ip,
+    `${appConfig.featurePrefix}:delete`,
+    appConfig.deleteLimit
+  );
   headers['X-RateLimit-Backend'] = rateLimit.backend;
   if (rateLimit.limited) {
     return json({ error: { message: '請求過於頻繁，請稍後再試。' } }, 429, headers);
   }
   const suppliedPasscode = (url.searchParams.get('passcode') || '').trim();
   try {
-    const doc = await firestoreGet(env, code);
+    const doc = await firestoreGet(env, appConfig.collection, code);
     // Nothing to check a passcode against - already gone (or never
     // existed), same as a 404 from the old design: not an error from the
     // caller's point of view.
     if (!doc.exists) return json({ deleted: true }, 200, headers);
     const passcodeHash = suppliedPasscode ? await sha256Hex(suppliedPasscode) : '';
     if (!suppliedPasscode || passcodeHash !== doc.managerPasscodeHash) {
-      return json({ error: { message: '需要正確的管理者密碼才能刪除整個同步。' } }, 403, headers);
+      return json({ error: { message: '需要正確的密碼才能刪除整個同步。' } }, 403, headers);
     }
-    await firestoreDelete(env, code);
+    await firestoreDelete(env, appConfig.collection, code);
     return json({ deleted: true }, 200, headers);
   } catch (error) {
     return json({ error: { message: error.message || 'Upstream request failed' } }, 502, headers);
   }
 }
+
+// ---- Per-app configuration for the generic handlers above -----------
+//
+// Orbit's own /sync: unchanged behavior from before generalization - reads
+// stay open to any holder of the plain sync code (the teacher/manager
+// broadcasts to many read-only student/viewer devices), only writes and
+// deletes need the manager passcode.
+const ORBIT_SYNC_APP = {
+  collection: 'orbit-schedules',
+  featurePrefix: 'sync',
+  maxPayloadLength: ORBIT_MAX_PAYLOAD_LENGTH,
+  readLimit: SYNC_READ_RATE_LIMIT,
+  verifyLimit: SYNC_VERIFY_RATE_LIMIT,
+  writeLimit: SYNC_WRITE_RATE_LIMIT,
+  deleteLimit: SYNC_DELETE_RATE_LIMIT,
+  createLimit: SYNC_CREATE_RATE_LIMIT,
+  readRequiresPasscode: false
+};
+// English Vocabulary Tool's /vocab-sync: every pairing belongs to one
+// learner syncing their own progress across their own devices - there is
+// no teacher/student broadcast use case the way Orbit has, so there is no
+// viewer role to keep open for. Requiring the passcode for GET too (not
+// just PATCH/DELETE) means a personal learning record can't be read by
+// anyone who only ever learns the plain sync code (e.g. glimpses it over
+// someone's shoulder) - every device that can read this app's progress can
+// also write it, which is fine, since it's the same one learner either way.
+const VOCAB_SYNC_APP = {
+  collection: 'vocab-progress-sync',
+  featurePrefix: 'vocab-sync',
+  maxPayloadLength: VOCAB_MAX_PAYLOAD_LENGTH,
+  readLimit: VOCAB_SYNC_READ_RATE_LIMIT,
+  verifyLimit: VOCAB_SYNC_VERIFY_RATE_LIMIT,
+  writeLimit: VOCAB_SYNC_WRITE_RATE_LIMIT,
+  deleteLimit: VOCAB_SYNC_DELETE_RATE_LIMIT,
+  createLimit: VOCAB_SYNC_CREATE_RATE_LIMIT,
+  readRequiresPasscode: true
+};
 
 // ==== Routing ================================================================
 
@@ -919,7 +1078,8 @@ export default {
     const path = new URL(request.url).pathname.replace(/\/+$/, '');
 
     if (path === '/gemini') return handleGeminiRequest(request, env, headers, ip);
-    if (path === '/sync') return handleSyncRequest(request, env, headers, ip);
+    if (path === '/sync') return handleSyncRequest(request, env, headers, ip, ORBIT_SYNC_APP);
+    if (path === '/vocab-sync') return handleSyncRequest(request, env, headers, ip, VOCAB_SYNC_APP);
     return json({ error: { message: 'Not found' } }, 404, headers);
   }
 };

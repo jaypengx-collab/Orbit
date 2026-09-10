@@ -243,16 +243,26 @@ npm run format       # Prettier 格式化（不含 index.html／css/styles.css�
    rules_version = '2';
    service cloud.firestore {
      match /databases/{database}/documents {
-       match /orbit-schedules/{doc} {
+       match /{document=**} {
          allow read, write: if false;
        }
      }
    }
    ```
-   服務帳戶的存取本來就不受 Firestore 規則限制（跟 Admin SDK 一樣），所以這條規則只影響「繞過 Worker、直接打 Firestore」的請求——把它整個關掉，才是這個 Worker 真正的意義：不是多一層檢查，是拿掉原本永遠開著的那道門。
+   服務帳戶的存取本來就不受 Firestore 規則限制（跟 Admin SDK 一樣），所以這條規則只影響「繞過 Worker、直接打 Firestore」的請求——把它整個關掉，才是這個 Worker 真正的意義：不是多一層檢查，是拿掉原本永遠開著的那道門。用萬用字元 `{document=**}` 涵蓋整個資料庫，而不是只列 `orbit-schedules`，是因為同一個 Firebase 專案、同一組服務帳戶也同時服務 `/vocab-sync`（見下方），寫成萬用字元就不用每多一個共用同步功能都回來改一次規則。
 7. 複製 Worker 網址，**加上 `/sync`**。GitHub 專案 Settings → Secrets and variables → Actions → **Variables**，新增 `VITE_ORBIT_SYNC_PROXY_URL`，值是這個含 `/sync` 的完整網址。推送到 `main` 後站台建置時內建進去。
 
 沒做這套設定（`VITE_ORBIT_SYNC_PROXY_URL` 留空，例如自建 fork）的話，跨裝置同步這整個功能就不可用——不會退回成直連 Firestore 的舊模式（那個模式已經移除：Firestore 規則沒辦法計數請求次數，等於形同虛設的流量限制）。
+
+### 這支 Worker 同時也服務 English Vocabulary Tool 的同步功能
+
+`cloudflare-worker/orbit-worker.js` 除了 `/sync`、`/gemini` 之外，還多了一個 `/vocab-sync` 路徑——服務姊妹專案 [English Vocabulary Tool](https://github.com/jaypengx-collab/English-Vocabulary-Tool) 的跨裝置學習進度同步。這不是 Orbit 自己的功能，純粹是把已經部署好的這支 Worker 當成共用基礎設施重複利用，不用為了另一個純前端小工具再申請一次 Firebase 專案、再部署一支 Worker、再重新調一次流量限制：
+
+- 用**同一個** Firebase 專案、**同一組**服務帳戶密鑰（`FIREBASE_PROJECT_ID`／`FIREBASE_CLIENT_EMAIL`／`FIREBASE_PRIVATE_KEY`）——完成上方〈跨裝置同步〉的設定後，`/vocab-sync` 不需要任何額外的 Secret。
+- 存進不同的 Firestore collection（`vocab-progress-sync`，而不是 Orbit 自己用的 `orbit-schedules`），並且用獨立的流量計數器（`vocab-sync:*`，見 `orbit-worker.js` 裡的 `VOCAB_SYNC_*` 常數），彼此互不影響——`/vocab-sync` 被濫用不會吃掉 `/sync` 或 `/gemini` 的額度，反之亦然。
+- 配對代碼／密碼機制與 `/sync` 相同，但**沒有「僅接收」角色**：`/vocab-sync` 的讀取（`GET`）也需要密碼才能成功，不像 `/sync` 讀取本身不設防——因為英文單字工具的同步情境是「同一個學習者的自己的多台裝置」，不是「一位老師的課表廣播給很多學生唯讀」，沒有必要留一個誰都能讀的公開讀取權限（見 `orbit-worker.js` 裡 `VOCAB_SYNC_APP.readRequiresPasscode` 旁的註解）。
+- 部署者只要照上方〈AI 辨識課表照片〉與〈跨裝置同步〉的步驟部署過這一支 Worker、且完成 Firestore 服務帳戶設定，`/vocab-sync` 就自動可用；把 Worker 網址**加上 `/vocab-sync`**，設進 English Vocabulary Tool 那個 repo 對應的 GitHub Actions 變數即可（細節見該 repo 的 README）。
+- 這是單向依賴：Orbit 完全不需要知道 English Vocabulary Tool 的存在也能正常運作，`/vocab-sync` 只是這支 Worker 多服務的一個路徑，不會出現在 Orbit 自己的網頁或程式碼裡。
 
 ---
 
