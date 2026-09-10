@@ -665,6 +665,10 @@ function openModal(c) {
 window.closeModal = closeModal;
 window.closeTestPanel = closeTestPanel;
 window.handleNav = handleNav;
+window.openTestPanel = openTestPanel; // testsim-runtime.js's patchPanelOpeners()
+// monkey-patches this (see applyPendingSheetAfterDiscard in editor-core.js for why
+// callers go through window.openTestPanel() rather than the bare function) - it
+// needs the real function bound here first, or it wraps undefined.
 window.toggleActionMenu = toggleActionMenu;
 window.toggleTestPanel = toggleTestPanel;
 window.update = update; // testsim-runtime.js monkey-patches this; every
