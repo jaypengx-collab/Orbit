@@ -277,7 +277,6 @@ function fitNowTitleText(force = false) {
     const paddingY = (parseFloat(styles.paddingTop) || 0) + (parseFloat(styles.paddingBottom) || 0);
     const gap = parseFloat(styles.rowGap || styles.gap) || 0;
     const metaVisible = meta && getComputedStyle(meta).display !== 'none';
-    const metaWidth = metaVisible ? Math.ceil(meta.getBoundingClientRect().width) : 0;
     // Reserve the meta row's own min-height (see .now-meta-row in
     // styles.css) even when it's hidden (.is-status), rather than 0 - a
     // no-class/break status message has nothing to put there, but sizing it
@@ -287,10 +286,16 @@ function fitNowTitleText(force = false) {
     // keeps status text sized to resonate with class text instead of
     // ballooning past it.
     const metaHeight = metaVisible ? Math.ceil(meta.getBoundingClientRect().height) : 20;
-    const available = Math.max(
-      72,
-      Math.floor(stack.clientWidth - paddingX - (metaWidth ? metaWidth + gap : 0))
-    );
+    // Width-wise, the meta row costs the title nothing - .now-stack stacks
+    // the title and meta row as separate rows (see its own grid-template-
+    // columns: a single column), not side by side, so the title always gets
+    // the box's full width regardless of how wide the teacher/room chips
+    // happen to be. (An earlier layout did put them side by side, which is
+    // why a metaWidth subtraction briefly lived here - stale after the
+    // redesign, and directly at fault for names that should wrap onto two
+    // big lines instead getting squeezed into a much narrower column than
+    // they actually had.)
+    const available = Math.max(72, Math.floor(stack.clientWidth - paddingX));
     // The starting size used to be a flat constant, which left a title sized
     // for a short/cramped box surrounded by dead air once .now-stack had
     // more room than that guess assumed (a tall dashboard share, a short
