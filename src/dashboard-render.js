@@ -444,11 +444,16 @@ function fitNextMetaText(force = false) {
     }
   });
 }
-// Same fallback as fitNextMetaText just above - shrink the chip's own text
-// first, and only fall back to letting it wrap onto a second line once even
-// the smallest legible size still doesn't fit - so a long teacher/room name
-// here behaves the same way a long one in the next-class line does, instead
-// of the plain ellipsis clip these chips used to do at a fixed size.
+// Shrink only, unlike fitNextMetaText's shrink-then-wrap - these chips sit
+// in .now-meta-row, inside the same .now-stack box as the current-class
+// title, so a chip that wraps onto a second line grows taller and eats into
+// the title's own share of that box's height. #next-meta-text doesn't have
+// that problem (it's alone in .time-card, not fighting anything else for
+// room), which is exactly why it can afford to wrap. Here, ellipsis - not a
+// second line - is the true last resort once even minSize doesn't fit,
+// which is just what happens if shrinkFontToFit alone can't get it under
+// `available`: the chip's own CSS (white-space:nowrap;text-overflow:
+// ellipsis) takes over with no extra styling needed from this function.
 const nowMetaFitState = { key: '', raf: 0 };
 function fitNowMetaChips(force = false) {
   const chips = ['now-teacher', 'now-place']
@@ -464,21 +469,16 @@ function fitNowMetaChips(force = false) {
 
   nowMetaFitState.raf = requestAnimationFrame(() => {
     chips.forEach(el => {
-      el.classList.remove('wrap-2l');
       el.style.fontSize = '';
       const defaultSize = parseFloat(getComputedStyle(el).fontSize) || 11.5;
       const minSize = Math.max(9, Math.round(defaultSize * 0.62));
-      // clientWidth, not the content box alone - scrollWidth (what this is
-      // compared against, in shrinkFontToFit and below) is measured on that
-      // same padding-included basis, so the two have to match or a short
-      // name that fits perfectly reads as overflowing by exactly paddingX.
+      // clientWidth, not the content box alone - scrollWidth (what
+      // shrinkFontToFit compares it against) is measured on that same
+      // padding-included basis, so the two have to match or a short name
+      // that fits perfectly reads as overflowing by exactly paddingX.
       const available = Math.floor(el.clientWidth);
       if (!available) return;
       shrinkFontToFit(el, available, defaultSize, minSize);
-      if (el.scrollWidth > available + 1) {
-        el.style.fontSize = defaultSize + 'px';
-        el.classList.add('wrap-2l');
-      }
     });
   });
 }

@@ -575,12 +575,6 @@ body.editor-open .top-actions,body.transfer-open .top-actions{opacity:0;visibili
 #now-teacher.show{display:block}
 #now-place{display:none;width:max-content;background:color-mix(in srgb,var(--current-class-color,var(--accent)) 14%,transparent);backdrop-filter:blur(10px) saturate(var(--glass-sat));-webkit-backdrop-filter:blur(10px) saturate(var(--glass-sat));color:var(--current-class-color,var(--accent));font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;line-height:1.15;max-width:46vw;min-height:20px;padding:3px 8px;border-radius:10px;font-size:11.5px}
 #now-place.show{display:block}
-/* Same last-resort fallback as #next-meta-text.wrap-2l - fitNowMetaChips()
-   (dashboard-render.js) only adds this once shrinking the chip's own text
-   down to its minimum legible size still isn't enough to fit, so a long
-   teacher/room name wraps here the same way a long one does in the
-   next-class line instead of just clipping with an ellipsis. */
-#now-teacher.wrap-2l,#now-place.wrap-2l{white-space:normal;text-wrap:balance}
 .dashboard-class-label{min-height:20px;max-width:100%;padding:2px 7px;font-size:11px;text-align:center;line-height:1.2;display:none;width:max-content;border-radius:999px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--current-class-color,var(--accent));background:transparent;border:0}
 .dashboard-class-label.show{display:block}
 @media (max-width:360px){#now-teacher,#now-place,.dashboard-class-label{padding-inline:6px}}
