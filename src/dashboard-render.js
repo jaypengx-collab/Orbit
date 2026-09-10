@@ -357,20 +357,22 @@ function fitNowTitleText(force = false) {
     // single-line savings that nobody would even notice.
     const singleLineSize = parseFloat(title.style.fontSize) || defaultSize;
     if (singleLineSize < defaultSize * 0.85 - 0.5) {
+      // 0 means no size between singleLineSize and defaultSize gets the
+      // *whole* name onto two lines - never settle for a bigger two-line
+      // size that would need to cut the name off to fit. Bigger-but-
+      // incomplete is not an improvement over smaller-but-complete.
       const wrapSize = fitTwoLineTitle(title, availableHeight, singleLineSize, defaultSize);
       if (wrapSize > singleLineSize + 1) {
         title.style.whiteSpace = 'normal';
         title.style.wordBreak = 'normal';
-        title.style.display = '-webkit-box';
-        title.style.webkitBoxOrient = 'vertical';
-        title.style.webkitLineClamp = '2';
-        title.style.overflow = 'hidden';
-        title.style.textOverflow = 'ellipsis';
+        title.style.display = 'block';
+        title.style.overflow = 'visible';
+        title.style.textOverflow = 'clip';
         title.style.fontSize = Math.floor(wrapSize) + 'px';
       } else {
-        // Wrapping didn't buy enough to be worth it - back out the wrap
-        // styling the search below applied while probing and keep the
-        // one-line fit instead.
+        // Wrapping didn't buy enough to be worth it (or couldn't fit the
+        // whole name at all) - back out the wrap styling the search below
+        // applied while probing and keep the one-line fit instead.
         title.style.whiteSpace = 'nowrap';
         title.style.wordBreak = 'keep-all';
         title.style.display = 'block';
@@ -379,6 +381,19 @@ function fitNowTitleText(force = false) {
         title.style.fontSize = Math.floor(singleLineSize) + 'px';
       }
     }
+    // Neither path above is actually guaranteed complete on its own:
+    // shrinkFontToFit's minSize is a legibility floor, not a fit guarantee -
+    // an extreme enough name can still overflow at minSize, and since
+    // .now-stack clips overflow-x, that would silently cut text off with no
+    // visual cue at all (worse than an ellipsis, which at least says
+    // "there's more"). If the one-line result currently in effect still
+    // doesn't fit, keep applying the same shrink rule below the normal
+    // floor, all the way down to 8px if it has to, rather than let that
+    // happen - so the name is always fully visible, just very small in the
+    // rare case it has to be.
+    if (title.style.whiteSpace === 'nowrap' && title.scrollWidth > available + 1) {
+      shrinkFontToFit(title, available, minSize, 8);
+    }
   });
 }
 // Finds the font-size to use if `el` wraps onto two lines instead of the one
@@ -386,14 +401,14 @@ function fitNowTitleText(force = false) {
 // already had to shrink below defaultSize, meaning there's width pressure a
 // second line could relieve. Two lines share out availableHeight, which
 // bounds how big either line can get (`geometryMax`) regardless of how much
-// text there actually is - a name long enough to still overflow that gets
-// truncated with an ellipsis by the -webkit-line-clamp the caller applies,
-// same as an overlong single line would otherwise just get silently clipped
-// by .now-stack's own overflow-x:hidden. Below that ceiling, prefer whatever
-// size lets the whole name actually finish within two real lines with no
-// ellipsis at all - checked by measuring `el` itself with wrapping turned on,
-// since that's the only way to know how many lines a given size wraps a given
-// name into.
+// text there actually is. Only ever returns a size that fits the *entire*
+// name within two real lines with no truncation - checked by measuring `el`
+// itself with wrapping turned on, since that's the only way to know how many
+// lines a given size wraps a given name into. Returns 0 (never adopted by
+// the caller) when nothing between minSize and geometryMax manages that: a
+// bigger two-line rendering that has to cut the name off is never preferred
+// over the smaller, already-complete one-line result the caller falls back
+// to instead - there is no ellipsis fallback here on purpose.
 function fitTwoLineTitle(el, availableHeight, minSize, maxSize) {
   el.style.whiteSpace = 'normal';
   el.style.wordBreak = 'normal';
@@ -403,21 +418,18 @@ function fitTwoLineTitle(el, availableHeight, minSize, maxSize) {
   const geometryMax = availableHeight / (2 * lineHeightRatio);
   let lo = minSize,
     hi = Math.min(maxSize, geometryMax),
-    noTruncationBest = 0;
+    best = 0;
   for (let i = 0; i < 18; i++) {
     const mid = (lo + hi) / 2;
     el.style.fontSize = mid + 'px';
     if (el.scrollHeight <= mid * lineHeightRatio * 2 + 3) {
-      noTruncationBest = mid;
+      best = mid;
       lo = mid;
     } else {
       hi = mid;
     }
   }
-  // Nothing in range fits the full name without truncating - the name is
-  // long enough that it'll need an ellipsis no matter how small it goes, so
-  // there's no reason to shrink further than the height ceiling allows.
-  return noTruncationBest > 0 ? noTruncationBest : Math.min(maxSize, geometryMax);
+  return best;
 }
 // A single line reads better than two, so try shrinking the "10:10 · 徐蓉莉
 // · 第三會議室" line to fit before ever wrapping it - only fall back to a
