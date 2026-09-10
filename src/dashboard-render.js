@@ -290,19 +290,23 @@ function fitNowTitleText(force = false) {
     // extra height goes here, so the title needs to actually grow into it
     // instead of stopping at a number picked for the smallest case. Sized
     // off the box's real available height (minus meta row + gap) rather
-    // than guessed. .6 and the 68px cap are deliberately conservative -
-    // an earlier pass here filled the box far more aggressively (.92, no
-    // real cap) and it read as oversized/blocky rather than "filling the
-    // space", so this leaves clear breathing room above/below instead of
-    // the glyph crowding the box edges. minDefaultSize (see above) is
-    // still the floor, so it never drops below timer-badge/title-next's
-    // own ceilings even in a short box.
+    // than guessed. .78 and the 84px cap replace an earlier, more
+    // conservative .6/68px pass picked back when .now-stack and .time-card
+    // still had a visible gap between them - now that they sit flush as one
+    // merged panel (see styles.css's own comment on that), .now-stack has
+    // more real height to work with, and .78/84 was retuned against that
+    // bigger box rather than left pointed at the smaller one. Still short of
+    // the once-tried .92/no-cap pass that read as oversized/blocky - this
+    // keeps a bit of breathing room above/below instead of the glyph
+    // crowding the box edges. minDefaultSize (see above) is still the
+    // floor, so it never drops below timer-badge/title-next's own ceilings
+    // even in a short box.
     const availableHeight = Math.max(
       0,
       stack.clientHeight - paddingY - (metaVisible ? metaHeight + gap : 0)
     );
-    const heightDefaultSize = Math.floor(availableHeight * 0.6);
-    const defaultSize = Math.max(minDefaultSize, Math.min(heightDefaultSize, 68));
+    const heightDefaultSize = Math.floor(availableHeight * 0.78);
+    const defaultSize = Math.max(minDefaultSize, Math.min(heightDefaultSize, 84));
 
     title.style.whiteSpace = 'nowrap';
     title.style.wordBreak = 'keep-all';
@@ -321,13 +325,17 @@ function fitNowTitleText(force = false) {
     // when the box still has plenty of height to spare - that's the "empty
     // gap" between the current-class card and the next-class/timer card
     // below it that a long single-line name leaves unused once it's been
-    // shrunk small enough to fit. If that happened (the name didn't already
-    // fit at defaultSize) and there's enough headroom for two lines, prefer
-    // wrapping onto a second line at a bigger size over squeezing further
-    // onto one - it fills that space with legible text instead of leaving
-    // it blank.
+    // shrunk small enough to fit. If that shrink was substantial (the name
+    // didn't just barely miss defaultSize) and there's enough headroom for
+    // two lines, prefer wrapping onto a second line at a bigger size over
+    // squeezing further onto one - it fills that space with legible text
+    // instead of leaving it blank. The 15%-of-defaultSize floor here matters:
+    // without it, a short fixed status string (今日無課 etc.) that only
+    // barely overflows one line at the new, taller defaultSize would get
+    // needlessly split across two much-too-large lines for a few px of
+    // single-line savings that nobody would even notice.
     const singleLineSize = parseFloat(title.style.fontSize) || defaultSize;
-    if (singleLineSize < defaultSize - 0.5) {
+    if (singleLineSize < defaultSize * 0.85 - 0.5) {
       const wrapSize = fitTwoLineTitle(title, availableHeight, singleLineSize, defaultSize);
       if (wrapSize > singleLineSize + 1) {
         title.style.whiteSpace = 'normal';
