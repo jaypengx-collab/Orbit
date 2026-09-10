@@ -1135,15 +1135,25 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
   display:flex;flex-direction:column;gap:0;border-radius:16px;
   border:1px solid var(--bd);background:rgba(255,255,255,.04);overflow:hidden;
 }
-.teacher-card{background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,.08);border-radius:0;padding:13px 12px;width:100%;max-width:100%;display:flex;flex-wrap:wrap;align-items:center;gap:9px;box-sizing:border-box;transition:box-shadow .15s,transform .15s,opacity .15s,background .15s}
+.teacher-card{background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,.08);border-radius:0;width:100%;max-width:100%;box-sizing:border-box;transition:box-shadow .15s,transform .15s,opacity .15s,background .15s}
 .teacher-card:last-child{border-bottom:none}
 .teacher-card.is-dragging{transform:scale(.985);box-shadow:0 8px 24px rgba(0,0,0,.25);opacity:.55;background:rgba(255,255,255,.07);outline:2px solid var(--accent)}
+.teacher-card-summary{display:flex;flex-wrap:nowrap;align-items:center;gap:9px;padding:13px 12px;cursor:pointer;user-select:none}
 .teacher-avatar{--avatar-hue:210;width:28px;height:28px;border-radius:50%;background:hsla(var(--avatar-hue),70%,55%,.18);color:hsl(var(--avatar-hue),70%,60%);font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1px solid hsla(var(--avatar-hue),70%,55%,.35)}
+.teacher-summary-text{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14.5px;font-weight:650;color:var(--txt)}
+.teacher-summary-text.is-empty{color:var(--sub);font-weight:500}
+.teacher-card-toggle{flex:0 0 auto;width:26px;height:26px;border:0;border-radius:8px;background:rgba(255,255,255,.06);color:var(--sub);font-size:13px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .18s,background .15s}
+.teacher-card.is-expanded .teacher-card-toggle{transform:rotate(180deg)}
+.teacher-card-body{display:none;flex-wrap:wrap;align-items:center;gap:9px;padding:0 12px 13px}
+.teacher-card.is-expanded .teacher-card-body{display:flex}
 .teacher-fields{display:contents}
-.teacher-card .tc-subject{flex:1 1 calc(50% - 4px);min-width:min(96px,40%)}
-.teacher-card .tc-teacher{flex:1 1 calc(50% - 4px);min-width:min(96px,40%)}
-.teacher-card .delete-btn{margin-left:auto;align-self:center;flex:0 0 auto}
-.teacher-order-actions{display:flex;gap:4px;margin-left:auto}
+.teacher-card .teacher-fields{display:flex;flex-wrap:wrap;gap:9px;flex:1 1 100%;min-width:0}
+.teacher-card .tc-subject{flex:1 1 calc(50% - 4.5px);min-width:min(96px,40%)}
+.teacher-card .tc-teacher{flex:1 1 calc(50% - 4.5px);min-width:min(96px,40%)}
+.teacher-card .tc-location{flex:1 1 100%}
+.teacher-card-body-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
+.teacher-card .delete-btn{flex:0 0 auto}
+.teacher-order-actions{display:flex;gap:4px;flex:0 0 auto}
 .teacher-drag-handle,.countdown-drag-handle{min-width:40px;border-radius:12px;line-height:1;background:rgba(255,255,255,.06);display:inline-flex;align-items:center;justify-content:center;width:28px;height:32px;color:var(--sub);font-size:18px;user-select:none;touch-action:none;cursor:grab;transition:background .15s}
 .countdown-drag-handle{width:40px;height:40px}
 .teacher-drag-handle:active,.countdown-drag-handle:active{cursor:grabbing;background:color-mix(in srgb,var(--accent) 18%,transparent)}
@@ -1457,7 +1467,7 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .editor-hint-title{font-size:10px;color:var(--accent);font-weight:700;margin-bottom:3px;letter-spacing:.35px}
 .editor-hint-body{font-size:11px;color:var(--sub);line-height:1.4}
 
-@media (max-width:480px){.editor-fold-summary{padding:11px 12px}.schedule-day-row{padding:13px 13px 13px 11px;border-radius:16px;display:block;overflow:hidden}.schedule-day-label{display:block}.schedule-periods{width:100%;overflow-x:auto;overflow-y:hidden;padding:2px 2px 7px;scroll-snap-type:x proximity;display:flex;flex-wrap:nowrap}.schedule-periods .period-select{width:126px;flex:0 0 126px;min-height:46px;font-size:14px;box-sizing:border-box;scroll-snap-align:start}.teacher-card{position:relative;margin-bottom:10px;display:block;width:100%;border-radius:14px;padding:14px 14px 14px 12px}.teacher-card .teacher-fields{display:grid;margin:0;grid-template-columns:minmax(0,1fr) minmax(0,1fr);margin-top:0;gap:10px;width:calc(100% - 44px)}.teacher-card .tc-subject{grid-column:1 / -1}.teacher-card .teacher-fields .editor-input{display:block;width:100%;max-width:100%;box-sizing:border-box;min-height:44px}.teacher-card .teacher-avatar{margin:0 0 8px}.teacher-card .delete-btn{position:absolute;min-width:28px;width:28px;height:28px;padding:0;top:auto;right:11px;bottom:11px}.teacher-card .teacher-order-actions{align-items:center;margin-top:10px;display:flex;gap:7px}.teacher-card .teacher-order-actions .teacher-drag-handle{order:-1}.countdown-event-row{margin-bottom:9px;padding:12px 12px 12px 14px}.countdown-event-header{margin-bottom:10px}.countdown-event-fields{gap:9px}}
+@media (max-width:480px){.editor-fold-summary{padding:11px 12px}.schedule-day-row{padding:13px 13px 13px 11px;border-radius:16px;display:block;overflow:hidden}.schedule-day-label{display:block}.schedule-periods{width:100%;overflow-x:auto;overflow-y:hidden;padding:2px 2px 7px;scroll-snap-type:x proximity;display:flex;flex-wrap:nowrap}.schedule-periods .period-select{width:126px;flex:0 0 126px;min-height:46px;font-size:14px;box-sizing:border-box;scroll-snap-align:start}.teacher-card-summary{padding:12px 11px;gap:8px}.teacher-summary-text{font-size:13.5px}.teacher-card-body{padding:0 11px 13px;gap:9px}.teacher-card .teacher-fields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:9px;width:100%}.teacher-card .tc-subject{grid-column:1 / -1}.teacher-card .teacher-fields .editor-input{display:block;width:100%;max-width:100%;box-sizing:border-box;min-height:44px}.teacher-card-body-actions{width:100%;justify-content:flex-end}.countdown-event-row{margin-bottom:9px;padding:12px 12px 12px 14px}.countdown-event-header{margin-bottom:10px}.countdown-event-fields{gap:9px}}
 /* 節次時間/特殊時段 (.bell-row) at phone width: every other element sharing
    the row with the two time inputs (the period-number badge, the row's own
    side padding, the delete button) gets trimmed down here specifically to

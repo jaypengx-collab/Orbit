@@ -58,13 +58,21 @@ function generateTeacherKey() {
   return key;
 }
 
-// Creates one editable teacher row.
-function makeTeacherCard(key, subject, teacher, location) {
+// Creates one editable teacher row. Collapsed by default (pass
+// options.expanded to start open, used for a freshly-added blank row) so a
+// long class list reads as a scannable stack of summaries instead of a wall
+// of open fields - the drag handle and order-position input stay visible on
+// the collapsed summary either way, since reordering shouldn't require
+// opening a card first.
+function makeTeacherCard(key, subject, teacher, location, options = {}) {
+  const expanded = !!options.expanded;
   const div = document.createElement('div');
-  div.className = 'teacher-card';
+  div.className = expanded ? 'teacher-card is-expanded' : 'teacher-card';
   div.dataset.origKey = key;
-  div.innerHTML = `<div class="teacher-avatar"></div><div class="teacher-fields"><input class="editor-input tc-subject" placeholder="科目" value="${esc(subject)}"><input class="editor-input tc-teacher" placeholder="教師" value="${esc(teacher)}"><input class="editor-input tc-location" placeholder="教室(選填)" value="${esc(location || '')}"></div><div class="teacher-order-actions"><span class="teacher-drag-handle" role="button" tabindex="0" title="拖曳排序" aria-label="拖曳排序">☰</span><label class="order-position-label">順序<input class="order-position" type="number" min="1" inputmode="numeric" aria-label="科目教師順序"></label><button type="button" class="teacher-assign" onclick="assignTeacherFromMenu(this)" aria-label="指定課節">排課</button><button type="button" class="delete-btn" onclick="deleteTeacherCard(this)" aria-label="刪除">×</button></div>`;
+  div.innerHTML = `<div class="teacher-card-summary"><div class="teacher-avatar"></div><div class="teacher-summary-text"></div><div class="teacher-order-actions"><span class="teacher-drag-handle" role="button" tabindex="0" title="拖曳排序" aria-label="拖曳排序">☰</span><label class="order-position-label">順序<input class="order-position" type="number" min="1" inputmode="numeric" aria-label="科目教師順序"></label></div><button type="button" class="teacher-card-toggle" aria-expanded="${expanded}" aria-label="展開編輯">⌄</button></div><div class="teacher-card-body"><div class="teacher-fields"><input class="editor-input tc-subject" placeholder="科目" value="${esc(subject)}"><input class="editor-input tc-teacher" placeholder="教師" value="${esc(teacher)}"><input class="editor-input tc-location" placeholder="教室(選填)" value="${esc(location || '')}"></div><div class="teacher-card-body-actions"><button type="button" class="teacher-assign" onclick="assignTeacherFromMenu(this)" aria-label="指定課節">排課</button><button type="button" class="delete-btn" onclick="deleteTeacherCard(this)" aria-label="刪除">×</button></div></div>`;
   updateTeacherCardAvatar(div);
+  updateTeacherCardSummary(div);
+  bindTeacherCardToggle(div);
   const positionInput = div.querySelector('.order-position');
   positionInput.addEventListener('change', event =>
     moveEditorRowToPosition(div, event.target.value, '#teacher-list .teacher-card')
@@ -83,9 +91,14 @@ function makeTeacherCard(key, subject, teacher, location) {
 
   div.querySelector('.tc-subject').addEventListener('input', function () {
     updateTeacherCardAvatar(div);
+    updateTeacherCardSummary(div);
     refreshPeriodSelectOptionsDebounced();
   });
-  div.querySelector('.tc-teacher').addEventListener('input', refreshPeriodSelectOptionsDebounced);
+  div.querySelector('.tc-teacher').addEventListener('input', function () {
+    updateTeacherCardSummary(div);
+    refreshPeriodSelectOptionsDebounced();
+  });
+  div.querySelector('.tc-location').addEventListener('input', () => updateTeacherCardSummary(div));
 
   return div;
 }
@@ -99,6 +112,37 @@ function updateTeacherCardAvatar(card) {
   const hue = subjectHue(subject);
   avatar.textContent = initial;
   avatar.style.setProperty('--avatar-hue', String(hue));
+}
+
+// Updates a collapsed teacher card's one-line summary from its current field
+// values, so the class is still identifiable without opening it.
+function updateTeacherCardSummary(card) {
+  const label = card.querySelector('.teacher-summary-text');
+  if (!label) return;
+  const subject = (card.querySelector('.tc-subject')?.value || '').trim();
+  const teacher = (card.querySelector('.tc-teacher')?.value || '').trim();
+  const location = (card.querySelector('.tc-location')?.value || '').trim();
+  const parts = [];
+  if (subject && teacher) parts.push(`${subject}（${teacher}）`);
+  else parts.push(subject || teacher || '未命名科目');
+  if (location) parts.push(location);
+  label.textContent = parts.join(' · ');
+  label.classList.toggle('is-empty', !subject && !teacher);
+}
+
+// Toggles a teacher card's editable body open/closed on click, ignoring
+// clicks on the drag handle or order-position input so reordering and
+// renumbering still work without opening the card.
+function bindTeacherCardToggle(card) {
+  const summary = card.querySelector('.teacher-card-summary');
+  summary.addEventListener('click', event => {
+    if (event.target.closest('.teacher-order-actions')) return;
+    setTeacherCardExpanded(card, !card.classList.contains('is-expanded'));
+  });
+}
+function setTeacherCardExpanded(card, expanded) {
+  card.classList.toggle('is-expanded', expanded);
+  card.querySelector('.teacher-card-toggle')?.setAttribute('aria-expanded', String(expanded));
 }
 let pendingAssignment = null;
 let assignmentDraft = null;
@@ -264,9 +308,10 @@ function refreshTeacherMoveButtons() {
   });
 }
 
-// Adds a blank teacher row to the editor.
+// Adds a blank teacher row to the editor, opened so it can be filled in
+// right away.
 function addTeacherRow() {
-  const card = makeTeacherCard(generateTeacherKey(), '', '');
+  const card = makeTeacherCard(generateTeacherKey(), '', '', '', { expanded: true });
   card.classList.add('row-enter');
   document.getElementById('teacher-list').appendChild(card);
   refreshPeriodSelectOptions();
