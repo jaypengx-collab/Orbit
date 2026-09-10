@@ -42,6 +42,7 @@ import {
 import {
   hideEditorDiscardConfirm,
   setEditorConfirmContent,
+  setStatusText,
   showEditorConfirmSheet
 } from './editor-core.js';
 
@@ -120,6 +121,13 @@ function writeLocal(key, value) {
     /* localStorage unavailable (private browsing, etc.) */
   }
 }
+function readLocalJSON(key) {
+  try {
+    return JSON.parse(readLocal(key) || 'null');
+  } catch {
+    return null;
+  }
+}
 
 function isSyncProxyConfigured() {
   return !!SYNC_PROXY_URL;
@@ -166,21 +174,13 @@ function setSyncKeepLocalStyle(value) {
   writeLocal(KEEP_LOCAL_STYLE_KEY, value ? '1' : '');
 }
 function getLastKnownSharedStyle() {
-  try {
-    return JSON.parse(readLocal(LAST_KNOWN_SHARED_STYLE_KEY) || 'null');
-  } catch {
-    return null;
-  }
+  return readLocalJSON(LAST_KNOWN_SHARED_STYLE_KEY);
 }
 function setLastKnownSharedStyle(data) {
   writeLocal(LAST_KNOWN_SHARED_STYLE_KEY, JSON.stringify(styleFieldsOf(data)));
 }
 function getStyleBackup() {
-  try {
-    return JSON.parse(readLocal(STYLE_BACKUP_KEY) || 'null');
-  } catch {
-    return null;
-  }
+  return readLocalJSON(STYLE_BACKUP_KEY);
 }
 // The four fields that make up "a style" everywhere in this file: the three
 // theme colors plus the five saved presets (styleSlots). Kept as one helper
@@ -212,11 +212,7 @@ function clearStyleBackup() {
   writeLocal(STYLE_BACKUP_KEY, '');
 }
 function getScheduleBackup() {
-  try {
-    return JSON.parse(readLocal(SCHEDULE_BACKUP_KEY) || 'null');
-  } catch {
-    return null;
-  }
+  return readLocalJSON(SCHEDULE_BACKUP_KEY);
 }
 // Takes the data to back up as a parameter, rather than reading
 // state.applicationData itself, because by the time performSyncJoin knows
@@ -467,10 +463,7 @@ let lastPushedSnapshot = null;
 let syncInFlight = false;
 
 function setSyncStatusUi(message, isError) {
-  const status = document.getElementById('sync-status');
-  if (!status) return;
-  status.textContent = message || '';
-  status.style.color = isError ? '#ff6b6b' : 'var(--sub)';
+  setStatusText('sync-status', message, isError);
 }
 
 // One check does at most one round trip: push when this device changed

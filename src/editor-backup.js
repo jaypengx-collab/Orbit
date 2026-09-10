@@ -1,7 +1,12 @@
 // ---- src/editor-backup.js ----
 // Backup export/import: the v2 transfer format's encode/decode, settings
 // validation for imported data, and the editor's dirty-state tracking.
-import { WEEKDAYS_DISPLAY_ORDER, WEEKDAYS_INDEX_ORDER, WEEKDAY_LABELS } from './constants.js';
+import {
+  WEEKDAYS_DISPLAY_ORDER,
+  WEEKDAYS_INDEX_ORDER,
+  WEEKDAY_LABELS,
+  isPlainObject
+} from './constants.js';
 import { state } from './state.js';
 import {
   applyProAccent,
@@ -29,6 +34,7 @@ import {
   hideEditorDiscardConfirm,
   renderCountdownEvent,
   setEditorConfirmContent,
+  setStatusText,
   showEditorConfirmSheet,
   sortEditorPeriodsByTime,
   syncEditorToggles
@@ -432,20 +438,9 @@ function normalizeSettingsData(raw, { requireMarker = false } = {}) {
     if (!(key in source)) throw new Error(`設定文字缺少「${key}」。`);
   });
 
-  if (!source.teacherDB || typeof source.teacherDB !== 'object' || Array.isArray(source.teacherDB))
-    throw new Error('teacherDB 必須是物件。');
-  if (
-    !source.locationDB ||
-    typeof source.locationDB !== 'object' ||
-    Array.isArray(source.locationDB)
-  )
-    throw new Error('locationDB 必須是物件。');
-  if (
-    !source.weeklySchedule ||
-    typeof source.weeklySchedule !== 'object' ||
-    Array.isArray(source.weeklySchedule)
-  )
-    throw new Error('weeklySchedule 必須是物件。');
+  if (!isPlainObject(source.teacherDB)) throw new Error('teacherDB 必須是物件。');
+  if (!isPlainObject(source.locationDB)) throw new Error('locationDB 必須是物件。');
+  if (!isPlainObject(source.weeklySchedule)) throw new Error('weeklySchedule 必須是物件。');
   if (!Array.isArray(source.bellTimes)) throw new Error('bellTimes 必須是陣列。');
   if (source.breakTimes !== undefined && !Array.isArray(source.breakTimes))
     throw new Error('breakTimes 必須是陣列。');
@@ -535,10 +530,7 @@ function settingsDataForExport() {
   };
 }
 function setTransferStatus(message, isError = false) {
-  const status = document.getElementById('settings-transfer-status');
-  if (!status) return;
-  status.textContent = message || '';
-  status.style.color = isError ? '#ff6b6b' : 'var(--sub)';
+  setStatusText('settings-transfer-status', message, isError);
 }
 async function copyTransferText(text) {
   if (navigator.clipboard && window.isSecureContext) {
@@ -588,6 +580,20 @@ function pushDiff(lines, title, items) {
   if (!items.length) return;
   lines.push(`${title}:`);
   items.forEach(item => lines.push(`- ${item}`));
+}
+// Diffs two same-shaped arrays index by index (padding the shorter one with
+// undefined), formatting each entry with `formatEntry` and building one diff
+// line per changed index via `formatLine` - shared by the bell-time and
+// break-time diffs below, which are otherwise identical shapes.
+function diffIndexedArrays(currentList, nextList, formatEntry, formatLine) {
+  const items = [];
+  const total = Math.max((currentList || []).length, (nextList || []).length);
+  for (let i = 0; i < total; i++) {
+    const beforeText = formatEntry((currentList || [])[i]);
+    const afterText = formatEntry((nextList || [])[i]);
+    if (beforeText !== afterText) items.push(formatLine(i, beforeText, afterText));
+  }
+  return items;
 }
 function dayDiffLabel(day) {
   return WEEKDAY_LABELS[day] || `第 ${day} 天`;
@@ -653,27 +659,20 @@ function describeSettingsDiff(current, next, { isImport = false } = {}) {
   });
   pushDiff(lines, '上課地點', locationItems);
 
-  const bellItems = [];
-  const bellTotal = Math.max((current.bellTimes || []).length, (next.bellTimes || []).length);
-  for (let i = 0; i < bellTotal; i++) {
-    const before = (current.bellTimes || [])[i];
-    const after = (next.bellTimes || [])[i];
-    const beforeText = before ? `${before[0]}-${before[1]}` : '（無）';
-    const afterText = after ? `${after[0]}-${after[1]}` : '（無）';
-    if (beforeText !== afterText) bellItems.push(`第 ${i + 1} 節：${beforeText} -> ${afterText}`);
-  }
+  const bellItems = diffIndexedArrays(
+    current.bellTimes,
+    next.bellTimes,
+    item => (item ? `${item[0]}-${item[1]}` : '（無）'),
+    (i, beforeText, afterText) => `第 ${i + 1} 節：${beforeText} -> ${afterText}`
+  );
   pushDiff(lines, '節次時間', bellItems);
 
-  const breakItems = [];
-  const breakTotal = Math.max((current.breakTimes || []).length, (next.breakTimes || []).length);
-  for (let i = 0; i < breakTotal; i++) {
-    const before = (current.breakTimes || [])[i];
-    const after = (next.breakTimes || [])[i];
-    const beforeText = before ? `${before.name} ${before.start}-${before.end}` : '（無）';
-    const afterText = after ? `${after.name} ${after.start}-${after.end}` : '（無）';
-    if (beforeText !== afterText)
-      breakItems.push(`休息時段 ${i + 1}：${beforeText} -> ${afterText}`);
-  }
+  const breakItems = diffIndexedArrays(
+    current.breakTimes,
+    next.breakTimes,
+    item => (item ? `${item.name} ${item.start}-${item.end}` : '（無）'),
+    (i, beforeText, afterText) => `休息時段 ${i + 1}：${beforeText} -> ${afterText}`
+  );
   pushDiff(lines, '休息時段', breakItems);
 
   const scheduleItems = [];

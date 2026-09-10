@@ -2,10 +2,11 @@
 // The teacher/subject list editor and the day-by-day period assignment UI.
 import { WEEKDAYS_DISPLAY_ORDER, WEEKDAY_LABELS } from './constants.js';
 import { state } from './state.js';
-import { collectEditorFormState, dayDiffLabel, formatClassRef } from './editor-backup.js';
+import { setOverlayVisible } from './dashboard.js';
 import {
   bindEditorDragReorder,
   esc,
+  findScheduleImpacts,
   getEditorBellPeriodCount,
   getEditorClassLabelFromDom,
   hideEditorDiscardConfirm,
@@ -89,9 +90,7 @@ function updateTeacherCardAvatar(card) {
 let pendingAssignment = null;
 let assignmentDraft = null;
 function closeAssignSheet() {
-  document.getElementById('assign-overlay')?.classList.remove('show');
-  document.getElementById('assign-sheet')?.classList.remove('show');
-  document.getElementById('assign-overlay')?.setAttribute('aria-hidden', 'true');
+  setOverlayVisible('assign-overlay', 'assign-sheet', false);
   pendingAssignment = null;
   assignmentDraft = null;
 }
@@ -128,9 +127,7 @@ function openAssignSheet(key) {
   });
   state.assignmentDay = 1;
   renderAssignmentDay(state.assignmentDay);
-  document.getElementById('assign-overlay').classList.add('show');
-  document.getElementById('assign-sheet').classList.add('show');
-  document.getElementById('assign-overlay').setAttribute('aria-hidden', 'false');
+  setOverlayVisible('assign-overlay', 'assign-sheet', true);
 }
 function renderAssignmentDay(day) {
   const grid = document.getElementById('assign-grid');
@@ -266,16 +263,7 @@ function getTeacherDeleteKey(card) {
   return (card?.dataset.origKey || '').trim();
 }
 function getTeacherDeleteImpacts(key) {
-  const data = collectEditorFormState();
-  const impacts = [];
-  document.querySelectorAll('#schedule-grid .schedule-day-row').forEach(dayRow => {
-    const day = parseInt(dayRow.dataset.day, 10);
-    dayRow.querySelectorAll('.period-select').forEach((select, index) => {
-      if (select.value === key)
-        impacts.push(`${dayDiffLabel(day)}第 ${index + 1} 節：${formatClassRef(key, data)}`);
-    });
-  });
-  return impacts;
+  return findScheduleImpacts(select => select.value === key);
 }
 function applyTeacherCardDelete(btn) {
   const card = btn.closest('.teacher-card');

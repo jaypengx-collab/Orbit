@@ -1014,6 +1014,7 @@ function activateOCRImporter() {
       result,
       onImport: data => {
         try {
+          const current = settingsDataForExport();
           const imported = normalizeSettingsData({
             ...data,
             // AI recognition has no knowledge of the app's visual theme or
@@ -1021,18 +1022,18 @@ function activateOCRImporter() {
             breakTimes:
               Array.isArray(data.breakTimes) && data.breakTimes.length
                 ? data.breakTimes
-                : settingsDataForExport().breakTimes,
+                : current.breakTimes,
             // Odd/even week orientation isn't something a single photo can
             // reliably signal either way (nothing in a timetable photo
             // marks which physical week it was taken in) - AI import never
             // touches this setting, recognized classes or not.
-            reverseWeek: settingsDataForExport().reverseWeek,
-            proAccent: settingsDataForExport().proAccent,
-            proSecondary: settingsDataForExport().proSecondary,
-            proTertiary: settingsDataForExport().proTertiary,
-            styleSlots: settingsDataForExport().styleSlots
+            reverseWeek: current.reverseWeek,
+            proAccent: current.proAccent,
+            proSecondary: current.proSecondary,
+            proTertiary: current.proTertiary,
+            styleSlots: current.styleSlots
           });
-          beginEditorImport(settingsDataForExport(), imported, { preserveStyle: true });
+          beginEditorImport(current, imported, { preserveStyle: true });
         } catch (error) {
           statusElement.textContent = `匯入預覽失敗：${error.message || error}`;
           statusElement.classList.add('error');

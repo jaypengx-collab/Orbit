@@ -48,11 +48,20 @@ const WEEKDAYS_INDEX_ORDER = Object.freeze([0, 1, 2, 3, 4, 5, 6]);
 // and schedule.js that would otherwise spell 86400000 out by hand.
 const MS_PER_DAY = 86400000;
 
+// A non-null, non-array object - the shape every saved/imported settings
+// field (teacherDB, locationDB, weeklySchedule...) is required to have.
+// Shared by data.js's loadData and editor-backup.js's normalizeSettingsData,
+// whose validation passes both repeat this same three-part check per field.
+function isPlainObject(value) {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
 export {
   DEFAULT_STYLE_PRIMARY,
   DEFAULT_STYLE_SECONDARY,
   WEEKDAY_LABELS,
   WEEKDAYS_DISPLAY_ORDER,
   WEEKDAYS_INDEX_ORDER,
-  MS_PER_DAY
+  MS_PER_DAY,
+  isPlainObject
 };

@@ -16,33 +16,19 @@ function syncTestPlayPauseUi() {
 
   if (!btn || !indicator) return;
 
-  if (!window.MANUALLY_TEST) {
-    btn.textContent = '開始';
-    btn.classList.remove('active');
-    indicator.style.display = 'none';
+  const { text, active, indicatorVisible } = !window.MANUALLY_TEST
+    ? { text: '開始', active: false, indicatorVisible: false }
+    : window.IS_SIMULATING
+      ? { text: '暫停', active: true, indicatorVisible: true }
+      : { text: '繼續', active: false, indicatorVisible: false };
 
-    if (exitButton) {
-      exitButton.disabled = false;
-      exitButton.style.opacity = '1';
-    }
-  } else if (window.IS_SIMULATING) {
-    btn.textContent = '暫停';
-    btn.classList.add('active');
-    indicator.style.display = 'inline-flex';
+  btn.textContent = text;
+  btn.classList.toggle('active', active);
+  indicator.style.display = indicatorVisible ? 'inline-flex' : 'none';
 
-    if (exitButton) {
-      exitButton.disabled = false;
-      exitButton.style.opacity = '1';
-    }
-  } else {
-    btn.textContent = '繼續';
-    btn.classList.remove('active');
-    indicator.style.display = 'none';
-
-    if (exitButton) {
-      exitButton.disabled = false;
-      exitButton.style.opacity = '1';
-    }
+  if (exitButton) {
+    exitButton.disabled = false;
+    exitButton.style.opacity = '1';
   }
 }
 

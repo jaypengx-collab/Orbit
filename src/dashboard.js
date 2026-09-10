@@ -2,7 +2,7 @@
 // The live "what's happening right now" dashboard: update()'s per-second
 // orchestration (calls schedule-calc.js for the math, then renders), plus
 // the toolbar/modal/countdown-card UI around it.
-import { MS_PER_DAY } from './constants.js';
+import { MS_PER_DAY, WEEKDAY_LABELS } from './constants.js';
 import { state } from './state.js';
 import { closeStylePanel } from './appearance.js';
 import {
@@ -13,7 +13,7 @@ import {
   renderList,
   shrinkFontToFit
 } from './dashboard-render.js';
-import { dayNames, formatCountdownEventDate, normalizeCountdownEvents } from './data.js';
+import { formatCountdownEventDate, normalizeCountdownEvents } from './data.js';
 import { isEditorDirty } from './editor-backup.js';
 import {
   closeEditor,
@@ -635,7 +635,7 @@ function openModal(c) {
       const match = c.isSplit ? terms.some(t => item.n.includes(t)) : item.n === c.n;
       if (match) {
         count++;
-        occHtml += `<div class="occ-row"><span class="occ-row-day">週${dayNames[d]}</span><div class="occ-row-meta"><div class="occ-row-period">第 ${idx + 1} 節</div><div class="occ-row-time">${esc(item.s)} – ${esc(item.e)}</div></div></div>`;
+        occHtml += `<div class="occ-row"><span class="occ-row-day">${WEEKDAY_LABELS[d]}</span><div class="occ-row-meta"><div class="occ-row-period">第 ${idx + 1} 節</div><div class="occ-row-time">${esc(item.s)} – ${esc(item.e)}</div></div></div>`;
       }
     });
   });

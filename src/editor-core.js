@@ -7,9 +7,12 @@ import { closeStylePanel, openStylePanel } from './appearance.js';
 import { closeTestPanel, getCountdownEvents, setOverlayVisible } from './dashboard.js';
 import {
   applyPendingSaveEditor,
+  collectEditorFormState,
+  dayDiffLabel,
   decodeTransferData,
   describeSettingsDiff,
   editorFormSnapshotString,
+  formatClassRef,
   isEditorDirty,
   normalizeSettingsData,
   resetOCRImporterUI,
@@ -139,6 +142,32 @@ function refreshPeriodSelectOptions() {
     sel.innerHTML = opts;
     sel.value = cur;
   });
+}
+// Sets a status line's text/color - shared by the transfer sheet's and the
+// sync panel's near-identical status messages.
+function setStatusText(elementId, message, isError = false) {
+  const status = document.getElementById(elementId);
+  if (!status) return;
+  status.textContent = message || '';
+  status.style.color = isError ? '#ff6b6b' : 'var(--sub)';
+}
+// Finds schedule-grid cells matching `matchFn(select, index)`, formatted as
+// "$day 第 $period 節：$classRef" - shared by the teacher-delete and
+// bell-row-delete confirmation sheets, which each warn about exactly this
+// before removing something a schedule cell still references.
+function findScheduleImpacts(matchFn) {
+  const data = collectEditorFormState();
+  const impacts = [];
+  document.querySelectorAll('#schedule-grid .schedule-day-row').forEach(dayRow => {
+    const day = parseInt(dayRow.dataset.day, 10);
+    dayRow.querySelectorAll('.period-select').forEach((select, index) => {
+      if (matchFn(select, index))
+        impacts.push(
+          `${dayDiffLabel(day)}第 ${index + 1} 節：${formatClassRef(select.value, data)}`
+        );
+    });
+  });
+  return impacts;
 }
 // Escapes text before inserting it into generated HTML.
 function esc(s) {
@@ -525,9 +554,7 @@ function setEditorConfirmContent(
   confirmBtn.onclick = confirmHandler;
 }
 function showEditorConfirmSheet() {
-  document.getElementById('editor-confirm-overlay').classList.add('show');
-  document.getElementById('editor-confirm-sheet').classList.add('show');
-  document.getElementById('editor-confirm-overlay').setAttribute('aria-hidden', 'false');
+  setOverlayVisible('editor-confirm-overlay', 'editor-confirm-sheet', true);
 }
 function getEditorUnsavedDiff() {
   try {
@@ -593,9 +620,7 @@ function hideEditorDiscardConfirm() {
   state.pendingStyleSlotSaveIndex = null;
   const diffEl = document.getElementById('editor-import-diff');
   if (diffEl) diffEl.scrollTop = 0;
-  document.getElementById('editor-confirm-overlay').classList.remove('show');
-  document.getElementById('editor-confirm-sheet').classList.remove('show');
-  document.getElementById('editor-confirm-overlay').setAttribute('aria-hidden', 'true');
+  setOverlayVisible('editor-confirm-overlay', 'editor-confirm-sheet', false);
 }
 
 // Discards editor changes and closes the editor.
@@ -734,13 +759,13 @@ async function closeTransferSheet(force) {
     return;
   }
 
-  if (!force && (await hasUnconsumedImportData())) {
+  const hadUnconsumedImportData = await hasUnconsumedImportData();
+  if (!force && hadUnconsumedImportData) {
     showTransferDiscardConfirm();
     return;
   }
 
   hideEditorDiscardConfirm();
-  const hadUnconsumedImportData = await hasUnconsumedImportData();
   setOverlayVisible('transfer-sheet-overlay', 'transfer-sheet', false, 'transfer-open');
   // Wipe any AI import data (pasted JSON and AI-recognized photo result) so it never lingers
   // into the next time the transfer sheet opens.
@@ -788,6 +813,7 @@ export {
   discardTransferChangesAndClose,
   editorTimeToMinutes,
   esc,
+  findScheduleImpacts,
   formatClassLabel,
   getEditorBellPeriodCount,
   getEditorClassLabelFromDom,
@@ -800,6 +826,7 @@ export {
   refreshPeriodSelectOptions,
   renderCountdownEvent,
   setEditorConfirmContent,
+  setStatusText,
   showEditorConfirmSheet,
   showEditorDiscardConfirm,
   showEditorSaveConfirm,

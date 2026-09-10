@@ -5,14 +5,13 @@ import { state } from './state.js';
 import { validateTimeIntervals } from './data.js';
 import {
   collectEditorFormState,
-  dayDiffLabel,
   describeSettingsDiff,
-  formatClassRef,
   normalizeSettingsData
 } from './editor-backup.js';
 import {
   editorTimeToMinutes,
   esc,
+  findScheduleImpacts,
   getEditorBellPeriodCount,
   getEditorTeacherEntriesFromDom,
   hideEditorDiscardConfirm,
@@ -111,15 +110,7 @@ function addBellRow() {
 }
 
 function getBellDeleteImpacts(index) {
-  const data = collectEditorFormState();
-  const impacts = [];
-  document.querySelectorAll('#schedule-grid .schedule-day-row').forEach(dayRow => {
-    const day = parseInt(dayRow.dataset.day, 10);
-    const select = dayRow.querySelectorAll('.period-select')[index];
-    if (select && select.value)
-      impacts.push(`${dayDiffLabel(day)}第 ${index + 1} 節：${formatClassRef(select.value, data)}`);
-  });
-  return impacts;
+  return findScheduleImpacts((select, selectIndex) => selectIndex === index && !!select.value);
 }
 function applyBellRowDelete(btn) {
   const row = btn.closest('.bell-row');
@@ -231,7 +222,7 @@ function saveEditor() {
     showEditorTimeConflict(error.message);
     return;
   }
-  const next = normalizeSettingsData(collectEditorFormState());
+  const next = normalizeSettingsData(draft);
   const baseline = state.editorBaselineData || normalizeSettingsData(state.applicationData);
   const diff = describeSettingsDiff(baseline, next);
   state.pendingEditorSaveData = next;

@@ -18,23 +18,20 @@ import {
 } from './editor-core.js';
 import { getSyncKeepLocalStyle, isSyncViewer } from './sync.js';
 
-function normalizeProAccent(value) {
+function normalizeHexColor(value, fallback) {
   const color = String(value || '')
     .trim()
     .toUpperCase();
-  return /^#[0-9A-F]{6}$/.test(color) ? color : DEFAULT_STYLE_PRIMARY;
+  return /^#[0-9A-F]{6}$/.test(color) ? color : fallback;
+}
+function normalizeProAccent(value) {
+  return normalizeHexColor(value, DEFAULT_STYLE_PRIMARY);
 }
 function normalizeProSecondary(value) {
-  const color = String(value || '')
-    .trim()
-    .toUpperCase();
-  return /^#[0-9A-F]{6}$/.test(color) ? color : DEFAULT_STYLE_SECONDARY;
+  return normalizeHexColor(value, DEFAULT_STYLE_SECONDARY);
 }
 function normalizeProTertiary(value) {
-  const color = String(value || '')
-    .trim()
-    .toUpperCase();
-  return /^#[0-9A-F]{6}$/.test(color) ? color : '#91AE78';
+  return normalizeHexColor(value, '#91AE78');
 }
 // Picks black or white text for a solid-color badge/button/pill painted in
 // the user's own chosen accent color. This used to maximize WCAG 2's

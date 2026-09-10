@@ -12,7 +12,8 @@ import { editorTimeToMinutes } from './editor-core.js';
 import {
   DEFAULT_STYLE_PRIMARY,
   DEFAULT_STYLE_SECONDARY,
-  WEEKDAYS_INDEX_ORDER
+  WEEKDAYS_INDEX_ORDER,
+  isPlainObject
 } from './constants.js';
 
 // App defaults and live simulator state.
@@ -94,11 +95,7 @@ function isValidTime(value) {
 }
 function isValidTimeRange(start, end) {
   if (!isValidTime(start) || !isValidTime(end)) return false;
-  const toMinutes = value => {
-    const [hours, minutes] = value.split(':').map(Number);
-    return hours * 60 + minutes;
-  };
-  return toMinutes(end) > toMinutes(start);
+  return editorTimeToMinutes(end) > editorTimeToMinutes(start);
 }
 function validateTimeIntervals(bellTimes, breakTimes) {
   const intervals = [];
@@ -241,29 +238,16 @@ function loadData() {
     if (!raw) return getDefaultData();
 
     const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
-      throw new Error('saved schedule is not an object');
+    if (!isPlainObject(parsed)) throw new Error('saved schedule is not an object');
 
     const required = ['teacherDB', 'locationDB', 'weeklySchedule', 'bellTimes'];
     if (!required.every(key => Object.prototype.hasOwnProperty.call(parsed, key)))
       throw new Error('saved schedule is missing required fields');
-    if (
-      !parsed.teacherDB ||
-      typeof parsed.teacherDB !== 'object' ||
-      Array.isArray(parsed.teacherDB)
-    )
+    if (!isPlainObject(parsed.teacherDB))
       throw new Error('saved schedule has an invalid teacherDB');
-    if (
-      !parsed.locationDB ||
-      typeof parsed.locationDB !== 'object' ||
-      Array.isArray(parsed.locationDB)
-    )
+    if (!isPlainObject(parsed.locationDB))
       throw new Error('saved schedule has an invalid locationDB');
-    if (
-      !parsed.weeklySchedule ||
-      typeof parsed.weeklySchedule !== 'object' ||
-      Array.isArray(parsed.weeklySchedule)
-    )
+    if (!isPlainObject(parsed.weeklySchedule))
       throw new Error('saved schedule has an invalid weeklySchedule');
     if (!Array.isArray(parsed.bellTimes))
       throw new Error('saved schedule has an invalid bellTimes');
@@ -339,14 +323,10 @@ function saveData(d) {
     // more useful to do here than drop this save attempt.
   }
 }
-// Runtime schedule data is rebuilt from the editable settings before display.
-const dayNames = ['日', '一', '二', '三', '四', '五', '六'];
-
 export {
   ORBIT_APP_ID,
   ORBIT_STORAGE_SCHEMA,
   REVERSE_WEEK_LOGIC_DEFAULT,
-  dayNames,
   formatCountdownEventDate,
   getDefaultData,
   hasSavedSchedule,
