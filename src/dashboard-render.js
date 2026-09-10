@@ -278,7 +278,15 @@ function fitNowTitleText(force = false) {
     const gap = parseFloat(styles.rowGap || styles.gap) || 0;
     const metaVisible = meta && getComputedStyle(meta).display !== 'none';
     const metaWidth = metaVisible ? Math.ceil(meta.getBoundingClientRect().width) : 0;
-    const metaHeight = metaVisible ? Math.ceil(meta.getBoundingClientRect().height) : 0;
+    // Reserve the meta row's own min-height (see .now-meta-row in
+    // styles.css) even when it's hidden (.is-status), rather than 0 - a
+    // no-class/break status message has nothing to put there, but sizing it
+    // off the extra room that leaves would make it noticeably bigger than an
+    // actual class name sitting above its teacher/room tag, for no reason
+    // other than having nothing below it. Reserving the same slot either way
+    // keeps status text sized to resonate with class text instead of
+    // ballooning past it.
+    const metaHeight = metaVisible ? Math.ceil(meta.getBoundingClientRect().height) : 20;
     const available = Math.max(
       72,
       Math.floor(stack.clientWidth - paddingX - (metaWidth ? metaWidth + gap : 0))
@@ -290,23 +298,31 @@ function fitNowTitleText(force = false) {
     // extra height goes here, so the title needs to actually grow into it
     // instead of stopping at a number picked for the smallest case. Sized
     // off the box's real available height (minus meta row + gap) rather
-    // than guessed. .78 and the 84px cap replace an earlier, more
-    // conservative .6/68px pass picked back when .now-stack and .time-card
-    // still had a visible gap between them - now that they sit flush as one
-    // merged panel (see styles.css's own comment on that), .now-stack has
-    // more real height to work with, and .78/84 was retuned against that
-    // bigger box rather than left pointed at the smaller one. Still short of
-    // the once-tried .92/no-cap pass that read as oversized/blocky - this
-    // keeps a bit of breathing room above/below instead of the glyph
-    // crowding the box edges. minDefaultSize (see above) is still the
+    // than guessed. .78 bumps up the ratio from an earlier, more
+    // conservative .6 picked back when .now-stack and .time-card still had a
+    // visible gap between them - now that they sit flush as one merged panel
+    // (see styles.css's own comment on that), .now-stack has more real
+    // height to work with in the common case (a class or break name sitting
+    // above its meta row), so the ratio was retuned against that.
+    // The 70px cap, on the other hand, is deliberately NOT raised to match -
+    // .now-stack's height varies far more wildly than the ratio bump was
+    // meant for once a no-class/day-finished state hides .time-card
+    // entirely and hands the whole dashboard over to .now-stack alone (see
+    // the v3-15/16/orbit-no-school-day rules in styles.css). Left uncapped
+    // (or capped generously), that state's status text (今日無課 etc.)
+    // would end up visibly bigger than an actual class name ever gets,
+    // reading as its own inconsistent hero size instead of "the same kind of
+    // headline, just with nothing scheduled" - the cap keeps it in the same
+    // ballpark a class name with its meta row actually reaches (typically
+    // high-60s/low-70s), so the two resonate instead of the status text
+    // ballooning just because it happened to land in a taller box. Also
+    // still short of the once-tried .92/no-cap pass that read as oversized/
+    // blocky in its own right. minDefaultSize (see above) is still the
     // floor, so it never drops below timer-badge/title-next's own ceilings
     // even in a short box.
-    const availableHeight = Math.max(
-      0,
-      stack.clientHeight - paddingY - (metaVisible ? metaHeight + gap : 0)
-    );
+    const availableHeight = Math.max(0, stack.clientHeight - paddingY - (metaHeight + gap));
     const heightDefaultSize = Math.floor(availableHeight * 0.78);
-    const defaultSize = Math.max(minDefaultSize, Math.min(heightDefaultSize, 84));
+    const defaultSize = Math.max(minDefaultSize, Math.min(heightDefaultSize, 70));
 
     title.style.whiteSpace = 'nowrap';
     title.style.wordBreak = 'keep-all';
