@@ -309,12 +309,86 @@ function fitNowTitleText(force = false) {
     title.style.overflowWrap = 'normal';
     title.style.textOverflow = 'clip';
     title.style.overflow = 'visible';
+    title.style.display = 'block';
+    title.style.webkitLineClamp = '';
     title.style.lineHeight = '.98';
     title.style.letterSpacing = hasLatin ? '-.95px' : '-.8px';
     title.style.width = available + 'px';
     title.style.maxWidth = available + 'px';
     shrinkFontToFit(title, available, defaultSize, minSize);
+
+    // shrinkFontToFit only ever slims the name down to fit one line, even
+    // when the box still has plenty of height to spare - that's the "empty
+    // gap" between the current-class card and the next-class/timer card
+    // below it that a long single-line name leaves unused once it's been
+    // shrunk small enough to fit. If that happened (the name didn't already
+    // fit at defaultSize) and there's enough headroom for two lines, prefer
+    // wrapping onto a second line at a bigger size over squeezing further
+    // onto one - it fills that space with legible text instead of leaving
+    // it blank.
+    const singleLineSize = parseFloat(title.style.fontSize) || defaultSize;
+    if (singleLineSize < defaultSize - 0.5) {
+      const wrapSize = fitTwoLineTitle(title, availableHeight, singleLineSize, defaultSize);
+      if (wrapSize > singleLineSize + 1) {
+        title.style.whiteSpace = 'normal';
+        title.style.wordBreak = 'normal';
+        title.style.display = '-webkit-box';
+        title.style.webkitBoxOrient = 'vertical';
+        title.style.webkitLineClamp = '2';
+        title.style.overflow = 'hidden';
+        title.style.textOverflow = 'ellipsis';
+        title.style.fontSize = Math.floor(wrapSize) + 'px';
+      } else {
+        // Wrapping didn't buy enough to be worth it - back out the wrap
+        // styling the search below applied while probing and keep the
+        // one-line fit instead.
+        title.style.whiteSpace = 'nowrap';
+        title.style.wordBreak = 'keep-all';
+        title.style.display = 'block';
+        title.style.overflow = 'visible';
+        title.style.textOverflow = 'clip';
+        title.style.fontSize = Math.floor(singleLineSize) + 'px';
+      }
+    }
   });
+}
+// Finds the font-size to use if `el` wraps onto two lines instead of the one
+// shrinkFontToFit already fit it to - called only once that one-line fit has
+// already had to shrink below defaultSize, meaning there's width pressure a
+// second line could relieve. Two lines share out availableHeight, which
+// bounds how big either line can get (`geometryMax`) regardless of how much
+// text there actually is - a name long enough to still overflow that gets
+// truncated with an ellipsis by the -webkit-line-clamp the caller applies,
+// same as an overlong single line would otherwise just get silently clipped
+// by .now-stack's own overflow-x:hidden. Below that ceiling, prefer whatever
+// size lets the whole name actually finish within two real lines with no
+// ellipsis at all - checked by measuring `el` itself with wrapping turned on,
+// since that's the only way to know how many lines a given size wraps a given
+// name into.
+function fitTwoLineTitle(el, availableHeight, minSize, maxSize) {
+  el.style.whiteSpace = 'normal';
+  el.style.wordBreak = 'normal';
+  el.style.display = 'block';
+  el.style.overflow = 'visible';
+  const lineHeightRatio = 1.02;
+  const geometryMax = availableHeight / (2 * lineHeightRatio);
+  let lo = minSize,
+    hi = Math.min(maxSize, geometryMax),
+    noTruncationBest = 0;
+  for (let i = 0; i < 18; i++) {
+    const mid = (lo + hi) / 2;
+    el.style.fontSize = mid + 'px';
+    if (el.scrollHeight <= mid * lineHeightRatio * 2 + 3) {
+      noTruncationBest = mid;
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+  }
+  // Nothing in range fits the full name without truncating - the name is
+  // long enough that it'll need an ellipsis no matter how small it goes, so
+  // there's no reason to shrink further than the height ceiling allows.
+  return noTruncationBest > 0 ? noTruncationBest : Math.min(maxSize, geometryMax);
 }
 // A single line reads better than two, so try shrinking the "10:10 · 徐蓉莉
 // · 第三會議室" line to fit before ever wrapping it - only fall back to a
