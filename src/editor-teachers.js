@@ -4,6 +4,7 @@ import { WEEKDAYS_DISPLAY_ORDER, WEEKDAY_LABELS } from './constants.js';
 import { state } from './state.js';
 import { setOverlayVisible } from './dashboard.js';
 import {
+  bindEditorCardToggle,
   bindEditorDragReorder,
   esc,
   findScheduleImpacts,
@@ -75,7 +76,7 @@ function makeTeacherCard(key, subject, teacher, location, options = {}) {
   div.innerHTML = `<div class="teacher-card-summary"><div class="teacher-avatar"></div><div class="teacher-summary-text"></div><div class="teacher-order-actions"><span class="teacher-drag-handle" role="button" tabindex="0" title="拖曳排序" aria-label="拖曳排序">☰</span></div><button type="button" class="teacher-card-toggle" aria-expanded="${expanded}" aria-label="展開編輯">⌄</button></div><div class="teacher-card-body"><div class="teacher-fields"><input class="editor-input tc-subject" placeholder="科目" value="${esc(subject)}"><input class="editor-input tc-teacher" placeholder="教師" value="${esc(teacher)}"><input class="editor-input tc-location" placeholder="教室(選填)" value="${esc(location || '')}"></div><div class="teacher-card-body-actions"><label class="order-position-label">順序<input class="order-position" type="number" min="1" inputmode="numeric" aria-label="科目教師順序"></label><div class="teacher-card-buttons"><button type="button" class="teacher-assign" onclick="assignTeacherFromMenu(this)" aria-label="指定課節">排課</button><button type="button" class="delete-btn" onclick="deleteTeacherCard(this)" aria-label="刪除">×</button></div></div></div>`;
   updateTeacherCardAvatar(div);
   updateTeacherCardSummary(div);
-  bindTeacherCardToggle(div);
+  bindEditorCardToggle(div);
   const positionInput = div.querySelector('.order-position');
   positionInput.addEventListener('change', event =>
     moveEditorRowToPosition(div, event.target.value, '#teacher-list .teacher-card')
@@ -128,20 +129,6 @@ function updateTeacherCardSummary(card) {
   label.classList.toggle('is-empty', !subject && !teacher);
 }
 
-// Toggles a teacher card's editable body open/closed on click, ignoring
-// clicks on the drag handle so dragging to reorder still works without
-// opening the card.
-function bindTeacherCardToggle(card) {
-  const summary = card.querySelector('.teacher-card-summary');
-  summary.addEventListener('click', event => {
-    if (event.target.closest('.teacher-order-actions')) return;
-    setTeacherCardExpanded(card, !card.classList.contains('is-expanded'));
-  });
-}
-function setTeacherCardExpanded(card, expanded) {
-  card.classList.toggle('is-expanded', expanded);
-  card.querySelector('.teacher-card-toggle')?.setAttribute('aria-expanded', String(expanded));
-}
 let pendingAssignment = null;
 let assignmentDraft = null;
 function closeAssignSheet() {

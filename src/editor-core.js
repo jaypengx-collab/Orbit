@@ -291,6 +291,22 @@ function orderEditorFolds() {
     if (section) body.insertBefore(section, saveBtn);
   });
 }
+// Toggles a collapsible editor tile's body open/closed on click - shared by
+// teacher cards and countdown events, the two editor lists built on this
+// same collapsed-summary/drag-handle/expandable-body shell. Ignores clicks
+// on the drag handle so dragging to reorder still works without opening
+// the card.
+function bindEditorCardToggle(card) {
+  const summary = card.querySelector('.teacher-card-summary');
+  summary.addEventListener('click', event => {
+    if (event.target.closest('.teacher-order-actions')) return;
+    setEditorCardExpanded(card, !card.classList.contains('is-expanded'));
+  });
+}
+function setEditorCardExpanded(card, expanded) {
+  card.classList.toggle('is-expanded', expanded);
+  card.querySelector('.teacher-card-toggle')?.setAttribute('aria-expanded', String(expanded));
+}
 function renderCountdownEvent() {
   const list = document.getElementById('countdown-event-list');
   if (!list) return;
@@ -298,19 +314,25 @@ function renderCountdownEvent() {
   getCountdownEvents().forEach((event, index) => addCountdownEventRow(event, index));
   refreshCountdownMoveButtons();
 }
+// Built on the exact same collapsible-tile shell as makeTeacherCard in
+// editor-teachers.js (.teacher-card/-summary/-body/-toggle, the drag handle,
+// the 順序 position input relocated into the body) - same reasoning applies
+// here too: a dozen countdown events would otherwise mean a dozen fully open
+// name+date-range forms to scroll past.
 function addCountdownEventRow(event = { name: '', startDate: '', endDate: '' }, index) {
   const list = document.getElementById('countdown-event-list');
   if (!list || list.children.length >= 12) return;
+  const expanded = index === undefined;
   const row = document.createElement('div');
-  row.className = index === undefined ? 'countdown-event-row row-enter' : 'countdown-event-row';
+  row.className = expanded ? 'teacher-card countdown-event-row is-expanded row-enter' : 'teacher-card countdown-event-row';
   row.innerHTML =
-    '<div class="countdown-event-header"><span class="countdown-event-title">倒數活動</span><div class="countdown-event-actions"><span class="countdown-drag-handle" role="button" tabindex="0" title="拖曳排序" aria-label="拖曳排序">☰</span><label class="order-position-label">順序<input class="order-position" type="number" min="1" inputmode="numeric" aria-label="倒數活動順序"></label><button type="button" class="countdown-event-remove" aria-label="移除倒數">×</button></div></div><div class="countdown-event-fields"><label>活動名稱<input class="editor-input countdown-event-name" maxlength="80" placeholder="例如：116 學測"></label><label class="countdown-event-daterange-label">日期<div class="countdown-date-range"><input class="editor-input countdown-event-start" type="date" aria-label="開始日期"><span class="time-sep">→</span><input class="editor-input countdown-event-end" type="date" aria-label="結束日期"></div></label></div>';
+    `<div class="teacher-card-summary"><div class="teacher-summary-text"></div><div class="teacher-order-actions"><span class="teacher-drag-handle" role="button" tabindex="0" title="拖曳排序" aria-label="拖曳排序">☰</span></div><button type="button" class="teacher-card-toggle" aria-expanded="${expanded}" aria-label="展開編輯">⌄</button></div><div class="teacher-card-body"><div class="countdown-event-fields"><label>活動名稱<input class="editor-input countdown-event-name" maxlength="80" placeholder="例如：116 學測"></label><label class="countdown-event-daterange-label">日期<div class="countdown-date-range"><input class="editor-input countdown-event-start" type="date" aria-label="開始日期"><span class="time-sep">→</span><input class="editor-input countdown-event-end" type="date" aria-label="結束日期"></div></label></div><div class="teacher-card-body-actions"><label class="order-position-label">順序<input class="order-position" type="number" min="1" inputmode="numeric" aria-label="倒數活動順序"></label><div class="teacher-card-buttons"><button type="button" class="delete-btn" aria-label="移除倒數">×</button></div></div></div>`;
   const nameInput = row.querySelector('.countdown-event-name');
-  const titleLabel = row.querySelector('.countdown-event-title');
+  const summaryText = row.querySelector('.teacher-summary-text');
   nameInput.value = event.name;
-  if (event.name) titleLabel.textContent = event.name;
+  summaryText.textContent = event.name.trim() || '倒數活動';
   nameInput.addEventListener('input', () => {
-    titleLabel.textContent = nameInput.value.trim() || '倒數活動';
+    summaryText.textContent = nameInput.value.trim() || '倒數活動';
   });
   const startInput = row.querySelector('.countdown-event-start');
   const endInput = row.querySelector('.countdown-event-end');
@@ -319,10 +341,11 @@ function addCountdownEventRow(event = { name: '', startDate: '', endDate: '' }, 
   startInput.addEventListener('change', () => {
     if (!endInput.value || endInput.value < startInput.value) endInput.value = startInput.value;
   });
-  row.querySelector('.countdown-event-remove').addEventListener('click', () => {
+  row.querySelector('.delete-btn').addEventListener('click', () => {
     if (list.children.length > 1) row.remove();
     else row.querySelectorAll('input').forEach(input => (input.value = ''));
   });
+  bindEditorCardToggle(row);
   list.appendChild(row);
   row.querySelector('.order-position').value = String(list.children.length);
   const positionInput = row.querySelector('.order-position');
@@ -346,7 +369,7 @@ function addCountdownEventRow(event = { name: '', startDate: '', endDate: '' }, 
 function refreshCountdownMoveButtons() {
   const rows = [...document.querySelectorAll('#countdown-event-list .countdown-event-row')];
   rows.forEach((row, index) => {
-    row.querySelector('.countdown-drag-handle')?.setAttribute('aria-label', '拖曳倒數活動排序');
+    row.querySelector('.teacher-drag-handle')?.setAttribute('aria-label', '拖曳倒數活動排序');
     const input = row.querySelector('.order-position');
     if (input) {
       input.max = String(rows.length);
@@ -509,7 +532,7 @@ function bindEditorDragReorder(row, handleSelector, siblingsSelector, onMove) {
 function bindCountdownDrag(row) {
   bindEditorDragReorder(
     row,
-    '.countdown-drag-handle',
+    '.teacher-drag-handle',
     '#countdown-event-list .countdown-event-row'
   );
 }
@@ -867,6 +890,7 @@ window.toggleReverse = toggleReverse;
 
 export {
   applyOfflineLock,
+  bindEditorCardToggle,
   bindEditorDragReorder,
   closeEditor,
   closeTransferSheet,
