@@ -1082,7 +1082,15 @@ body.editor-open .dashboard,body.transfer-open .dashboard{pointer-events:none}
 .row-enter{animation:rowEnter .28s var(--ease-glass)}
 
 .editor-drill-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-bottom:9px}
-.editor-drill-btn{min-height:34px;border-radius:11px;border:1px solid color-mix(in srgb,var(--pro-accent) 38%,rgba(255,255,255,.14));background:color-mix(in srgb,var(--pro-accent) 15%,rgba(255,255,255,.05));color:var(--pro-accent-readable);font-size:12px;font-weight:800;cursor:pointer;transition:transform .12s,background .15s;backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat));-webkit-backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat))}
+/* Same backdrop-filter-plus-:active-transform combination as .nav-item's own
+   compositing bug (see its comment for the full explanation): pressing
+   promotes this button to its own GPU layer just for the scale, and real
+   Safari can fail to rasterize the blur/color-mix() background onto that
+   layer in time, flashing a blank or shadowed frame before it "catches up".
+   Forcing a permanent layer with translateZ(0)/backface-visibility/
+   will-change, exactly like .nav-item, keeps that layer alive across the
+   whole press so there's nothing to promote/demote/mis-rasterize. */
+.editor-drill-btn{min-height:34px;border-radius:11px;border:1px solid color-mix(in srgb,var(--pro-accent) 38%,rgba(255,255,255,.14));background:color-mix(in srgb,var(--pro-accent) 15%,rgba(255,255,255,.05));color:var(--pro-accent-readable);font-size:12px;font-weight:800;cursor:pointer;-webkit-appearance:none;appearance:none;-webkit-transform:translateZ(0);transform:translateZ(0);-webkit-backface-visibility:hidden;backface-visibility:hidden;will-change:transform;transition:transform .12s,background .15s;backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat));-webkit-backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat))}
 .editor-drill-btn:active{transform:scale(.96);background:color-mix(in srgb,var(--pro-accent) 28%,rgba(255,255,255,.05))}
 .editor-back-row{display:flex;justify-content:flex-start;margin-bottom:8px}
 .editor-back-btn{min-height:32px;border-radius:11px;border:1px solid color-mix(in srgb,var(--pro-accent) 38%,rgba(255,255,255,.14));background:color-mix(in srgb,var(--pro-accent) 15%,rgba(255,255,255,.05));color:var(--pro-accent-readable);font-size:12px;font-weight:800;cursor:pointer;padding:7px 10px;transition:transform .12s,background .15s;backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat));-webkit-backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat))}
@@ -1121,7 +1129,12 @@ body.editor-open .editor-confirm-sheet,body.style-panel-open .editor-confirm-she
 .toggle-row{background:linear-gradient(135deg,color-mix(in srgb,var(--pro-accent) 12%,transparent),var(--glass-fill-card) 78%);border-radius:16px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;border:1px solid color-mix(in srgb,var(--pro-accent) 16%,transparent);margin-bottom:0;backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat)) brightness(var(--glass-bright));-webkit-backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat)) brightness(var(--glass-bright))}
 .editor-inline-options .toggle-row{margin-bottom:0}
 .toggle-label{font-size:14px;font-weight:600}
-.toggle-switch{width:44px;height:26px;border-radius:13px;border:1px solid rgba(255,255,255,.14);background:color-mix(in srgb,#3a3a3c 72%,transparent);cursor:pointer;position:relative;transition:background .2s;flex-shrink:0;backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat));-webkit-backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat))}
+/* Real <button> element with its own backdrop-filter, tapped to flip .on -
+   the same compositing bug .nav-item and .editor-drill-btn already work
+   around (see .nav-item's comment): a real button's own native tap
+   treatment plus the blur background can flash on real Safari without
+   -webkit-appearance:none and a permanent GPU layer here. */
+.toggle-switch{width:44px;height:26px;border-radius:13px;border:1px solid rgba(255,255,255,.14);background:color-mix(in srgb,#3a3a3c 72%,transparent);cursor:pointer;position:relative;-webkit-appearance:none;appearance:none;-webkit-transform:translateZ(0);transform:translateZ(0);-webkit-backface-visibility:hidden;backface-visibility:hidden;will-change:transform;transition:background .2s;flex-shrink:0;backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat));-webkit-backdrop-filter:blur(var(--glass-blur-card)) saturate(var(--glass-sat))}
 .toggle-switch::after{content:"";position:absolute;width:20px;height:20px;top:2px;left:2px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 4px rgba(0,0,0,.3)}
 .toggle-switch.on{background:color-mix(in srgb,var(--accent) 78%,transparent);border-color:color-mix(in srgb,var(--accent) 55%,transparent)}
 .toggle-switch.on::after{transform:translateX(18px)}
