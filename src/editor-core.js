@@ -470,7 +470,7 @@ function moveEditorControlsIntoLayers() {
 }
 function ensureEditorBackButtons() {
   document.querySelectorAll('#editor-sheet details.editor-fold').forEach(section => {
-    if (section.id === 'editor-fold-schedule' || section.id === 'editor-fold-options') return;
+    if (section.hasAttribute('data-no-back-button')) return;
     if (section.closest('#ocr-import-result')) return;
     const body = section.querySelector('.editor-fold-body');
     if (!body || body.querySelector('.editor-back-row')) return;

@@ -652,48 +652,62 @@ window.forceAppRefresh = function () {
   );
 };
 
+// Binds `handler` to `events` (one name or a list) on the element with id
+// `id`, exactly once - a re-render can call the bind*() functions below
+// again on the same still-present DOM node, and this is what keeps that
+// idempotent. `flagName` namespaces the "already bound" marker so unrelated
+// bindOnce() calls on the same element (there are none today, but nothing
+// stops a future one) can't stomp each other's flag. With
+// `replaceToStripOnclick`, the node is cloned and swapped in first - the
+// clone carries the markup's `onclick="..."` attribute but none of its own
+// JS-attached listeners, which is what actually strips a stale one; plain
+// `removeAttribute`/`onclick = null` on the original wouldn't touch a
+// listener added via addEventListener. Returns the (possibly replaced) node
+// when it just bound for the first time, null otherwise, so a caller with
+// its own one-time setup (bindExitButtons' disabled-reset) can piggyback on
+// the same guard instead of tracking it separately.
+function bindOnce(id, flagName, events, handler, { replaceToStripOnclick = false } = {}) {
+  let node = el(id);
+  if (!node || node.dataset[flagName]) return null;
+  if (replaceToStripOnclick) {
+    const clone = node.cloneNode(true);
+    clone.removeAttribute('onclick');
+    clone.onclick = null;
+    node.parentNode.replaceChild(clone, node);
+    node = clone;
+  }
+  (Array.isArray(events) ? events : [events]).forEach(eventName =>
+    node.addEventListener(eventName, handler, true)
+  );
+  node.dataset[flagName] = '1';
+  return node;
+}
 function bindPlayButton() {
-  const oldBtn = el('test-play-pause-btn');
-  if (!oldBtn || (oldBtn.dataset && oldBtn.dataset.orbitConsolidatedBound === '1')) return;
-  const btn = oldBtn.cloneNode(true);
-  btn.removeAttribute('onclick');
-  btn.onclick = null;
-  btn.dataset.orbitConsolidatedBound = '1';
-  oldBtn.parentNode.replaceChild(btn, oldBtn);
-  btn.addEventListener('click', window.toggleTestPlayPause, true);
+  bindOnce('test-play-pause-btn', 'orbitConsolidatedBound', 'click', window.toggleTestPlayPause, {
+    replaceToStripOnclick: true
+  });
 }
 function bindExitButtons() {
-  const exit = el('test-exit-btn');
-  if (exit && !exit.orbitConsolidatedBound) {
+  const exit = bindOnce('test-exit-btn', 'orbitConsolidatedBound', 'click', function (event) {
+    event.preventDefault();
+    event.stopPropagation();
+    window.exitTestMode();
+  });
+  if (exit) {
     exit.disabled = false;
     exit.removeAttribute('disabled');
-    exit.addEventListener(
-      'click',
-      function (event) {
-        event.preventDefault();
-        event.stopPropagation();
-        window.exitTestMode();
-      },
-      true
-    );
-    exit.orbitConsolidatedBound = true;
   }
 }
 function bindInputPauses() {
-  ['in-h', 'in-m', 'test-day-input'].forEach(function (id) {
-    const node = el(id);
-    if (!node || node.orbitConsolidatedPauseBound) return;
-    node.addEventListener('focus', pauseForEditing, true);
-    node.addEventListener('input', pauseForEditing, true);
-    node.orbitConsolidatedPauseBound = true;
-  });
-  const slider = el('test-time-slider');
-  if (slider && !slider.orbitEndpointLockBound) {
-    ['pointerup', 'mouseup', 'touchend', 'keyup', 'blur', 'change'].forEach(function (eventName) {
-      slider.addEventListener(eventName, clearSliderEndpointLock, true);
-    });
-    slider.orbitEndpointLockBound = true;
-  }
+  ['in-h', 'in-m', 'test-day-input'].forEach(id =>
+    bindOnce(id, 'orbitConsolidatedPauseBound', ['focus', 'input'], pauseForEditing)
+  );
+  bindOnce(
+    'test-time-slider',
+    'orbitEndpointLockBound',
+    ['pointerup', 'mouseup', 'touchend', 'keyup', 'blur', 'change'],
+    clearSliderEndpointLock
+  );
 }
 function init() {
   mergeNextClassWithTimer();

@@ -49,19 +49,30 @@ import { renderEditorTeachers } from './editor-teachers.js';
 import { buildSchedule } from './schedule.js';
 import { isSyncConfigured, isSyncViewer, pushSyncSnapshot, setSyncStatusUi } from './sync.js';
 
-// Reads the editor form and converts it into the app data shape.
-function collectEditorFormState() {
+// Reads the editor form and converts it into the app data shape. With
+// `includeDraft: true` (only editorFormSnapshotString below needs this),
+// also returns each section's raw, unfiltered field values as *Draft
+// arrays - the same DOM read collectEditorFormState() already does per
+// row, just kept instead of discarded, so the snapshot doesn't have to
+// re-walk the same rows a second time to get them.
+function collectEditorFormState({ includeDraft = false } = {}) {
   const newDB = {},
     newLoc = {};
+  const teacherCardsDraft = [];
   document.querySelectorAll('#teacher-list .teacher-card').forEach(card => {
-    const key = (card.dataset.origKey || '').trim(),
-      subject = card.querySelector('.tc-subject').value.trim(),
-      teacher = card.querySelector('.tc-teacher').value.trim(),
-      location = card.querySelector('.tc-location').value.trim();
+    const origKeyRaw = card.dataset.origKey || '',
+      subjectRaw = card.querySelector('.tc-subject').value,
+      teacherRaw = card.querySelector('.tc-teacher').value,
+      locationRaw = card.querySelector('.tc-location').value,
+      key = origKeyRaw.trim(),
+      subject = subjectRaw.trim(),
+      teacher = teacherRaw.trim(),
+      location = locationRaw.trim();
     if (key && subject) {
       newDB[key] = [subject, teacher, location];
       newLoc[key] = location;
     }
+    if (includeDraft) teacherCardsDraft.push([origKeyRaw, subjectRaw, teacherRaw, locationRaw]);
   });
   const newWeekly = {};
   document.querySelectorAll('#schedule-grid .schedule-day-row').forEach(row => {
@@ -69,17 +80,22 @@ function collectEditorFormState() {
     newWeekly[d] = Array.from(row.querySelectorAll('.period-select')).map(sel => sel.value);
   });
   const newBells = [];
+  const bellRowsDraft = [];
   document.querySelectorAll('#bell-list .bell-row').forEach(row => {
     const s = row.querySelector('.bell-start').value,
       e = row.querySelector('.bell-end').value;
     if (s && e) newBells.push([s, e]);
+    if (includeDraft) bellRowsDraft.push([s, e]);
   });
   const newBreaks = [];
+  const breakRowsDraft = [];
   document.querySelectorAll('#break-list .break-row').forEach(row => {
-    const name = row.querySelector('.break-name').value.trim(),
+    const nameRaw = row.querySelector('.break-name').value,
       start = row.querySelector('.break-start').value,
-      end = row.querySelector('.break-end').value;
+      end = row.querySelector('.break-end').value,
+      name = nameRaw.trim();
     if (name && start && end) newBreaks.push({ name, start, end });
+    if (includeDraft) breakRowsDraft.push([nameRaw, start, end, '']);
   });
   const reverseWeek = document.getElementById('toggle-reverse').classList.contains('on');
   const countdownEvents = Array.from(
@@ -114,34 +130,13 @@ function collectEditorFormState() {
     proAccent,
     proSecondary,
     proTertiary,
-    styleSlots: normalizeStyleSlots(state.applicationData.styleSlots)
+    styleSlots: normalizeStyleSlots(state.applicationData.styleSlots),
+    ...(includeDraft ? { teacherCardsDraft, bellRowsDraft, breakRowsDraft } : {})
   };
 }
 // Creates a stable snapshot so the app can detect unsaved editor changes.
 function editorFormSnapshotString() {
-  const s = collectEditorFormState();
-  const tcd = [];
-  document.querySelectorAll('#teacher-list .teacher-card').forEach(card => {
-    tcd.push([
-      card.dataset.origKey || '',
-      card.querySelector('.tc-subject').value,
-      card.querySelector('.tc-teacher').value,
-      card.querySelector('.tc-location').value
-    ]);
-  });
-  const brd = [];
-  document.querySelectorAll('#bell-list .bell-row').forEach(row => {
-    brd.push([row.querySelector('.bell-start').value, row.querySelector('.bell-end').value]);
-  });
-  const bkd = [];
-  document.querySelectorAll('#break-list .break-row').forEach(row => {
-    bkd.push([
-      row.querySelector('.break-name').value,
-      row.querySelector('.break-start').value,
-      row.querySelector('.break-end').value,
-      ''
-    ]);
-  });
+  const s = collectEditorFormState({ includeDraft: true });
   return JSON.stringify({
     reverseWeek: s.reverseWeek,
     countdownEvents: s.countdownEvents,
@@ -151,12 +146,12 @@ function editorFormSnapshotString() {
     styleSlots: s.styleSlots,
     bellTimes: s.bellTimes,
     breakTimes: s.breakTimes,
-    bellRowsDraft: brd,
-    breakRowsDraft: bkd,
+    bellRowsDraft: s.bellRowsDraft,
+    breakRowsDraft: s.breakRowsDraft,
     weeklySchedule: s.weeklySchedule,
     teacherDB: s.teacherDB,
     teacherOrder: s.teacherOrder,
-    teacherCardsDraft: tcd
+    teacherCardsDraft: s.teacherCardsDraft
   });
 }
 // Checks whether the editor has unsaved changes.

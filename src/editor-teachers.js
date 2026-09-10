@@ -17,6 +17,19 @@ import {
 } from './editor-core.js';
 import { subjectHue } from './schedule.js';
 
+// refreshPeriodSelectOptions rebuilds every schedule-grid <select>'s full
+// option list (one DOM query plus one innerHTML rebuild per select) from
+// the live teacher fields - correct to call on every keystroke (the actual
+// stored value, restored via `sel.value = cur` inside it, never lags), but
+// wasteful to actually run that often. Debounced here for the two keystroke
+// listeners below; every other caller (add/delete/reorder) still calls the
+// real function directly, since those are one-shot actions, not typing.
+let refreshPeriodSelectOptionsTimer = null;
+function refreshPeriodSelectOptionsDebounced() {
+  clearTimeout(refreshPeriodSelectOptionsTimer);
+  refreshPeriodSelectOptionsTimer = setTimeout(refreshPeriodSelectOptions, 150);
+}
+
 // Renders the editable teacher list.
 function renderEditorTeachers() {
   const container = document.getElementById('teacher-list');
@@ -70,9 +83,9 @@ function makeTeacherCard(key, subject, teacher, location) {
 
   div.querySelector('.tc-subject').addEventListener('input', function () {
     updateTeacherCardAvatar(div);
-    refreshPeriodSelectOptions();
+    refreshPeriodSelectOptionsDebounced();
   });
-  div.querySelector('.tc-teacher').addEventListener('input', refreshPeriodSelectOptions);
+  div.querySelector('.tc-teacher').addEventListener('input', refreshPeriodSelectOptionsDebounced);
 
   return div;
 }
