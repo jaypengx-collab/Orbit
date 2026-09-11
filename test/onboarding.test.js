@@ -42,7 +42,7 @@ describe('first-run onboarding prompt', () => {
     showOnboardingPrompt();
     expect(confirmSheetVisible()).toBe(true);
     expect(document.getElementById('editor-confirm-title').textContent).toMatch(
-      /開始使用 Orbit AI/
+      /開始使用 Orbit Class/
     );
   });
 

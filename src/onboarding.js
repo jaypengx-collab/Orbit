@@ -75,7 +75,7 @@ function showOnboardingPrompt() {
   if (hasSavedSchedule() || isSyncConfigured() || hasSeenOnboarding()) return;
   markOnboardingSeen();
   setEditorConfirmContent(
-    '開始使用 Orbit AI',
+    '開始使用 Orbit Class',
     '有代碼可直接輸入加入，沒有的話可以自己建立。',
     '',
     '輸入配對代碼',

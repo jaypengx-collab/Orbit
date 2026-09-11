@@ -4,7 +4,7 @@
 // same globals.
 //
 // None of these are app bugs: every API below exists and behaves as used
-// here in every real browser Orbit AI targets. They're missing from jsdom,
+// here in every real browser Orbit Class targets. They're missing from jsdom,
 // or from the VM realm the fast pool runs test files in.
 import { Blob as NodeBlob } from 'node:buffer';
 import { CompressionStream, DecompressionStream } from 'node:stream/web';

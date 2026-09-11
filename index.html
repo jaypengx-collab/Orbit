@@ -7,12 +7,25 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Orbit AI">
+    <meta name="apple-mobile-web-app-title" content="Orbit Class">
+    <meta name="description" content="Orbit Class：即時算出現在是哪一堂、還剩幾分鐘、下一堂在哪的課表儀表板。">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Orbit Class">
+    <meta property="og:title" content="Orbit Class — 即時課表儀表板">
+    <meta property="og:description" content="現在是哪一堂、還剩幾分鐘、下一堂在哪——打開就有答案，不用自己對照時間表。">
+    <meta property="og:url" content="https://jaypengx-collab.github.io/Orbit/">
+    <meta property="og:image" content="https://jaypengx-collab.github.io/Orbit/og-card.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Orbit Class — 即時課表儀表板">
+    <meta name="twitter:description" content="現在是哪一堂、還剩幾分鐘、下一堂在哪——打開就有答案，不用自己對照時間表。">
+    <meta name="twitter:image" content="https://jaypengx-collab.github.io/Orbit/og-card.png">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png?v=__APP_VERSION__">
     <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png?v=__APP_VERSION__">
     <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png?v=__APP_VERSION__">
-    <title>Orbit AI</title>
+    <title>Orbit Class</title>
     <link rel="stylesheet" href="css/styles.css?v=__APP_VERSION__">
   </head>
 <body class="orbit-booting">
@@ -281,7 +294,7 @@
   </div>
   <div class="transfer-sheet-body" id="transfer-sheet-body">
   <div class="settings-transfer-box" id="sync-setup-box">
-    <div class="editor-hint-body" id="sync-setup-hint">同步會把課表存到 Orbit AI 內建的同步伺服器，讓多台裝置自動保持一致，不需要自己申請任何帳號。建立同步後會拿到一組「同步代碼」跟一組「管理者密碼」：同步代碼可以自由分享，任何裝置拿到都能接收更新；管理者密碼才是編輯課表的唯一憑證，只給你想讓它也能編輯的裝置。</div>
+    <div class="editor-hint-body" id="sync-setup-hint">同步會把課表存到 Orbit Class 內建的同步伺服器，讓多台裝置自動保持一致，不需要自己申請任何帳號。建立同步後會拿到一組「同步代碼」跟一組「管理者密碼」：同步代碼可以自由分享，任何裝置拿到都能接收更新；管理者密碼才是編輯課表的唯一憑證，只給你想讓它也能編輯的裝置。</div>
     <div class="settings-transfer-actions">
       <button type="button" id="sync-create-btn" class="settings-transfer-btn" onclick="orbitSyncCreate()">
         建立新同步
@@ -369,8 +382,8 @@
     <summary class="legacy-fold-summary">手動備份（舊版，不需要同步也能用）</summary>
     <div class="legacy-fold-body">
       <div class="settings-transfer-box">
-        <textarea id="settings-transfer-text" class="settings-transfer-text" spellcheck="false" placeholder="請在此貼上 Orbit AI 課表設定備份，或按下「匯出」建立備份。"></textarea>
-        <div class="editor-hint-body">這是 Orbit AI 課表設定備份文字。請複製完整內容，包含 BEGIN 與 END 標記。</div>
+        <textarea id="settings-transfer-text" class="settings-transfer-text" spellcheck="false" placeholder="請在此貼上 Orbit Class 課表設定備份，或按下「匯出」建立備份。"></textarea>
+        <div class="editor-hint-body">這是 Orbit Class 課表設定備份文字。請複製完整內容，包含 BEGIN 與 END 標記。</div>
         <div class="settings-transfer-actions">
           <button type="button" id="settings-export-btn" class="settings-transfer-btn" onclick="requestTransferAction('export')">
             匯出

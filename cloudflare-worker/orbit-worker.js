@@ -1,5 +1,5 @@
 // ---- cloudflare-worker/orbit-worker.js ----
-// A single Cloudflare Worker serving Orbit AI's optional server-side
+// A single Cloudflare Worker serving Orbit Class's optional server-side
 // features, plus one more app's sync feature, routed by path:
 //
 //   POST      /gemini     - AI schedule-photo import (see src/gemini-ocr.js).
@@ -652,7 +652,7 @@ const VOCAB_SYNC_CREATE_RATE_LIMIT = 20;
 // keyed JSON (see that file's "Compact wire format" comment) specifically
 // to keep this small - every field that isn't read back anywhere is
 // dropped before it's ever compressed, not just compressed harder. Even a
-// worst case of every one of Orbit AI's 3,060 vocab words fully attempted,
+// worst case of every one of Orbit Class's 3,060 vocab words fully attempted,
 // each with a maxed-out recent-mistakes history, comes in well under
 // 250,000 bytes once compressed and base64-encoded; this cap stays a
 // comfortable multiple above that real worst case while still refusing a

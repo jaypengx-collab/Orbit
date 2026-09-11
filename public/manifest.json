@@ -1,6 +1,6 @@
 {
-  "name": "Orbit AI",
-  "short_name": "Orbit AI",
+  "name": "Orbit Class",
+  "short_name": "Orbit Class",
   "description": "跑在瀏覽器裡的課表儀表板",
   "start_url": "./",
   "scope": "./",
