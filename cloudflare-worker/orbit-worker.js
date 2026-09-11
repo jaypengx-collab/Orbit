@@ -7,7 +7,7 @@
 //                            end users never need one of their own.
 //   GET/PATCH/DELETE /sync - Orbit's own cross-device schedule sync (see
 //                            src/sync.js).
-//   GET/PATCH/DELETE /vocab-sync - English Vocabulary Tool's cross-device
+//   GET/PATCH/DELETE /vocab-sync - Orbit Vocab's cross-device
 //                            progress sync (see that repo's sync.js). Not
 //                            Orbit's own feature - this Worker is simply
 //                            reused as shared infrastructure for a sibling
@@ -631,7 +631,7 @@ const ORBIT_MAX_PAYLOAD_LENGTH = MAX_PAYLOAD_LENGTH;
 //
 // A separate set of counters from /sync's above (see isRateLimited's
 // `feature` keying) - vocab-sync's traffic shape is different enough to
-// tune independently: English Vocabulary Tool has no manager/viewer split
+// tune independently: Orbit Vocab has no manager/viewer split
 // (see VOCAB_SYNC_APP's readRequiresPasscode below), so every read is
 // already a credential check and lands in the 'verify' bucket, not 'read' -
 // VOCAB_SYNC_READ_RATE_LIMIT is kept only so the generic handler below
@@ -647,7 +647,7 @@ const VOCAB_SYNC_WRITE_RATE_LIMIT = 300;
 const VOCAB_SYNC_DELETE_RATE_LIMIT = 20;
 const VOCAB_SYNC_CREATE_RATE_LIMIT = 20;
 // Firestore's own per-document cap is ~1 MiB, but this is set far below
-// that on purpose: English Vocabulary Tool's sync.js writes progress as
+// that on purpose: Orbit Vocab's sync.js writes progress as
 // gzip-compressed, delta-timestamped, positional tuples rather than plain
 // keyed JSON (see that file's "Compact wire format" comment) specifically
 // to keep this small - every field that isn't read back anywhere is
@@ -1050,7 +1050,7 @@ const ORBIT_SYNC_APP = {
   createLimit: SYNC_CREATE_RATE_LIMIT,
   readRequiresPasscode: false
 };
-// English Vocabulary Tool's /vocab-sync: every pairing belongs to one
+// Orbit Vocab's /vocab-sync: every pairing belongs to one
 // learner syncing their own progress across their own devices - there is
 // no teacher/student broadcast use case the way Orbit has, so there is no
 // viewer role to keep open for. Requiring the passcode for GET too (not
