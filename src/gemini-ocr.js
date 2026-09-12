@@ -237,6 +237,22 @@ class AIVisionProcessor {
     this.geminiModels = ['gemini-3.5-flash-lite', 'gemini-3.7-flash'];
   }
 
+  // Fastest-first is right for a single file, but confirmed wrong for
+  // several: ran this app's real prompt+schema against gemini-3.5-flash-lite
+  // with two real files (a timetable photo plus a course-registration form)
+  // and it scrambled the cross-reference badly - courses landed on the wrong
+  // day, some placeholders were never resolved at all, and it invented
+  // duplicate entries for cells that were genuinely blank. The exact same
+  // two files handed to gemini-3.7-flash came back correct on every slot.
+  // The structural `validate` check below can't catch this class of
+  // failure - a scrambled answer is still perfectly well-formed JSON - so
+  // there is no escalation path that would ever recover it. Reordering
+  // per-request instead of escalating after the fact means the harder task
+  // gets the model that's actually shown able to do it, on the first try.
+  modelOrderFor(fileCount) {
+    return fileCount > 1 ? [...this.geminiModels].reverse() : this.geminiModels;
+  }
+
   // `files` is the encoded {mime_type, data} part list (see
   // encodeSourceForUpload) - all of them go up in one request so the model
   // reads them as one timetable, which is the entire point of accepting
@@ -265,7 +281,7 @@ class AIVisionProcessor {
     // README's security notes on the AI proxy.
     let lastError = null;
     let lastRejected = null;
-    for (const model of this.geminiModels) {
+    for (const model of this.modelOrderFor(parts.length)) {
       report(`正在請求 AI 模型（${model}）分析課表…`);
       const requestBody = JSON.stringify({ model, files: parts });
       let response;
