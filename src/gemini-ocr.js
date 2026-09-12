@@ -514,7 +514,25 @@ class AIVisionProcessor {
   }
 }
 
+// Generic elective/self-study slot labels a Taiwanese senior-high timetable
+// commonly shows in place of a real subject (see the Worker's prompt) -
+// used only to decide whether a multi-file import is worth escalating to a
+// stronger model, never to block or flag the final result: a leftover
+// placeholder can be entirely correct when the second file genuinely has no
+// matching row for that slot.
+const PLACEHOLDER_SUBJECT_PATTERN =
+  /^(多元選修|加深加廣選修|彈性[-－]?(充實|充補|自主|學習)?|選修|團體活動時間)$/;
+
 class DataValidator {
+  // True when a multi-file candidate still contains a bare placeholder
+  // subject - the sign a weaker model matched file 1's grid but missed the
+  // day+period lookup into file 2's course-selection rows.
+  hasUnresolvedPlaceholder(candidate) {
+    return Object.values(candidate?.teacherDB || {}).some(entry =>
+      PLACEHOLDER_SUBJECT_PATTERN.test(String(entry?.[0] || '').trim())
+    );
+  }
+
   validate(candidate) {
     const errors = [];
     if (!candidate || typeof candidate !== 'object') {
@@ -964,8 +982,22 @@ function mountOCRImporter({
         message => status(message),
         // Lets a structurally unusable answer escalate to a stronger model
         // instead of being shown to the user as a broken preview - the same
-        // check the preview itself is about to run.
-        { validate: input => validator.validate(input) }
+        // check the preview itself is about to run. When several files were
+        // submitted (the timetable-plus-course-selection-form case), also
+        // escalate on a leftover placeholder subject (e.g. still "多元選修")
+        // rather than only on a structurally broken response - it's the
+        // clearest sign the weaker model matched file 1's grid but never
+        // looked up the corresponding row in file 2.
+        {
+          validate: input => {
+            const structural = validator.validate(input);
+            if (!structural.valid) return structural;
+            if (files.length > 1 && validator.hasUnresolvedPlaceholder(input)) {
+              return { valid: false, errors: structural.errors };
+            }
+            return structural;
+          }
+        }
       );
       status('正在驗證課表資料…');
       const validation = validator.validate(candidate);

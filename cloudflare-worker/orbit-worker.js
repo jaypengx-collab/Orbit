@@ -197,7 +197,14 @@ async function isRateLimited(env, ip, feature, limit) {
 // point of moving it server-side is that the client no longer sends it.
 const GEMINI_PROMPT = `Extract the class timetable from the attached file(s) and return it as a single JSON object. Focus on the timetable only — ignore background, margins, decorations, and unrelated content; it may only occupy part of the frame.
 
-When more than one file is attached, they describe ONE timetable together, not several: read all of them first, then answer once. They are given in the order the user chose them, and a later file is normally there to fill in or correct what an earlier one left vague — for example a timetable photo with placeholder or generic slot names followed by a screenshot of the student's own enrolled classes, where the second file supplies the real subject and teacher names for the first file's slots. Prefer the more specific, more legible source for any given detail, and prefer a later file when two disagree about the same slot. Never emit a slot twice because two files showed it. Examine EVERY attached file on its own for countdownEvents — an exam banner, calendar, or notice can appear in any one of them regardless of which file has the timetable grid, so do not stop looking once the first file has been read.
+When more than one file is attached, they describe ONE timetable together, not several: read all of them first, then answer once. They are given in the order the user chose them, and a later file is normally there to fill in or correct what an earlier one left vague — for example a timetable photo with placeholder or generic slot names followed by a screenshot or form listing the student's own enrolled classes, where the second file supplies the real subject and teacher names for the first file's slots. Prefer the more specific, more legible source for any given detail, and prefer a later file when two disagree about the same slot. Never emit a slot twice because two files showed it. Examine EVERY attached file on its own for countdownEvents — an exam banner, calendar, or notice can appear in any one of them regardless of which file has the timetable grid, so do not stop looking once the first file has been read.
+
+A very common pairing (especially at Taiwanese senior-high schools): file 1 is the official weekly timetable grid, where some cells show a generic elective/placeholder label instead of a real subject — for example 多元選修, 加深加廣選修, 彈性-充實, 彈性-充補, 彈性-自主, 彈性學習, 選修, 團體活動時間, or a bare classroom/room name used as a stand-in. File 2 is a course-selection confirmation form (選課確認單) or similar enrollment listing: a table whose rows each name one real course the student is actually taking, typically with columns for the course name (選課科目), teacher (教師), and a class-time column (上課時間) that packs together a weekday and one or more period numbers — e.g. "一・34" means Monday, periods 3 and 4; "四・67" means Thursday, periods 6 and 7; "三・7" means Wednesday, period 7 alone. Weekday characters follow the usual 一二三四五六日/日 order for Monday–Sunday. When you see this pairing:
+- Match a file-1 placeholder cell to a file-2 row strictly by day-and-period position (decode the row's 上課時間 into the exact weekday + period numbers it covers), never by comparing text — the row's own subject/class-track name (e.g. "三加深加廣1", "三充實補強2") will not resemble the placeholder label and is not meant to be compared against it. If a row's periods span multiple columns (e.g. "34"), the row's course fills every one of those period cells on that weekday.
+- When a placeholder cell has a matching row, replace that cell's subject with the row's actual course name, its teacher with the row's teacher, and its location with the row's classroom/venue if given (fall back to whatever file 1 already showed there if file 2 leaves location blank). The placeholder label itself must not survive into the output for that cell — it is what the real course name is standing in for, not a separate class in its own right.
+- A worked example: file 1's Monday grid shows "加深加廣選修" in the periods-3-4 cell; file 2 has a row "多媒體音樂 I ｜ 徐蓉莉 ｜ 一・34 ｜ 三加深加廣1". The correct merged output places one classes entry {subject:"多媒體音樂 I", teacher:"徐蓉莉"} at Monday's period-3 and period-4 slots — not "加深加廣選修".
+- If a placeholder cell in file 1 has no corresponding row anywhere in file 2 (by day+period), leave that cell exactly as file 1 showed it — do not invent a course for it and do not delete it.
+- Before finalizing, re-check: none of your classes entries should still be a bare placeholder/elective label from the list above if a file-2 row exists for that same day and period — that combination means a matching row was missed and needs to be found.
 
 Return valid JSON only, matching this exact schema:
 {
@@ -371,11 +378,18 @@ const GEMINI_RESPONSE_SCHEMA = {
 // partway through a still-valid generation. A higher ceiling costs nothing
 // when it isn't needed (it bounds worst case, it doesn't change target
 // length), so it stays generous for every model and file count.
+// temperature is 0, not the 0.1 an earlier version of this used - this is a
+// read-what's-there extraction task with a schema-constrained output, never
+// a creative one, so there is nothing for sampling randomness to buy: it
+// only means the same two files can come back with a different merge result
+// (e.g. which slots got a placeholder replaced) between otherwise-identical
+// attempts, which is exactly the "inconsistent" failure mode this feature
+// most needs to avoid.
 function buildGenerationConfig(model) {
   return {
     response_mime_type: 'application/json',
     response_schema: GEMINI_RESPONSE_SCHEMA,
-    temperature: 0.1,
+    temperature: 0,
     maxOutputTokens: 24576,
     thinkingConfig: /^gemini-2\./.test(model) ? { thinkingBudget: 0 } : { thinkingLevel: 'low' }
   };
